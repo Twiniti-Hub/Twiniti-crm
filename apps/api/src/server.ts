@@ -56,7 +56,24 @@ await registerMcpRoutes(app, db);
 app.get("/docs", async (_, reply) => reply.redirect("/documentation"));
 
 const webDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../web/dist");
-await app.register(fastifyStatic, { root: webDist, prefix: "/", decorateReply: false });
+await app.register(fastifyStatic, {
+  root: webDist,
+  prefix: "/",
+  decorateReply: true,
+  wildcard: false
+});
+
+app.setNotFoundHandler((request, reply) => {
+  const url = request.url.split("?")[0] ?? request.url;
+  if (request.method === "GET" && !url.startsWith("/api/") && !url.startsWith("/documentation") && url !== "/mcp") {
+    return reply.sendFile("index.html");
+  }
+  return reply.code(404).send({
+    message: `Route ${request.method}:${url} not found`,
+    error: "Not Found",
+    statusCode: 404
+  });
+});
 
 const port = env.PORT;
 await app.listen({ port, host: "0.0.0.0" });
