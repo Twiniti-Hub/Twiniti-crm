@@ -235,20 +235,34 @@ export async function claimJobs(db: Db, limit = 10) {
   return claimed;
 }
 
-export async function completeJob(db: Db, id: string, error?: string) {
+export async function completeJob(db: Db, id: string, error?: string, options?: { maxAttempts?: number }) {
   if (error) {
+    const maxAttempts = options?.maxAttempts ?? 5;
+    const [current] = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
+    const attempts = current?.attempts ?? 1;
+    const retryable = attempts < maxAttempts;
     await db.update(jobs).set({
-      status: "failed",
+      status: retryable ? "queued" : "failed",
       lastError: error,
-      availableAt: new Date(Date.now() + 60_000)
+      lockedAt: null,
+      availableAt: new Date(Date.now() + Math.min(60_000 * attempts, 15 * 60_000))
     }).where(eq(jobs.id, id));
     return;
   }
   await db.update(jobs).set({
     status: "completed",
     completedAt: new Date(),
-    lastError: null
+    lastError: null,
+    lockedAt: null
   }).where(eq(jobs.id, id));
+}
+
+export async function getContactById(db: Db, organizationId: string, id: string) {
+  const rows = await db.select().from(contacts).where(and(
+    eq(contacts.organizationId, organizationId),
+    eq(contacts.id, id)
+  )).limit(1);
+  return rows[0] ?? null;
 }
 
 export async function listCompanies(db: Db, organizationId: string, query?: string) {

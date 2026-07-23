@@ -11,6 +11,7 @@ import {
 import {
   createContact,
   findContactByEmail,
+  getContactById,
   getContactTimeline,
   listCampaigns,
   searchContacts,
@@ -142,8 +143,7 @@ export async function registerMcpRoutes(app: FastifyInstance, db: Db) {
             break;
           }
           case "get_contact": {
-            const rows = await searchContacts(db, actor.organizationId, { limit: 100 });
-            result = rows.find((row) => row.id === String(args.id ?? "")) ?? null;
+            result = await getContactById(db, actor.organizationId, String(args.id ?? ""));
             break;
           }
           case "create_contact": {

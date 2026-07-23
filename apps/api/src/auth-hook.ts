@@ -45,7 +45,11 @@ export function requireActor(request: FastifyRequest): AuthActor {
 
 export function requireUserRole(actor: AuthActor, role: "viewer" | "analyst" | "marketer" | "admin" | "owner") {
   if (actor.type === "agent") {
-    return;
+    const error = new Error(`Agent credentials cannot satisfy user role ${role}; use scoped agent endpoints`) as Error & {
+      statusCode: number;
+    };
+    error.statusCode = 403;
+    throw error;
   }
   if (!requireRole(actor, role)) {
     const error = new Error(`Requires role ${role}`) as Error & { statusCode: number };

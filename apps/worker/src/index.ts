@@ -15,6 +15,7 @@ import {
   importJobs,
   importRows,
   isEmailSuppressed,
+  organizations,
   webhookEvents,
   workflowEnrollments,
   workflowRuns,
@@ -170,15 +171,26 @@ async function processHubspotImport(payload: {
   }).where(eq(importJobs.id, job.id));
 }
 
-async function processResendWebhook(payload: { webhookEventId: string }) {
+async function processResendWebhook(payload: { webhookEventId: string; organizationId?: string | null }) {
   const [event] = await db.select().from(webhookEvents).where(eq(webhookEvents.id, payload.webhookEventId)).limit(1);
   if (!event) return;
   const body = event.payload as Record<string, unknown>;
   const data = (body.data ?? body) as Record<string, unknown>;
   const dedupeKey = String(body.id ?? data.email_id ?? event.id);
+  let organizationId = event.organizationId ?? payload.organizationId ?? null;
+  if (!organizationId) {
+    const [org] = await db.select().from(organizations).limit(1);
+    organizationId = org?.id ?? null;
+  }
+  if (!organizationId) {
+    await db.update(webhookEvents).set({
+      processedAt: new Date()
+    }).where(eq(webhookEvents.id, event.id));
+    throw new Error("Cannot process Resend webhook without an organization");
+  }
   try {
     await db.insert(emailEvents).values({
-      organizationId: event.organizationId ?? "00000000-0000-0000-0000-000000000000",
+      organizationId,
       resendId: typeof data.email_id === "string" ? data.email_id : null,
       eventType: event.eventType ?? "unknown",
       email: typeof data.to === "string" ? data.to : Array.isArray(data.to) ? String(data.to[0]) : null,
@@ -188,7 +200,10 @@ async function processResendWebhook(payload: { webhookEventId: string }) {
   } catch {
     // duplicate webhook events are ignored
   }
-  await db.update(webhookEvents).set({ processedAt: new Date() }).where(eq(webhookEvents.id, event.id));
+  await db.update(webhookEvents).set({
+    organizationId,
+    processedAt: new Date()
+  }).where(eq(webhookEvents.id, event.id));
 }
 
 async function processWorkflowStep(payload: {
@@ -259,7 +274,7 @@ async function handleJob(kind: string, payload: Record<string, unknown>) {
       await processHubspotImport(payload as { importJobId: string; contacts?: Array<Record<string, unknown>> });
       return;
     case "webhook.resend.process":
-      await processResendWebhook(payload as { webhookEventId: string });
+      await processResendWebhook(payload as { webhookEventId: string; organizationId?: string | null });
       return;
     case "workflow.trigger.form_submit":
     case "workflow.run_step":

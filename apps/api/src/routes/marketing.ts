@@ -37,6 +37,7 @@ import {
   lists,
   mintAgentCredential,
   normalizeEmail,
+  organizations,
   parseFilterAst,
   propertyDefinitions,
   reportDefinitions,
@@ -701,15 +702,18 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       const signatureHeader = Array.isArray(signature) ? signature[0] : signature;
       const valid = verifyResendWebhookSignature(raw, signatureHeader, env.RESEND_WEBHOOK_SECRET);
       const payload = typeof request.body === "object" && request.body ? request.body as Record<string, unknown> : { raw };
+      const [org] = await db.select().from(organizations).limit(1);
       const event = await storeWebhookEvent(db, {
+        organizationId: org?.id ?? null,
         provider: "resend",
         eventType: typeof payload.type === "string" ? payload.type : "unknown",
         payload,
         signatureValid: valid
       });
       await enqueueJob(db, {
+        organizationId: org?.id ?? null,
         kind: "webhook.resend.process",
-        payload: { webhookEventId: event.id }
+        payload: { webhookEventId: event.id, organizationId: org?.id ?? null }
       });
       return { data: { accepted: true, signatureValid: valid } };
     } catch (error) {

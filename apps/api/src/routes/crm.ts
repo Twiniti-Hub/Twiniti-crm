@@ -15,6 +15,7 @@ import {
   createContact,
   customerEvents,
   findContactByEmail,
+  getContactById,
   getContactTimeline,
   listCompanies,
   normalizeDomain,
@@ -71,8 +72,7 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
       const actor = requireActor(request);
       if (actor.type === "agent") assertScope(actor, "contacts:read");
       const { id } = request.params as { id: string };
-      const rows = await searchContacts(db, actor.organizationId, { limit: 100 });
-      const row = rows.find((item) => item.id === id);
+      const row = await getContactById(db, actor.organizationId, id);
       if (!row) return reply.code(404).send({ error: { code: "not_found", message: "Contact not found" } });
       return { data: mapContact(row) };
     } catch (error) {
