@@ -1,3 +1,4 @@
+import { useHexclaveApp, useUser } from "@hexclave/react";
 import { NavLink, Outlet } from "react-router-dom";
 import { authConfigured } from "../hexclave/client";
 
@@ -13,6 +14,26 @@ const links = [
   { to: "/deliverability", label: "Deliverability" },
   { to: "/settings", label: "Settings" }
 ] as const;
+
+function AccountFooter() {
+  const app = useHexclaveApp();
+  const user = useUser();
+  const label = user?.displayName ?? user?.primaryEmail ?? "Signed in";
+
+  return (
+    <div className="account-block">
+      <div className="account-label">
+        <span className="status-dot" />
+        <span className="account-name" title={label}>
+          {label}
+        </span>
+      </div>
+      <button className="sign-out" type="button" onClick={() => app.redirectToSignOut()}>
+        Sign out
+      </button>
+    </div>
+  );
+}
 
 export function Shell() {
   return (
@@ -35,8 +56,14 @@ export function Shell() {
           ))}
         </nav>
         <div className="sidebar-footer">
-          <span className="status-dot" />
-          {authConfigured ? "Hexclave auth ready" : "Bootstrap mode"}
+          {authConfigured ? (
+            <AccountFooter />
+          ) : (
+            <>
+              <span className="status-dot" />
+              Bootstrap mode
+            </>
+          )}
         </div>
       </aside>
       <section className="content">
