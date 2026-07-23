@@ -6,7 +6,7 @@ services:
     region: frankfurt
     branch: development
     autoDeploy: true
-    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/api build
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/web build && pnpm --filter @twiniti/api build
     startCommand: pnpm --filter @twiniti/api start
     healthCheckPath: /health
     envVars:
