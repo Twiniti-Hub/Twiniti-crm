@@ -1,0 +1,30 @@
+[
+  {
+    "id": "hs-contact-1",
+    "email": "ada@example.com",
+    "firstname": "Ada",
+    "lastname": "Lovelace",
+    "lifecyclestage": "customer",
+    "jobtitle": "Analyst",
+    "phone": "+44 20 7946 0001",
+    "company": "Analytical Engines",
+    "hs_lead_status": "OPEN",
+    "hs_email_optout": false,
+    "city": "London",
+    "country": "United Kingdom",
+    "unknown_hubspot_field": "should-be-unmapped"
+  },
+  {
+    "id": "hs-contact-2",
+    "email": "grace@example.com",
+    "firstname": "Grace",
+    "lastname": "Hopper",
+    "lifecyclestage": "marketingqualifiedlead",
+    "jobtitle": "Compiler Lead",
+    "phone": "+1 202 555 0147",
+    "company": "Naval Computing",
+    "hs_lead_status": "NEW",
+    "city": "Washington",
+    "country": "United States"
+  }
+]

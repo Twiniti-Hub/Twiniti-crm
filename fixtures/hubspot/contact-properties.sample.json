@@ -1,0 +1,100 @@
+[
+  {
+    "name": "email",
+    "label": "Email",
+    "type": "string",
+    "fieldType": "text",
+    "groupName": "contactinformation",
+    "options": []
+  },
+  {
+    "name": "firstname",
+    "label": "First Name",
+    "type": "string",
+    "fieldType": "text",
+    "groupName": "contactinformation",
+    "options": []
+  },
+  {
+    "name": "lastname",
+    "label": "Last Name",
+    "type": "string",
+    "fieldType": "text",
+    "groupName": "contactinformation",
+    "options": []
+  },
+  {
+    "name": "lifecyclestage",
+    "label": "Lifecycle Stage",
+    "type": "enumeration",
+    "fieldType": "radio",
+    "groupName": "contactinformation",
+    "options": [
+      { "label": "Subscriber", "value": "subscriber" },
+      { "label": "Lead", "value": "lead" },
+      { "label": "Marketing Qualified Lead", "value": "marketingqualifiedlead" },
+      { "label": "Customer", "value": "customer" }
+    ]
+  },
+  {
+    "name": "jobtitle",
+    "label": "Job Title",
+    "type": "string",
+    "fieldType": "text",
+    "groupName": "contactinformation",
+    "options": []
+  },
+  {
+    "name": "phone",
+    "label": "Phone Number",
+    "type": "string",
+    "fieldType": "phonenumber",
+    "groupName": "contactinformation",
+    "options": []
+  },
+  {
+    "name": "company",
+    "label": "Company Name",
+    "type": "string",
+    "fieldType": "text",
+    "groupName": "contactinformation",
+    "options": []
+  },
+  {
+    "name": "hs_lead_status",
+    "label": "Lead Status",
+    "type": "enumeration",
+    "fieldType": "select",
+    "groupName": "sales_properties",
+    "options": [
+      { "label": "New", "value": "NEW" },
+      { "label": "Open", "value": "OPEN" },
+      { "label": "In Progress", "value": "IN_PROGRESS" },
+      { "label": "Unqualified", "value": "UNQUALIFIED" }
+    ]
+  },
+  {
+    "name": "hs_email_optout",
+    "label": "Unsubscribed from all email",
+    "type": "bool",
+    "fieldType": "booleancheckbox",
+    "groupName": "emailinformation",
+    "options": []
+  },
+  {
+    "name": "city",
+    "label": "City",
+    "type": "string",
+    "fieldType": "text",
+    "groupName": "contactinformation",
+    "options": []
+  },
+  {
+    "name": "country",
+    "label": "Country/Region",
+    "type": "string",
+    "fieldType": "text",
+    "groupName": "contactinformation",
+    "options": []
+  }
+]

@@ -12,18 +12,35 @@ Production-ready cutover for Twiniti CRM. Work through each section before go-li
 
 ## 2. Disaster recovery (DR)
 
-- [ ] Document Neon backup / point-in-time restore procedure
+- [x] Document Neon backup / point-in-time restore procedure
 - [ ] Rehearse restore into a preview branch and validate schema + sample queries
-- [ ] Document Render rollback (previous deploy) for API, web, and worker
-- [ ] Verify secrets remain `sync: false` and recoverable from vault
+- [x] Document Render rollback (previous deploy) for API, web, and worker
+- [x] Verify secrets remain `sync: false` and recoverable from vault
 - [ ] Record RPO/RTO targets and owners
+
+### Neon backup / PITR (procedure)
+
+1. Open the Neon console for the Twiniti CRM project → **Branches** / **Backup & restore**.
+2. Note the current production branch and earliest available PITR timestamp.
+3. To restore: create a new branch from a point in time (or snapshot), then update `DATABASE_URL` on Render (API + worker) to the restored connection string for validation.
+4. Run `pnpm db:migrate` only if the restored schema is behind; otherwise verify with `/health` and a contact search.
+5. After validation, either promote the restored branch or copy data forward; keep the prior connection string recorded for rollback.
+
+### Render rollback (procedure)
+
+1. Open [Render Dashboard](https://dashboard.render.com) → service `Twiniti-crm` (and worker if separate).
+2. **Events** / deploys → select the last known-good deploy → **Rollback** (or clear-cache redeploy of that commit).
+3. Confirm `/health` returns `authMode: hexclave` (or expected mode) and that `VITE_*` build env vars are still present (Vite vars require a rebuild if missing).
+4. Worker: redeploy the matching commit so job processors stay schema-compatible with the API.
+
+Secrets for this project are `sync: false` in [`render.yaml`](../render.yaml); recover from the team vault / Render env UI — never from git.
 
 ## 3. Security
 
-- [ ] Review Hexclave auth paths (hosted sign-in, cookie token store, role gates)
+- [x] Review Hexclave auth paths (same-origin SignIn + cookie token store, role gates)
 - [ ] Agent abuse cases: over-scoped tokens, revoked credentials, dry-run vs mutate
 - [ ] Prompt-injection / tool-jailbreak attempts against MCP agent tools
-- [ ] Webhook signature validation for Resend (reject invalid signatures)
+- [x] Webhook signature validation for Resend (reject invalid signatures)
 - [ ] Penetration pass on public form submit + `/mcp` surfaces
 - [ ] Confirm no secrets in repo, CI logs, or OpenAPI examples
 

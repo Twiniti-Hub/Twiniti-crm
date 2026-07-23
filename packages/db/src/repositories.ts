@@ -2,6 +2,11 @@ import { and, asc, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-or
 // neon-http workers use optimistic claim rather than SKIP LOCKED transactions
 import type { Db } from "./client.js";
 import {
+  mapHubspotPropertyType,
+  normalizeHubspotInternalName,
+  type PropertyDataType
+} from "./hubspot.js";
+import {
   agentIdentities,
   auditEvents,
   campaigns,
@@ -9,6 +14,7 @@ import {
   contacts,
   crmUsers,
   customerEvents,
+  externalRecordIds,
   jobs,
   organizations,
   propertyDefinitions,
@@ -313,4 +319,175 @@ export async function listCampaigns(db: Db, organizationId: string) {
 
 export async function listSegments(db: Db, organizationId: string) {
   return db.select().from(segments).where(eq(segments.organizationId, organizationId)).orderBy(asc(segments.name));
+}
+
+export async function listPropertyDefinitions(
+  db: Db,
+  organizationId: string,
+  options?: { objectType?: string; includeArchived?: boolean }
+) {
+  const filters: SQL[] = [eq(propertyDefinitions.organizationId, organizationId)];
+  if (options?.objectType) {
+    filters.push(eq(propertyDefinitions.objectType, options.objectType));
+  }
+  if (!options?.includeArchived) {
+    filters.push(eq(propertyDefinitions.archived, false));
+  }
+  return db.select().from(propertyDefinitions).where(and(...filters)).orderBy(asc(propertyDefinitions.label));
+}
+
+export async function upsertPropertyDefinition(
+  db: Db,
+  input: {
+    organizationId: string;
+    objectType: string;
+    internalName: string;
+    label: string;
+    dataType: PropertyDataType;
+    fieldGroup?: string | null;
+    options?: unknown[];
+    required?: boolean;
+    searchable?: boolean;
+    hubspotMetadata?: Record<string, unknown>;
+    archived?: boolean;
+  }
+) {
+  const internalName = normalizeHubspotInternalName(input.internalName);
+  const existing = await db.select().from(propertyDefinitions).where(and(
+    eq(propertyDefinitions.organizationId, input.organizationId),
+    eq(propertyDefinitions.objectType, input.objectType),
+    eq(propertyDefinitions.internalName, internalName)
+  )).limit(1);
+
+  if (existing[0]) {
+    const [row] = await db.update(propertyDefinitions).set({
+      label: input.label,
+      dataType: input.dataType,
+      fieldGroup: input.fieldGroup ?? null,
+      options: input.options ?? [],
+      required: input.required ?? false,
+      searchable: input.searchable ?? false,
+      hubspotMetadata: input.hubspotMetadata ?? {},
+      archived: input.archived ?? false
+    }).where(eq(propertyDefinitions.id, existing[0].id)).returning();
+    return { row, created: false as const };
+  }
+
+  const [row] = await db.insert(propertyDefinitions).values({
+    organizationId: input.organizationId,
+    objectType: input.objectType,
+    internalName,
+    label: input.label,
+    dataType: input.dataType,
+    fieldGroup: input.fieldGroup ?? null,
+    options: input.options ?? [],
+    required: input.required ?? false,
+    searchable: input.searchable ?? false,
+    hubspotMetadata: input.hubspotMetadata ?? {},
+    archived: input.archived ?? false
+  }).returning();
+  return { row, created: true as const };
+}
+
+export async function upsertPropertyDefinitionFromHubspot(
+  db: Db,
+  organizationId: string,
+  objectType: string,
+  raw: {
+    name: string;
+    label?: string;
+    type?: string;
+    fieldType?: string;
+    groupName?: string;
+    options?: unknown[];
+    hidden?: boolean;
+  }
+) {
+  const dataType = mapHubspotPropertyType(raw.type, raw.fieldType);
+  return upsertPropertyDefinition(db, {
+    organizationId,
+    objectType,
+    internalName: raw.name,
+    label: raw.label?.trim() || raw.name,
+    dataType,
+    fieldGroup: raw.groupName ?? null,
+    options: Array.isArray(raw.options) ? raw.options : [],
+    searchable: dataType === "string" || dataType === "enum",
+    hubspotMetadata: {
+      type: raw.type ?? null,
+      fieldType: raw.fieldType ?? null,
+      groupName: raw.groupName ?? null,
+      name: raw.name
+    },
+    archived: Boolean(raw.hidden)
+  });
+}
+
+export async function upsertContactByEmail(
+  db: Db,
+  input: {
+    organizationId: string;
+    email: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    lifecycleStage?: string | null;
+    properties?: Record<string, unknown>;
+  }
+) {
+  const existing = await findContactByEmail(db, input.organizationId, input.email);
+  if (!existing) {
+    const row = await createContact(db, input);
+    return { row, created: true as const };
+  }
+  const mergedProperties = {
+    ...((existing.properties ?? {}) as Record<string, unknown>),
+    ...(input.properties ?? {})
+  };
+  const result = await updateContact(db, input.organizationId, existing.id, {
+    firstName: input.firstName === undefined ? existing.firstName : input.firstName,
+    lastName: input.lastName === undefined ? existing.lastName : input.lastName,
+    lifecycleStage: input.lifecycleStage === undefined ? existing.lifecycleStage : input.lifecycleStage,
+    properties: mergedProperties
+  });
+  if (!result || result.conflict) {
+    throw new Error("Failed to upsert contact");
+  }
+  return { row: result.row, created: false as const };
+}
+
+export async function upsertExternalRecordId(
+  db: Db,
+  input: {
+    organizationId: string;
+    provider: string;
+    objectType: string;
+    externalId: string;
+    internalId: string;
+    rawPayload?: Record<string, unknown>;
+  }
+) {
+  const existing = await db.select().from(externalRecordIds).where(and(
+    eq(externalRecordIds.organizationId, input.organizationId),
+    eq(externalRecordIds.provider, input.provider),
+    eq(externalRecordIds.objectType, input.objectType),
+    eq(externalRecordIds.externalId, input.externalId)
+  )).limit(1);
+
+  if (existing[0]) {
+    const [row] = await db.update(externalRecordIds).set({
+      internalId: input.internalId,
+      rawPayload: input.rawPayload ?? {}
+    }).where(eq(externalRecordIds.id, existing[0].id)).returning();
+    return row;
+  }
+
+  const [row] = await db.insert(externalRecordIds).values({
+    organizationId: input.organizationId,
+    provider: input.provider,
+    objectType: input.objectType,
+    externalId: input.externalId,
+    internalId: input.internalId,
+    rawPayload: input.rawPayload ?? {}
+  }).returning();
+  return row;
 }

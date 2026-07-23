@@ -338,6 +338,38 @@ export const createImportJobSchema = z.object({
   options: z.record(z.unknown()).default({})
 });
 
+/** HubSpot Properties API–like shape for one-time definition import. */
+export const hubspotPropertyDefinitionImportSchema = z.object({
+  name: z.string().trim().min(1).max(150),
+  label: z.string().trim().min(1).max(200).optional(),
+  type: z.string().trim().optional(),
+  fieldType: z.string().trim().optional(),
+  groupName: z.string().trim().max(100).optional(),
+  options: z
+    .array(
+      z.object({
+        label: z.string().optional(),
+        value: z.union([z.string(), z.number(), z.boolean()]).optional(),
+        displayOrder: z.number().optional(),
+        hidden: z.boolean().optional()
+      }).passthrough()
+    )
+    .optional()
+    .default([]),
+  hidden: z.boolean().optional(),
+  hasUniqueValue: z.boolean().optional()
+}).passthrough();
+
+export const hubspotPropertyDefinitionsImportBodySchema = z.object({
+  objectType: z.enum(["contact", "company"]).default("contact"),
+  properties: z.array(hubspotPropertyDefinitionImportSchema).min(1).max(5_000)
+});
+
+export const hubspotContactsImportBodySchema = z.object({
+  contacts: z.array(z.record(z.unknown())).min(1).max(50_000),
+  cursor: z.number().int().nonnegative().optional()
+});
+
 export const importJobSchema = createImportJobSchema.extend({
   id: z.string().uuid(),
   status: z.enum(["queued", "running", "completed", "failed", "cancelled"]),
@@ -411,4 +443,7 @@ export type Workflow = z.infer<typeof workflowSchema>;
 export type IngestEvent = z.infer<typeof ingestEventSchema>;
 export type CreateImportJob = z.infer<typeof createImportJobSchema>;
 export type ImportJob = z.infer<typeof importJobSchema>;
+export type HubspotPropertyDefinitionImport = z.infer<typeof hubspotPropertyDefinitionImportSchema>;
+export type HubspotPropertyDefinitionsImportBody = z.infer<typeof hubspotPropertyDefinitionsImportBodySchema>;
+export type HubspotContactsImportBody = z.infer<typeof hubspotContactsImportBodySchema>;
 export type AgentToolName = z.infer<typeof agentToolNameSchema>;

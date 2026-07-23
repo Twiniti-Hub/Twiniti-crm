@@ -1,0 +1,171 @@
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { api } from "../lib/api";
+
+type PropertyDefinition = {
+  id: string;
+  internalName: string;
+  label: string;
+  dataType: string;
+  fieldGroup: string | null;
+  options: unknown[];
+  required: boolean;
+  archived: boolean;
+};
+
+type Contact = {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  lifecycleStage: string | null;
+  properties: Record<string, unknown>;
+  version: number;
+};
+
+const CORE_NAMES = new Set(["email", "firstname", "lastname", "lifecyclestage"]);
+
+export function ContactDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const [contact, setContact] = useState<Contact | null>(null);
+  const [definitions, setDefinitions] = useState<PropertyDefinition[]>([]);
+  const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [lifecycleStage, setLifecycleStage] = useState("");
+  const [customValues, setCustomValues] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const grouped = useMemo(() => {
+    const fields = definitions.filter((d) => !CORE_NAMES.has(d.internalName) && !d.archived);
+    const groups = new Map<string, PropertyDefinition[]>();
+    for (const field of fields) {
+      const key = field.fieldGroup || "other";
+      const list = groups.get(key) ?? [];
+      list.push(field);
+      groups.set(key, list);
+    }
+    return [...groups.entries()];
+  }, [definitions]);
+
+  useEffect(() => {
+    if (!id) return;
+    Promise.all([
+      api(`/api/v1/contacts/${id}`),
+      api("/api/v1/properties?objectType=contact")
+    ])
+      .then(([contactRes, propsRes]) => {
+        const row = contactRes.data as Contact;
+        setContact(row);
+        setEmail(row.email);
+        setFirstName(row.firstName ?? "");
+        setLastName(row.lastName ?? "");
+        setLifecycleStage(row.lifecycleStage ?? "");
+        const next: Record<string, string> = {};
+        for (const [key, value] of Object.entries(row.properties ?? {})) {
+          next[key] = value == null ? "" : String(value);
+        }
+        setCustomValues(next);
+        setDefinitions((propsRes.data ?? []) as PropertyDefinition[]);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load contact"));
+  }, [id]);
+
+  async function onSave(event: FormEvent) {
+    event.preventDefault();
+    if (!contact) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const properties: Record<string, unknown> = { ...(contact.properties ?? {}) };
+      for (const field of definitions) {
+        if (CORE_NAMES.has(field.internalName) || field.archived) continue;
+        const value = customValues[field.internalName];
+        if (value === "" || value == null) delete properties[field.internalName];
+        else properties[field.internalName] = value;
+      }
+      const res = await api(`/api/v1/contacts/${contact.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          email,
+          firstName: firstName || null,
+          lastName: lastName || null,
+          lifecycleStage: lifecycleStage || null,
+          properties,
+          version: contact.version
+        })
+      });
+      const row = res.data as Contact;
+      setContact(row);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!contact && !error) {
+    return <div className="banner info">Loading contact…</div>;
+  }
+
+  return (
+    <>
+      <header className="topbar">
+        <div>
+          <p className="eyebrow">CRM</p>
+          <h1>{contact?.email ?? "Contact"}</h1>
+        </div>
+        <Link className="quiet" to="/contacts">
+          Back to contacts
+        </Link>
+      </header>
+      {error ? <div className="banner error">{error}</div> : null}
+      {contact ? (
+        <form className="stack-form" onSubmit={onSave}>
+          <div className="form-row">
+            <label>
+              Email
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </label>
+            <label>
+              First name
+              <input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+            </label>
+            <label>
+              Last name
+              <input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+            </label>
+            <label>
+              Lifecycle stage
+              <input value={lifecycleStage} onChange={(e) => setLifecycleStage(e.target.value)} />
+            </label>
+          </div>
+          {grouped.map(([group, fields]) => (
+            <section key={group} className="panel" style={{ marginTop: 12 }}>
+              <p className="eyebrow">{group}</p>
+              <div className="form-row">
+                {fields.map((field) => (
+                  <label key={field.id}>
+                    {field.label}
+                    <span className="muted"> ({field.internalName})</span>
+                    <input
+                      value={customValues[field.internalName] ?? ""}
+                      required={field.required}
+                      onChange={(e) =>
+                        setCustomValues((prev) => ({ ...prev, [field.internalName]: e.target.value }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            </section>
+          ))}
+          <button className="primary" type="submit" disabled={busy}>
+            {busy ? "Saving…" : "Save contact"}
+          </button>
+        </form>
+      ) : null}
+    </>
+  );
+}

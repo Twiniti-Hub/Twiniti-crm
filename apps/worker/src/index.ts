@@ -6,16 +6,21 @@ import {
   campaigns,
   claimJobs,
   completeJob,
-  createContact,
   emailEvents,
   emailSends,
   enqueueJob,
-  findContactByEmail,
+  getContactById,
   getDb,
+  HUBSPOT_CORE_CONTACT_FIELDS,
   importJobs,
   importRows,
   isEmailSuppressed,
+  listPropertyDefinitions,
+  mapHubspotContactRow,
   organizations,
+  upsertContactByEmail,
+  upsertExternalRecordId,
+  upsertPropertyDefinitionFromHubspot,
   webhookEvents,
   workflowEnrollments,
   workflowRuns,
@@ -30,6 +35,7 @@ const env = loadEnv({
 });
 
 const db = getDb(env.DATABASE_URL);
+const CHECKPOINT_EVERY = 25;
 
 async function processCampaignSend(payload: { campaignId: string }) {
   const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, payload.campaignId)).limit(1);
@@ -45,10 +51,15 @@ async function processCampaignSend(payload: { campaignId: string }) {
       continue;
     }
 
+    const contact = recipient.contactId
+      ? await getContactById(db, campaign.organizationId, recipient.contactId)
+      : null;
+
     const html = personalizeForContact(campaign.htmlBody ?? "", {
       email: recipient.emailNormalized,
-      firstName: null,
-      lastName: null
+      firstName: contact?.firstName ?? null,
+      lastName: contact?.lastName ?? null,
+      properties: (contact?.properties ?? {}) as Record<string, unknown>
     });
 
     if (!env.RESEND_API_KEY) {
@@ -103,70 +114,183 @@ async function processCampaignSend(payload: { campaignId: string }) {
   });
 }
 
-async function processHubspotImport(payload: {
+async function processHubspotPropertiesImport(payload: {
   importJobId: string;
-  contacts?: Array<Record<string, unknown>>;
+  objectType?: string;
+  properties?: Array<Record<string, unknown>>;
+  cursor?: number;
 }) {
   const [job] = await db.select().from(importJobs).where(eq(importJobs.id, payload.importJobId)).limit(1);
   if (!job) throw new Error("Import job not found");
+  const objectType = payload.objectType ?? "contact";
+  const properties = payload.properties ?? [];
+  const start = Math.max(0, Number(payload.cursor ?? (job.stats as { cursor?: number })?.cursor ?? 0));
+
   await db.update(importJobs).set({ status: "running" }).where(eq(importJobs.id, job.id));
 
-  let imported = 0;
-  let skipped = 0;
-  let failed = 0;
-  for (const row of payload.contacts ?? []) {
-    const email = String(row.email ?? "");
+  let created = Number((job.stats as { created?: number })?.created ?? 0);
+  let updated = Number((job.stats as { updated?: number })?.updated ?? 0);
+  let failed = Number((job.stats as { failed?: number })?.failed ?? 0);
+  let cursor = start;
+
+  for (let i = start; i < properties.length; i += 1) {
+    const raw = properties[i] ?? {};
+    const name = typeof raw.name === "string" ? raw.name : "";
     try {
-      if (!email) {
-        skipped += 1;
-        continue;
+      if (!name) {
+        failed += 1;
+        await db.insert(importRows).values({
+          organizationId: job.organizationId,
+          importJobId: job.id,
+          objectType: "property_definition",
+          externalId: `row-${i}`,
+          status: "failed",
+          payload: raw,
+          error: "missing name"
+        });
+      } else {
+        const result = await upsertPropertyDefinitionFromHubspot(db, job.organizationId, objectType, {
+          name,
+          label: typeof raw.label === "string" ? raw.label : undefined,
+          type: typeof raw.type === "string" ? raw.type : undefined,
+          fieldType: typeof raw.fieldType === "string" ? raw.fieldType : undefined,
+          groupName: typeof raw.groupName === "string" ? raw.groupName : undefined,
+          options: Array.isArray(raw.options) ? raw.options : [],
+          hidden: Boolean(raw.hidden)
+        });
+        if (result.created) created += 1;
+        else updated += 1;
+        await db.insert(importRows).values({
+          organizationId: job.organizationId,
+          importJobId: job.id,
+          objectType: "property_definition",
+          externalId: name,
+          status: result.created ? "imported" : "updated",
+          payload: { ...raw, internalId: result.row.id }
+        });
       }
-      const existing = await findContactByEmail(db, job.organizationId, email);
-      if (existing) {
-        skipped += 1;
+    } catch (error) {
+      failed += 1;
+      await db.insert(importRows).values({
+        organizationId: job.organizationId,
+        importJobId: job.id,
+        objectType: "property_definition",
+        externalId: name || `row-${i}`,
+        status: "failed",
+        payload: raw,
+        error: error instanceof Error ? error.message : "import failed"
+      });
+    }
+
+    cursor = i + 1;
+    if (cursor % CHECKPOINT_EVERY === 0 || cursor === properties.length) {
+      await db.update(importJobs).set({
+        stats: { created, updated, failed, cursor, total: properties.length }
+      }).where(eq(importJobs.id, job.id));
+    }
+  }
+
+  await db.update(importJobs).set({
+    status: "completed",
+    stats: { created, updated, failed, cursor, total: properties.length },
+    completedAt: new Date()
+  }).where(eq(importJobs.id, job.id));
+}
+
+async function processHubspotImport(payload: {
+  importJobId: string;
+  contacts?: Array<Record<string, unknown>>;
+  cursor?: number;
+}) {
+  const [job] = await db.select().from(importJobs).where(eq(importJobs.id, payload.importJobId)).limit(1);
+  if (!job) throw new Error("Import job not found");
+  const contactsPayload = payload.contacts ?? [];
+  const start = Math.max(0, Number(payload.cursor ?? (job.stats as { cursor?: number })?.cursor ?? 0));
+
+  await db.update(importJobs).set({ status: "running" }).where(eq(importJobs.id, job.id));
+
+  const definitions = await listPropertyDefinitions(db, job.organizationId, { objectType: "contact" });
+  const definedNames = new Set(definitions.map((d) => d.internalName));
+  for (const core of HUBSPOT_CORE_CONTACT_FIELDS) definedNames.add(core);
+
+  let imported = Number((job.stats as { imported?: number })?.imported ?? 0);
+  let updated = Number((job.stats as { updated?: number })?.updated ?? 0);
+  let failed = Number((job.stats as { failed?: number })?.failed ?? 0);
+  let unmapped = Number((job.stats as { unmapped?: number })?.unmapped ?? 0);
+  let cursor = start;
+
+  for (let i = start; i < contactsPayload.length; i += 1) {
+    const row = contactsPayload[i] ?? {};
+    try {
+      const mapped = mapHubspotContactRow(row, definedNames);
+      if ("error" in mapped) {
+        failed += 1;
         await db.insert(importRows).values({
           organizationId: job.organizationId,
           importJobId: job.id,
           objectType: "contact",
-          externalId: String(row.id ?? email),
-          status: "skipped",
-          payload: row
+          externalId: String(row.id ?? `row-${i}`),
+          status: "failed",
+          payload: row,
+          error: mapped.error
         });
-        continue;
+      } else {
+        unmapped += mapped.unmappedKeys.length;
+        const result = await upsertContactByEmail(db, {
+          organizationId: job.organizationId,
+          email: mapped.email,
+          firstName: mapped.firstName,
+          lastName: mapped.lastName,
+          lifecycleStage: mapped.lifecycleStage,
+          properties: mapped.properties
+        });
+        if (result.created) imported += 1;
+        else updated += 1;
+
+        if (mapped.externalId) {
+          await upsertExternalRecordId(db, {
+            organizationId: job.organizationId,
+            provider: "hubspot",
+            objectType: "contact",
+            externalId: mapped.externalId,
+            internalId: result.row.id,
+            rawPayload: row
+          });
+        }
+
+        await db.insert(importRows).values({
+          organizationId: job.organizationId,
+          importJobId: job.id,
+          objectType: "contact",
+          externalId: mapped.externalId ?? mapped.email,
+          status: result.created ? "imported" : "updated",
+          payload: { ...row, internalId: result.row.id, unmappedKeys: mapped.unmappedKeys }
+        });
       }
-      const contact = await createContact(db, {
-        organizationId: job.organizationId,
-        email,
-        firstName: typeof row.firstname === "string" ? row.firstname : typeof row.firstName === "string" ? row.firstName : null,
-        lastName: typeof row.lastname === "string" ? row.lastname : typeof row.lastName === "string" ? row.lastName : null,
-        properties: row
-      });
-      imported += 1;
-      await db.insert(importRows).values({
-        organizationId: job.organizationId,
-        importJobId: job.id,
-        objectType: "contact",
-        externalId: String(row.id ?? email),
-        status: "imported",
-        payload: { ...row, internalId: contact.id }
-      });
     } catch (error) {
       failed += 1;
       await db.insert(importRows).values({
         organizationId: job.organizationId,
         importJobId: job.id,
         objectType: "contact",
-        externalId: String(row.id ?? email),
+        externalId: String(row.id ?? row.email ?? `row-${i}`),
         status: "failed",
         payload: row,
         error: error instanceof Error ? error.message : "import failed"
       });
     }
+
+    cursor = i + 1;
+    if (cursor % CHECKPOINT_EVERY === 0 || cursor === contactsPayload.length) {
+      await db.update(importJobs).set({
+        stats: { imported, updated, failed, unmapped, cursor, total: contactsPayload.length }
+      }).where(eq(importJobs.id, job.id));
+    }
   }
 
   await db.update(importJobs).set({
     status: "completed",
-    stats: { imported, skipped, failed },
+    stats: { imported, updated, failed, unmapped, cursor, total: contactsPayload.length },
     completedAt: new Date()
   }).where(eq(importJobs.id, job.id));
 }
@@ -240,16 +364,46 @@ async function processWorkflowStep(payload: {
 
   const [workflow] = await db.select().from(workflows).where(eq(workflows.id, payload.workflowId)).limit(1);
   if (!workflow) return;
-  const definition = workflow.definition as { steps?: Array<{ type: string; campaignId?: string }> };
+  const definition = workflow.definition as {
+    steps?: Array<{ type: string; campaignId?: string; field?: string; value?: unknown }>;
+  };
   const stepIndex = payload.stepIndex ?? 0;
   const step = definition.steps?.[stepIndex];
-  await db.insert(workflowRuns).values({
-    organizationId: workflow.organizationId,
-    enrollmentId: payload.enrollmentId,
-    stepIndex,
-    status: "completed",
-    result: { step: step ?? null }
-  });
+
+  if (step?.type === "condition" && step.field && payload.contactId) {
+    const contact = await getContactById(db, workflow.organizationId, payload.contactId);
+    const props = (contact?.properties ?? {}) as Record<string, unknown>;
+    const field = String(step.field);
+    const actual = field.startsWith("properties.")
+      ? props[field.slice("properties.".length)]
+      : field === "lifecycle_stage" || field === "lifecyclestage"
+        ? contact?.lifecycleStage
+        : null;
+    const matched = actual === step.value;
+    await db.insert(workflowRuns).values({
+      organizationId: workflow.organizationId,
+      enrollmentId: payload.enrollmentId,
+      stepIndex,
+      status: matched ? "completed" : "skipped",
+      result: { step, actual, matched }
+    });
+    if (!matched) {
+      await db.update(workflowEnrollments).set({
+        status: "completed",
+        updatedAt: new Date()
+      }).where(eq(workflowEnrollments.id, payload.enrollmentId));
+      return;
+    }
+  } else {
+    await db.insert(workflowRuns).values({
+      organizationId: workflow.organizationId,
+      enrollmentId: payload.enrollmentId,
+      stepIndex,
+      status: "completed",
+      result: { step: step ?? null }
+    });
+  }
+
   await db.update(workflowEnrollments).set({
     currentStep: stepIndex + 1,
     status: step ? "active" : "completed",
@@ -270,8 +424,20 @@ async function handleJob(kind: string, payload: Record<string, unknown>) {
     case "campaign.send":
       await processCampaignSend(payload as { campaignId: string });
       return;
+    case "import.hubspot.properties":
+      await processHubspotPropertiesImport(payload as {
+        importJobId: string;
+        objectType?: string;
+        properties?: Array<Record<string, unknown>>;
+        cursor?: number;
+      });
+      return;
     case "import.hubspot":
-      await processHubspotImport(payload as { importJobId: string; contacts?: Array<Record<string, unknown>> });
+      await processHubspotImport(payload as {
+        importJobId: string;
+        contacts?: Array<Record<string, unknown>>;
+        cursor?: number;
+      });
       return;
     case "webhook.resend.process":
       await processResendWebhook(payload as { webhookEventId: string; organizationId?: string | null });

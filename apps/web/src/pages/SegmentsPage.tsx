@@ -1,12 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api } from "../lib/api";
 
-const DEFAULT_FILTER_AST = JSON.stringify(
-  { op: "and", children: [{ op: "eq", field: "lifecycle_stage", value: "lead" }] },
-  null,
-  2
-);
-
 type Segment = {
   id: string;
   name: string;
@@ -14,16 +8,39 @@ type Segment = {
   filterAst: unknown;
 };
 
+type PropertyDefinition = {
+  id: string;
+  internalName: string;
+  label: string;
+  archived: boolean;
+};
+
+const CORE_FIELDS = [
+  { value: "email", label: "Email" },
+  { value: "lifecycle_stage", label: "Lifecycle stage" },
+  { value: "first_name", label: "First name" },
+  { value: "last_name", label: "Last name" }
+];
+
 export function SegmentsPage() {
   const [segments, setSegments] = useState<Segment[]>([]);
+  const [definitions, setDefinitions] = useState<PropertyDefinition[]>([]);
   const [name, setName] = useState("");
-  const [filterAstText, setFilterAstText] = useState(DEFAULT_FILTER_AST);
+  const [field, setField] = useState("lifecycle_stage");
+  const [op, setOp] = useState<"eq" | "contains" | "neq">("eq");
+  const [value, setValue] = useState("lead");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function load() {
-    const res = await api("/api/v1/segments");
-    setSegments((res.data ?? []) as Segment[]);
+    const [segmentsRes, propsRes] = await Promise.all([
+      api("/api/v1/segments"),
+      api("/api/v1/properties?objectType=contact")
+    ]);
+    setSegments((segmentsRes.data ?? []) as Segment[]);
+    setDefinitions(
+      ((propsRes.data ?? []) as PropertyDefinition[]).filter((d) => !d.archived)
+    );
   }
 
   useEffect(() => {
@@ -35,13 +52,15 @@ export function SegmentsPage() {
     setBusy(true);
     setError(null);
     try {
-      const filterAst = JSON.parse(filterAstText) as unknown;
+      const filterAst = {
+        op: "and",
+        children: [{ op, field, value }]
+      };
       await api("/api/v1/segments", {
         method: "POST",
         body: JSON.stringify({ name, filterAst })
       });
       setName("");
-      setFilterAstText(DEFAULT_FILTER_AST);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
@@ -49,6 +68,13 @@ export function SegmentsPage() {
       setBusy(false);
     }
   }
+
+  const fieldOptions = [
+    ...CORE_FIELDS,
+    ...definitions
+      .filter((d) => !["email", "firstname", "lastname", "lifecyclestage"].includes(d.internalName))
+      .map((d) => ({ value: `properties.${d.internalName}`, label: `${d.label} (${d.internalName})` }))
+  ];
 
   return (
     <>
@@ -64,10 +90,30 @@ export function SegmentsPage() {
           Name
           <input value={name} onChange={(e) => setName(e.target.value)} required />
         </label>
-        <label>
-          Filter AST (JSON)
-          <textarea value={filterAstText} onChange={(e) => setFilterAstText(e.target.value)} rows={8} />
-        </label>
+        <div className="form-row">
+          <label>
+            Field
+            <select value={field} onChange={(e) => setField(e.target.value)}>
+              {fieldOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Operator
+            <select value={op} onChange={(e) => setOp(e.target.value as typeof op)}>
+              <option value="eq">equals</option>
+              <option value="neq">not equals</option>
+              <option value="contains">contains</option>
+            </select>
+          </label>
+          <label>
+            Value
+            <input value={value} onChange={(e) => setValue(e.target.value)} required />
+          </label>
+        </div>
         <button className="primary" type="submit" disabled={busy}>
           {busy ? "Creating…" : "Create segment"}
         </button>

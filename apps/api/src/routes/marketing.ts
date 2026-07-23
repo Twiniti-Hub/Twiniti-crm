@@ -10,6 +10,8 @@ import {
   createListSchema,
   createWorkflowSchema,
   filterAstSchema,
+  hubspotContactsImportBodySchema,
+  hubspotPropertyDefinitionsImportBodySchema,
   ingestEventSchema
 } from "@twiniti/contracts";
 import {
@@ -18,8 +20,8 @@ import {
   campaignRecipients,
   campaigns,
   compileFilterAst,
-  contentHash,
   contacts,
+  contentHash,
   createContact,
   customerEvents,
   emailEvents,
@@ -33,6 +35,7 @@ import {
   isEmailSuppressed,
   listCampaigns,
   listMemberships,
+  listPropertyDefinitions,
   listSegments,
   lists,
   mintAgentCredential,
@@ -69,7 +72,10 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/properties", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      const data = await db.select().from(propertyDefinitions).where(eq(propertyDefinitions.organizationId, actor.organizationId));
+      const query = request.query as { objectType?: string };
+      const data = await listPropertyDefinitions(db, actor.organizationId, {
+        objectType: query.objectType
+      });
       return { data };
     } catch (error) {
       return sendError(reply, error);
@@ -353,7 +359,12 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       const previews = sampleContacts.map((contact) => ({
         contactId: contact.id,
         email: contact.email,
-        html: personalizeForContact(campaign.htmlBody ?? "", contact),
+        html: personalizeForContact(campaign.htmlBody ?? "", {
+          email: contact.email,
+          firstName: contact.firstName,
+          lastName: contact.lastName,
+          properties: (contact.properties ?? {}) as Record<string, unknown>
+        }),
         suppressed: false
       }));
       for (const preview of previews) {
@@ -575,24 +586,79 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
     }
   });
 
+  app.post("/api/v1/imports/hubspot/properties", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireUserRole(actor, "admin");
+      const body = hubspotPropertyDefinitionsImportBodySchema.parse(request.body);
+      const [job] = await db.insert(importJobs).values({
+        organizationId: actor.organizationId,
+        provider: "hubspot",
+        mode: "csv",
+        status: "queued",
+        stats: { queued: body.properties.length, kind: "properties", cursor: 0 }
+      }).returning();
+      await enqueueJob(db, {
+        organizationId: actor.organizationId,
+        kind: "import.hubspot.properties",
+        payload: {
+          importJobId: job.id,
+          objectType: body.objectType,
+          properties: body.properties,
+          cursor: 0
+        }
+      });
+      await audit(db, actor, "import.hubspot.properties", "import_job", job.id, {
+        count: body.properties.length
+      });
+      reply.code(202);
+      return { data: job };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
   app.post("/api/v1/imports/hubspot", async (request, reply) => {
     try {
       const actor = requireActor(request);
       requireUserRole(actor, "admin");
-      const body = request.body as { mode?: "api" | "csv"; token?: string; contacts?: Array<Record<string, unknown>> };
+      const body = hubspotContactsImportBodySchema.parse(request.body);
       const [job] = await db.insert(importJobs).values({
         organizationId: actor.organizationId,
         provider: "hubspot",
-        mode: body.mode ?? "csv",
+        mode: "csv",
         status: "queued",
-        stats: { queued: (body.contacts ?? []).length }
+        stats: { queued: body.contacts.length, kind: "contacts", cursor: body.cursor ?? 0 }
       }).returning();
       await enqueueJob(db, {
         organizationId: actor.organizationId,
         kind: "import.hubspot",
-        payload: { importJobId: job.id, contacts: body.contacts ?? [], token: body.token ?? null }
+        payload: {
+          importJobId: job.id,
+          contacts: body.contacts,
+          cursor: body.cursor ?? 0
+        }
+      });
+      await audit(db, actor, "import.hubspot.contacts", "import_job", job.id, {
+        count: body.contacts.length
       });
       reply.code(202);
+      return { data: job };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.get("/api/v1/imports/:id", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireUserRole(actor, "viewer");
+      const { id } = request.params as { id: string };
+      const [job] = await db.select().from(importJobs).where(and(
+        eq(importJobs.id, id),
+        eq(importJobs.organizationId, actor.organizationId)
+      )).limit(1);
+      if (!job) return reply.code(404).send({ error: { code: "not_found", message: "Import job not found" } });
       return { data: job };
     } catch (error) {
       return sendError(reply, error);
@@ -701,6 +767,11 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       const signature = request.headers["svix-signature"] ?? request.headers["resend-signature"];
       const signatureHeader = Array.isArray(signature) ? signature[0] : signature;
       const valid = verifyResendWebhookSignature(raw, signatureHeader, env.RESEND_WEBHOOK_SECRET);
+      if (!valid) {
+        return reply.code(401).send({
+          error: { code: "unauthorized", message: "Invalid Resend webhook signature" }
+        });
+      }
       const payload = typeof request.body === "object" && request.body ? request.body as Record<string, unknown> : { raw };
       const [org] = await db.select().from(organizations).limit(1);
       const event = await storeWebhookEvent(db, {
@@ -708,14 +779,14 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
         provider: "resend",
         eventType: typeof payload.type === "string" ? payload.type : "unknown",
         payload,
-        signatureValid: valid
+        signatureValid: true
       });
       await enqueueJob(db, {
         organizationId: org?.id ?? null,
         kind: "webhook.resend.process",
         payload: { webhookEventId: event.id, organizationId: org?.id ?? null }
       });
-      return { data: { accepted: true, signatureValid: valid } };
+      return { data: { accepted: true, signatureValid: true } };
     } catch (error) {
       return sendError(reply, error);
     }

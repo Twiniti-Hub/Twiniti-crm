@@ -5,6 +5,7 @@ import { authConfigured } from "../hexclave/client";
 const links = [
   { to: "/", label: "Overview", end: true },
   { to: "/contacts", label: "Contacts" },
+  { to: "/import", label: "Import" },
   { to: "/companies", label: "Companies" },
   { to: "/segments", label: "Segments" },
   { to: "/campaigns", label: "Campaigns" },

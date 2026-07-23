@@ -78,25 +78,42 @@ export function verifyResendWebhookSignature(
 }
 
 export function renderTemplate(html: string, tokens: Record<string, string>): string {
-  return html.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key: string) => {
+  return html.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (_match, key: string) => {
     return Object.prototype.hasOwnProperty.call(tokens, key) ? tokens[key] : "";
   });
 }
 
 export function personalizeForContact(
   html: string,
-  contact: { firstName?: string | null; lastName?: string | null; email: string }
+  contact: {
+    firstName?: string | null;
+    lastName?: string | null;
+    email: string;
+    properties?: Record<string, unknown>;
+  }
 ): string {
   const firstName = contact.firstName ?? "";
   const lastName = contact.lastName ?? "";
   const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
-  return renderTemplate(html, {
+  const tokens: Record<string, string> = {
     firstName,
     lastName,
     fullName,
     email: contact.email,
     first_name: firstName,
     last_name: lastName,
-    full_name: fullName
+    full_name: fullName,
+    firstname: firstName,
+    lastname: lastName
+  };
+
+  for (const [key, value] of Object.entries(contact.properties ?? {})) {
+    const rendered = value == null ? "" : Array.isArray(value) ? value.join(", ") : String(value);
+    tokens[key] = rendered;
+    tokens[`properties.${key}`] = rendered;
+  }
+
+  return html.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (_match, key: string) => {
+    return Object.prototype.hasOwnProperty.call(tokens, key) ? tokens[key] : "";
   });
 }

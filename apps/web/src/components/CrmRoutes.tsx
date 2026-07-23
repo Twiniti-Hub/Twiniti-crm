@@ -2,9 +2,11 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AgentsPage } from "../pages/AgentsPage";
 import { CampaignsPage } from "../pages/CampaignsPage";
 import { CompaniesPage } from "../pages/CompaniesPage";
+import { ContactDetailPage } from "../pages/ContactDetailPage";
 import { ContactsPage } from "../pages/ContactsPage";
 import { DeliverabilityPage } from "../pages/DeliverabilityPage";
 import { FormsPage } from "../pages/FormsPage";
+import { ImportPage } from "../pages/ImportPage";
 import { OverviewPage } from "../pages/OverviewPage";
 import { SegmentsPage } from "../pages/SegmentsPage";
 import { SettingsPage } from "../pages/SettingsPage";
@@ -17,6 +19,8 @@ export function CrmRoutes() {
       <Route element={<Shell />}>
         <Route index element={<OverviewPage />} />
         <Route path="contacts" element={<ContactsPage />} />
+        <Route path="contacts/:id" element={<ContactDetailPage />} />
+        <Route path="import" element={<ImportPage />} />
         <Route path="companies" element={<CompaniesPage />} />
         <Route path="segments" element={<SegmentsPage />} />
         <Route path="campaigns" element={<CampaignsPage />} />

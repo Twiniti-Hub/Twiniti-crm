@@ -6,39 +6,77 @@ type FormRow = {
   name: string;
   slug: string;
   published: boolean;
+  fields?: Array<{ name: string; label: string; type: string; required?: boolean }>;
 };
+
+type PropertyDefinition = {
+  id: string;
+  internalName: string;
+  label: string;
+  dataType: string;
+  required: boolean;
+  archived: boolean;
+};
+
+const CORE_ALWAYS = [
+  { name: "email", label: "Email", type: "email", required: true }
+];
 
 export function FormsPage() {
   const [forms, setForms] = useState<FormRow[]>([]);
+  const [definitions, setDefinitions] = useState<PropertyDefinition[]>([]);
+  const [selectedProps, setSelectedProps] = useState<string[]>([]);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function load() {
-    const res = await api("/api/v1/forms");
-    setForms((res.data ?? []) as FormRow[]);
+    const [formsRes, propsRes] = await Promise.all([
+      api("/api/v1/forms"),
+      api("/api/v1/properties?objectType=contact")
+    ]);
+    setForms((formsRes.data ?? []) as FormRow[]);
+    setDefinitions(
+      ((propsRes.data ?? []) as PropertyDefinition[]).filter(
+        (d) => !d.archived && d.internalName !== "email"
+      )
+    );
   }
 
   useEffect(() => {
     load().catch((err) => setError(err instanceof Error ? err.message : "Failed to load forms"));
   }, []);
 
+  function toggleProp(internalName: string) {
+    setSelectedProps((prev) =>
+      prev.includes(internalName) ? prev.filter((x) => x !== internalName) : [...prev, internalName]
+    );
+  }
+
   async function onCreate(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError(null);
     try {
+      const fields = [
+        ...CORE_ALWAYS,
+        ...definitions
+          .filter((d) => selectedProps.includes(d.internalName))
+          .map((d) => ({
+            name: d.internalName,
+            label: d.label,
+            type: d.dataType === "boolean" ? "checkbox" : "text",
+            required: d.required
+          }))
+      ];
       await api("/api/v1/forms", {
         method: "POST",
-        body: JSON.stringify({
-          name,
-          slug,
-          fields: [{ name: "email", label: "Email", type: "email", required: true }]
-        })
+        body: JSON.stringify({ name, slug, fields })
       });
       setName("");
       setSlug("");
+      setSelectedProps([]);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
@@ -73,6 +111,25 @@ export function FormsPage() {
             />
           </label>
         </div>
+        <fieldset>
+          <legend className="eyebrow">Fields from property definitions</legend>
+          <p className="muted">Email is always included. Select additional HubSpot-mapped properties.</p>
+          <div className="form-row">
+            {definitions.map((def) => (
+              <label key={def.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={selectedProps.includes(def.internalName)}
+                  onChange={() => toggleProp(def.internalName)}
+                />
+                {def.label} <code>{def.internalName}</code>
+              </label>
+            ))}
+            {!definitions.length ? (
+              <p className="muted">No property definitions yet — import HubSpot properties first.</p>
+            ) : null}
+          </div>
+        </fieldset>
         <button className="primary" type="submit" disabled={busy}>
           {busy ? "Creating…" : "Create form"}
         </button>

@@ -3,3 +3,4 @@ export * from "./schema.js";
 export * from "./repositories.js";
 export * from "./filters.js";
 export * from "./jobs.js";
+export * from "./hubspot.js";

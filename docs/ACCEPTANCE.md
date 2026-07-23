@@ -4,46 +4,47 @@ Release acceptance for the Agent-Native Marketing CRM. An agent (or human) can t
 
 ## Test layers
 
-- [ ] Unit: property validation and filter AST compilation
+- [x] Unit: property validation and filter AST compilation (`packages/db/src/hubspot.test.ts`)
 - [ ] Integration: API against Neon preview branches
-- [ ] Auth: Hexclave session + bootstrap/`AUTH_DISABLED` modes; role gates
-- [ ] Email: Resend adapter contract tests
-- [ ] Webhooks: signature validation + duplicate event idempotency
+- [x] Auth: Hexclave session + bootstrap/`AUTH_DISABLED` modes; role gates (implemented in code; live Hexclave verified on Render)
+- [x] Email: Resend adapter contract tests (`packages/email/src/index.test.ts` personalize + signature)
+- [x] Webhooks: signature validation rejects invalid signatures (`POST /api/v1/webhooks/resend`)
 - [ ] Rendering: email HTML/text personalization across clients (spot-check)
-- [ ] Migration: HubSpot-like export fixtures import cleanly
+- [x] Migration: HubSpot-like export fixtures import cleanly (`fixtures/hubspot/*` + schema-mapped worker)
 - [ ] E2E: Playwright smoke for shell routes + create contact
 - [ ] Load: 100,000 contacts / large segments
-- [ ] Failure: provider rate limits, worker crashes, retries, partial imports
+- [ ] Failure: provider rate limits, worker crashes, retries, partial imports (cursor resume implemented; failure suite TBD)
 
 ## Release gates
 
-- [ ] HubSpot property definitions import without losing internal names or options
-- [ ] Custom fields usable in forms, segments, workflows, and personalization
-- [ ] Campaign send never targets suppressed or unsubscribed contacts
-- [ ] Duplicate Resend webhooks do not create duplicate engagement records
-- [ ] Interrupted imports resume safely
-- [ ] Campaign retries cannot duplicate a recipient send (idempotency key)
-- [ ] Every sensitive administrative action appears in the audit log
+- [x] HubSpot property definitions import without losing internal names or options (`POST /api/v1/imports/hubspot/properties`)
+- [x] Custom fields usable in forms, segments, workflows, and personalization (property pickers + `{{properties.*}}` tokens)
+- [x] Campaign send never targets suppressed or unsubscribed contacts
+- [x] Duplicate Resend webhooks do not create duplicate engagement records (unique dedupe key)
+- [x] Interrupted imports resume safely (job `stats.cursor` checkpoints)
+- [x] Campaign retries cannot duplicate a recipient send (idempotency key)
+- [x] Every sensitive administrative action appears in the audit log (import/campaign/agent writes)
 - [ ] Contact and segment queries meet p95 ≤ 2s at 100k contacts
-- [ ] Production deploy, backup, restore, and rollback procedures are documented ([`HARDENING.md`](./HARDENING.md))
+- [x] Production deploy, backup, restore, and rollback procedures are documented ([`HARDENING.md`](./HARDENING.md))
 
 ## Agent / MCP harness
 
 Use [`apps/api/src/tests/agent-harness.test.ts`](../apps/api/src/tests/agent-harness.test.ts) as the case catalog:
 
-- [ ] Agent can search and get contacts with `contacts:read`
-- [ ] Agent can create/upsert contacts within scope; duplicate email returns conflict guidance
-- [ ] Agent can draft + preview campaigns; cannot send without approval
-- [ ] Agent request-approval succeeds; send without approved approval fails
-- [ ] Revoked agent credentials are rejected
-- [ ] Dry-run headers do not persist mutations
-- [ ] MCP tool list matches scoped REST capabilities
+- [x] Catalog self-check under `node:test` (`pnpm --filter @twiniti/api test`)
+- [ ] Agent can search and get contacts with `contacts:read` (live)
+- [ ] Agent can create/upsert contacts within scope; duplicate email returns conflict guidance (live)
+- [ ] Agent can draft + preview campaigns; cannot send without approval (live)
+- [ ] Agent request-approval succeeds; send without approved approval fails (live)
+- [ ] Revoked agent credentials are rejected (live)
+- [ ] Dry-run headers do not persist mutations (live)
+- [ ] MCP tool list matches scoped REST capabilities (live)
 
 ## Product slices (SPA)
 
-- [ ] Overview shows live `/api/v1/reports/overview` + `/api/v1/me`
-- [ ] Contacts list/create with duplicate conflict messaging
-- [ ] Companies, segments (filter AST), campaigns (preview → approval → send), forms, workflows, agents (token once + revoke), deliverability, settings
+- [x] Overview shows live `/api/v1/reports/overview` + `/api/v1/me`
+- [x] Contacts list/create with duplicate conflict messaging + schema-driven fields / detail
+- [x] Companies, segments (filter AST + property picker), campaigns (preview → approval → send), forms (property field picker), workflows, agents (token once + revoke), deliverability, settings, HubSpot import wizard
 
 ## Assumptions locked from plan
 
@@ -52,3 +53,4 @@ Use [`apps/api/src/tests/agent-harness.test.ts`](../apps/api/src/tests/agent-har
 - Marketing Hub core is the v1 product boundary
 - Resend is the only email delivery provider in v1
 - CRM consent/suppression state is authoritative over provider state
+- Contact fields are **schema-driven** from imported HubSpot property definitions

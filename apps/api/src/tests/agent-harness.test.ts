@@ -1,10 +1,12 @@
 /**
  * Agent harness case catalog for Twiniti CRM.
  *
- * This module documents assertable scenarios for agent/MCP tooling.
- * Wire to `node:test` later; until then import and run the helpers
- * against a live API + agent token.
+ * Documents assertable scenarios for agent/MCP tooling and runs a catalog
+ * self-check under `node:test`. Live API execution still needs an agent token.
  */
+
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 
 export type HarnessCase = {
   id: string;
@@ -122,7 +124,14 @@ export function assertHarnessCatalog(): void {
   }
 }
 
-/** Optional node:test entry when the runner is wired. */
 export async function runHarnessSelfCheck(): Promise<void> {
   assertHarnessCatalog();
 }
+
+describe("agent harness catalog", () => {
+  it("has unique ids and non-empty steps/expectations", () => {
+    assertHarnessCatalog();
+    assert.equal(listHarnessCaseIds().length, agentHarnessCases.length);
+    assert.ok(getHarnessCase("campaigns.approval.gate"));
+  });
+});
