@@ -53,6 +53,8 @@ services:
         sync: false
       - key: VITE_HEXCLAVE_PROJECT_ID
         sync: false
+      - key: VITE_HEXCLAVE_PUBLISHABLE_CLIENT_KEY
+        sync: false
 
   - type: worker
     name: twiniti-crm-worker
