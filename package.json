@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "packageManager": "pnpm@10.17.1",
   "scripts": {
-    "dev": "pnpm --parallel --filter @twiniti/api --filter @twiniti/web dev",
+    "dev": "pnpm --parallel --filter @twiniti/api --filter @twiniti/web --filter @twiniti/worker dev",
     "build": "pnpm -r build",
     "check": "pnpm -r typecheck",
     "lint": "pnpm -r lint",

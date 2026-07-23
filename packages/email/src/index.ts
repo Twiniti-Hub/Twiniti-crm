@@ -1,0 +1,102 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { Resend } from "resend";
+import { z } from "zod";
+
+const sendEmailInputSchema = z.object({
+  apiKey: z.string().min(1),
+  from: z.string().min(1),
+  to: z.union([z.string().email(), z.array(z.string().email()).min(1)]),
+  subject: z.string().min(1),
+  html: z.string().min(1),
+  text: z.string().optional(),
+  idempotencyKey: z.string().min(1).optional()
+});
+
+export type SendEmailInput = z.infer<typeof sendEmailInputSchema>;
+
+export function createResendClient(apiKey: string): Resend {
+  return new Resend(apiKey);
+}
+
+export async function sendEmail(input: SendEmailInput) {
+  const parsed = sendEmailInputSchema.parse(input);
+  const client = createResendClient(parsed.apiKey);
+  const result = await client.emails.send(
+    {
+      from: parsed.from,
+      to: parsed.to,
+      subject: parsed.subject,
+      html: parsed.html,
+      text: parsed.text
+    },
+    parsed.idempotencyKey ? { idempotencyKey: parsed.idempotencyKey } : undefined
+  );
+  return result;
+}
+
+/**
+ * Lightweight webhook signature check for local/dev.
+ * Production should use Resend's official Svix verification (svix library / Resend helpers).
+ * Accepts either an exact hex digest match or a header that includes the HMAC-SHA256 hex digest
+ * (Svix-style `v1,<hex>` lists).
+ */
+export function verifyResendWebhookSignature(
+  payload: string,
+  signatureHeader: string | undefined,
+  secret: string
+): boolean {
+  if (!secret) {
+    return process.env.NODE_ENV !== "production";
+  }
+  if (!signatureHeader) {
+    return false;
+  }
+
+  const digest = createHmac("sha256", secret).update(payload, "utf8").digest("hex");
+  const candidates = signatureHeader
+    .split(" ")
+    .flatMap((part) => part.split(","))
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => (part.includes("=") ? part.slice(part.indexOf("=") + 1) : part));
+
+  if (signatureHeader === digest || candidates.includes(digest)) {
+    return true;
+  }
+
+  try {
+    const expected = Buffer.from(digest, "utf8");
+    const provided = Buffer.from(signatureHeader, "utf8");
+    if (expected.length === provided.length && timingSafeEqual(expected, provided)) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
+export function renderTemplate(html: string, tokens: Record<string, string>): string {
+  return html.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key: string) => {
+    return Object.prototype.hasOwnProperty.call(tokens, key) ? tokens[key] : "";
+  });
+}
+
+export function personalizeForContact(
+  html: string,
+  contact: { firstName?: string | null; lastName?: string | null; email: string }
+): string {
+  const firstName = contact.firstName ?? "";
+  const lastName = contact.lastName ?? "";
+  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
+  return renderTemplate(html, {
+    firstName,
+    lastName,
+    fullName,
+    email: contact.email,
+    first_name: firstName,
+    last_name: lastName,
+    full_name: fullName
+  });
+}

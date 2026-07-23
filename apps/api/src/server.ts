@@ -5,52 +5,58 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import swagger from "@fastify/swagger";
-import { contactSearchSchema, createContactSchema, updateContactSchema } from "@twiniti/contracts";
+import { loadEnv } from "@twiniti/config";
+import { ensureBootstrapOrg, getDb } from "@twiniti/db";
+import { registerAuthHook } from "./auth-hook.js";
+import { registerMcpRoutes } from "./mcp.js";
+import { registerCrmRoutes } from "./routes/crm.js";
+import { registerMarketingRoutes } from "./routes/marketing.js";
+
+const env = loadEnv({
+  ...process.env,
+  AUTH_DISABLED: process.env.AUTH_DISABLED ?? (process.env.HEXCLAVE_SECRET_SERVER_KEY ? "false" : "true"),
+  DATABASE_URL: process.env.DATABASE_URL ?? "postgresql://user:password@localhost:5432/twiniti_crm"
+});
 
 const app = Fastify({ logger: true });
+const db = getDb(env.DATABASE_URL);
 
-await app.register(cors, { origin: process.env.WEB_ORIGIN ?? "http://localhost:5173" });
+await app.register(cors, {
+  origin: env.WEB_ORIGIN,
+  credentials: true
+});
+
 await app.register(swagger, {
   openapi: {
     info: { title: "Twiniti CRM API", version: "0.1.0" },
-    servers: [{ url: "http://localhost:4000" }]
+    servers: [{ url: `http://localhost:${env.PORT}` }]
   }
 });
 
-app.get("/health", async () => ({ status: "ok", service: "twiniti-crm-api" }));
+registerAuthHook(app, db, env);
 
-app.get("/api/v1/contacts", async (request) => {
-  const query = contactSearchSchema.parse(request.query);
-  return { data: [], meta: { limit: query.limit, cursor: query.cursor ?? null, query: query.query ?? null } };
-});
-
-app.post("/api/v1/contacts", async (request, reply) => {
-  const input = createContactSchema.parse(request.body);
-  reply.code(201);
-  return { data: { id: "pending-db-integration", ...input }, meta: { mode: "scaffold" } };
-});
-
-app.patch("/api/v1/contacts/:id", async (request) => {
-  const input = updateContactSchema.parse(request.body);
-  return { data: { id: (request.params as { id: string }).id, ...input }, meta: { mode: "scaffold" } };
-});
-
-app.get("/api/v1/agents/tools", async () => ({
-  tools: [
-    { name: "search_contacts", scope: "contacts:read" },
-    { name: "create_contact", scope: "contacts:create" },
-    { name: "update_contact", scope: "contacts:update" },
-    { name: "create_campaign_draft", scope: "campaigns:create" },
-    { name: "preview_campaign", scope: "campaigns:preview" },
-    { name: "request_campaign_approval", scope: "campaigns:request_approval" },
-    { name: "send_approved_campaign", scope: "campaigns:send" }
-  ]
+app.get("/health", async () => ({
+  status: "ok",
+  service: "twiniti-crm-api",
+  authMode: env.AUTH_DISABLED || !env.HEXCLAVE_SECRET_SERVER_KEY ? "bootstrap" : "hexclave"
 }));
+
+app.get("/api/v1/bootstrap", async () => {
+  const org = await ensureBootstrapOrg(db, {
+    orgName: env.BOOTSTRAP_ORG_NAME,
+    ownerSubject: env.BOOTSTRAP_OWNER_SUBJECT || "dev-owner"
+  });
+  return { data: { organizationId: org.id, name: org.name } };
+});
+
+await registerCrmRoutes(app, db);
+await registerMarketingRoutes(app, db, env);
+await registerMcpRoutes(app, db);
 
 app.get("/docs", async (_, reply) => reply.redirect("/documentation"));
 
 const webDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../web/dist");
-await app.register(fastifyStatic, { root: webDist, prefix: "/" });
+await app.register(fastifyStatic, { root: webDist, prefix: "/", decorateReply: false });
 
-const port = Number(process.env.PORT ?? 4000);
+const port = env.PORT;
 await app.listen({ port, host: "0.0.0.0" });

@@ -1,0 +1,23 @@
+{
+  "name": "@twiniti/auth",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hexclave/js": "^1.0.55",
+    "@twiniti/config": "workspace:*",
+    "@twiniti/db": "workspace:*",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}
