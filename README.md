@@ -22,6 +22,12 @@ pnpm dev
 
 The web app runs on `http://localhost:5173` and the API on `http://localhost:4000`.
 
+## Render deployment
+
+The repository includes a `render.yaml` Blueprint for the React static site and Fastify API. It deploys from the `development` branch. Private values are intentionally marked `sync: false` and must be entered in the Render Dashboard; `.env` files are ignored and must never be committed.
+
+After applying the Blueprint, set `VITE_API_URL` on the web service and `WEB_ORIGIN` on the API service using the generated Render URLs.
+
 ## Agent surface
 
 The initial API exposes safe, versioned routes for contact search, contact creation/update, and campaign previews. The MCP server and approval-gated sending workflow are planned as the next implementation slice; direct database access is intentionally not supported.
