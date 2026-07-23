@@ -28,6 +28,12 @@ services:
         sync: false
       - key: RESEND_FROM_EMAIL
         sync: false
+      - key: AUTH_DISABLED
+        sync: false
+      - key: BOOTSTRAP_ORG_NAME
+        sync: false
+      - key: BOOTSTRAP_OWNER_SUBJECT
+        sync: false
 
   - type: web
     name: twiniti-crm-web
@@ -44,4 +50,27 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
+        sync: false
+      - key: VITE_HEXCLAVE_PROJECT_ID
+        sync: false
+
+  - type: worker
+    name: twiniti-crm-worker
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: development
+    autoDeploy: true
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/worker build
+    startCommand: pnpm --filter @twiniti/worker start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
+      - key: RESEND_WEBHOOK_SECRET
         sync: false
