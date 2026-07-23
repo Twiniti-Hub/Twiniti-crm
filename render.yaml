@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: twiniti-crm-api
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: development
+    autoDeploy: true
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/api build
+    startCommand: pnpm --filter @twiniti/api start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: WEB_ORIGIN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: HEXCLAVE_BASE_URL
+        sync: false
+      - key: HEXCLAVE_PROJECT_ID
+        sync: false
+      - key: HEXCLAVE_SECRET_SERVER_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_WEBHOOK_SECRET
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        sync: false
+
+  - type: web
+    name: twiniti-crm-web
+    runtime: static
+    plan: free
+    region: frankfurt
+    branch: development
+    autoDeploy: true
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/web build
+    staticPublishPath: apps/web/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        sync: false
