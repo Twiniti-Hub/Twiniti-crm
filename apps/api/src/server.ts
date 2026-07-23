@@ -1,6 +1,9 @@
 import "dotenv/config";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import fastifyStatic from "@fastify/static";
 import swagger from "@fastify/swagger";
 import { contactSearchSchema, createContactSchema, updateContactSchema } from "@twiniti/contracts";
 
@@ -45,6 +48,9 @@ app.get("/api/v1/agents/tools", async () => ({
 }));
 
 app.get("/docs", async (_, reply) => reply.redirect("/documentation"));
+
+const webDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../web/dist");
+await app.register(fastifyStatic, { root: webDist, prefix: "/" });
 
 const port = Number(process.env.PORT ?? 4000);
 await app.listen({ port, host: "0.0.0.0" });
