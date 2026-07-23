@@ -26,6 +26,10 @@ nav a:hover, nav a.active { background: #21464b; color: #fff; }
 .landing-hero { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: clamp(32px, 8vh, 80px) clamp(20px, 5vw, 56px) 72px; max-width: 760px; }
 .landing-hero h1 { font-size: clamp(40px, 7vw, 68px); line-height: .98; letter-spacing: -.055em; margin-bottom: 18px; }
 .landing-lede { color: #4e6863; font-size: 17px; line-height: 1.55; max-width: 34rem; margin-bottom: 8px; }
+.landing-actions a, .hero-actions a { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+.auth-page { min-height: 100vh; background: #f5f8f6; }
+.auth-page-header { padding: 22px clamp(20px, 5vw, 56px); }
+.auth-page-header .brand { color: #102b31; padding: 0; text-decoration: none; }
 .content { flex: 1; max-width: 1480px; margin: 0 auto; padding: 38px clamp(24px, 5vw, 76px) 70px; }
 .topbar { display: flex; align-items: start; justify-content: space-between; margin-bottom: 30px; }.eyebrow { text-transform: uppercase; letter-spacing: .13em; color: #758b89; font-size: 10px; font-weight: 800; margin: 0 0 8px; }.accent { color: #1c856d; }
 h1, h2, h3, p { margin-top: 0; } h1 { font-size: clamp(28px, 3vw, 40px); line-height: 1.1; letter-spacing: -.05em; margin-bottom: 0; } h2 { font-size: 25px; letter-spacing: -.04em; margin-bottom: 9px; } h3 { font-size: 18px; letter-spacing: -.03em; margin-bottom: 0; }

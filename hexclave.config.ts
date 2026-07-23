@@ -8,9 +8,8 @@ export default {
     allowSignIn: true
   },
   urls: {
-    default: {
-      type: "hosted"
-    },
+    signIn: "/sign-in",
+    signUp: "/sign-up",
     home: "/",
     afterSignIn: "/",
     afterSignUp: "/",

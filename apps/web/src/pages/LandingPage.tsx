@@ -1,4 +1,5 @@
 import { useHexclaveApp } from "@hexclave/react";
+import { Link } from "react-router-dom";
 
 export function LandingPage() {
   const app = useHexclaveApp();
@@ -11,12 +12,12 @@ export function LandingPage() {
           <span>Twiniti CRM</span>
         </div>
         <div className="landing-actions">
-          <button className="secondary" type="button" onClick={() => app.redirectToSignUp()}>
+          <Link className="secondary" to="/sign-up">
             Sign up
-          </button>
-          <button className="primary" type="button" onClick={() => app.redirectToSignIn()}>
+          </Link>
+          <Link className="primary" to="/sign-in">
             Sign in
-          </button>
+          </Link>
         </div>
       </header>
 
@@ -31,9 +32,9 @@ export function LandingPage() {
           marketing hub.
         </p>
         <div className="hero-actions">
-          <button className="primary" type="button" onClick={() => app.redirectToSignIn()}>
+          <Link className="primary" to="/sign-in">
             Sign in to continue
-          </button>
+          </Link>
           <button className="quiet" type="button" onClick={() => app.redirectToSignUp()}>
             Create an account
           </button>

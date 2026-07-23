@@ -6,13 +6,19 @@ const publishableClientKey =
 
 export const authConfigured = Boolean(projectId);
 
+/**
+ * Same-origin auth pages (not Hexclave hosted). Hosted sign-in fails when the
+ * project requires publishable client keys, because the hosted handler never
+ * receives our Vite-baked `pck_`.
+ */
 export const hexclaveApp = authConfigured
   ? new HexclaveClientApp({
       projectId,
       ...(publishableClientKey ? { publishableClientKey } : {}),
       tokenStore: "cookie",
       urls: {
-        default: { type: "hosted" },
+        signIn: "/sign-in",
+        signUp: "/sign-up",
         afterSignIn: "/",
         afterSignUp: "/",
         afterSignOut: "/",

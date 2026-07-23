@@ -52,8 +52,8 @@ export function SettingsPage() {
         <h3>Hexclave hosted sign-in</h3>
         <p>
           {authConfigured
-            ? "You are signed in. Use Sign out in the sidebar to end the session. Guests only see the public landing page."
-            : "Set `VITE_HEXCLAVE_PROJECT_ID` to enable Hexclave hosted sign-in. Until then the API can use bootstrap auth with `AUTH_DISABLED=true`."}
+            ? "You are signed in. Use Sign out in the sidebar to end the session. Guests see the landing page and same-origin Hexclave sign-in."
+            : "Set `VITE_HEXCLAVE_PROJECT_ID` (and `VITE_HEXCLAVE_PUBLISHABLE_CLIENT_KEY` if required) to enable Hexclave sign-in. Until then the API can use bootstrap auth with `AUTH_DISABLED=true`."}
         </p>
       </section>
     </>
