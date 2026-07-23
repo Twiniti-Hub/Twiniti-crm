@@ -46,6 +46,27 @@ describe("hubspot contact row mapping", () => {
   it("normalizes internal names", () => {
     assert.equal(normalizeHubspotInternalName("HS Lead Status"), "hs_lead_status");
   });
+
+  it("does not report common CSV contact aliases as unmapped properties", () => {
+    const mapped = mapHubspotContactRow(
+      {
+        "Email Address": "ada@example.com",
+        "First Name": "Ada",
+        "Last Name": "Lovelace",
+        "Lifecycle Stage": "customer",
+        "Record ID": "hs-1",
+        job_title: "Analyst"
+      },
+      new Set(["job_title"])
+    );
+    assert.ok(!("error" in mapped));
+    if ("error" in mapped) return;
+    assert.equal(mapped.firstName, "Ada");
+    assert.equal(mapped.lastName, "Lovelace");
+    assert.equal(mapped.lifecycleStage, "customer");
+    assert.equal(mapped.externalId, "hs-1");
+    assert.deepEqual(mapped.unmappedKeys, []);
+  });
 });
 
 describe("filter AST", () => {

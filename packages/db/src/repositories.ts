@@ -1,5 +1,6 @@
-import { and, asc, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 // neon-http workers use optimistic claim rather than SKIP LOCKED transactions
+import { randomBytes } from "node:crypto";
 import type { Db } from "./client.js";
 import {
   mapHubspotPropertyType,
@@ -16,6 +17,7 @@ import {
   customerEvents,
   externalRecordIds,
   jobs,
+  organizationInvitations,
   organizations,
   propertyDefinitions,
   segments,
@@ -30,6 +32,27 @@ export function normalizeEmail(email: string): string {
 export function normalizeDomain(domain: string | null | undefined): string | null {
   if (!domain) return null;
   return domain.trim().toLowerCase().replace(/^www\./, "");
+}
+
+async function seedDefaultPropertyDefinitions(db: Db, organizationId: string) {
+  await db.insert(propertyDefinitions).values([
+    {
+      organizationId,
+      objectType: "contact",
+      internalName: "job_title",
+      label: "Job Title",
+      dataType: "string",
+      searchable: true
+    },
+    {
+      organizationId,
+      objectType: "company",
+      internalName: "employee_count",
+      label: "Employee Count",
+      dataType: "number",
+      searchable: true
+    }
+  ]);
 }
 
 export async function writeAudit(
@@ -69,29 +92,94 @@ export async function ensureBootstrapOrg(
       organizationId: org.id,
       hexclaveSubject: options.ownerSubject,
       email: options.ownerEmail ?? null,
-      role: "owner",
+      role: "admin",
       displayName: "Owner"
     });
   }
-  await db.insert(propertyDefinitions).values([
-    {
-      organizationId: org.id,
-      objectType: "contact",
-      internalName: "job_title",
-      label: "Job Title",
-      dataType: "string",
-      searchable: true
-    },
-    {
-      organizationId: org.id,
-      objectType: "company",
-      internalName: "employee_count",
-      label: "Employee Count",
-      dataType: "number",
-      searchable: true
-    }
-  ]);
+  await seedDefaultPropertyDefinitions(db, org.id);
   return org;
+}
+
+export async function createOrganization(
+  db: Db,
+  input: {
+    name: string;
+    adminSubject?: string;
+    email?: string | null;
+    displayName?: string | null;
+  }
+) {
+  const [org] = await db.insert(organizations).values({ name: input.name.trim() }).returning();
+  await seedDefaultPropertyDefinitions(db, org.id);
+  let admin = null;
+  if (input.adminSubject) {
+    const [created] = await db.insert(crmUsers).values({
+      organizationId: org.id,
+      hexclaveSubject: input.adminSubject,
+      email: input.email ?? null,
+      displayName: input.displayName ?? null,
+      role: "admin"
+    }).returning();
+    admin = created;
+  }
+  return { organization: org, admin };
+}
+
+export async function findCrmUserBySubject(db: Db, subject: string) {
+  const rows = await db.select().from(crmUsers).where(eq(crmUsers.hexclaveSubject, subject)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function getOrganizationById(db: Db, organizationId: string) {
+  const rows = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function listOrganizations(db: Db) {
+  const rows = await db
+    .select({
+      id: organizations.id,
+      name: organizations.name,
+      createdAt: organizations.createdAt,
+      memberCount: count(crmUsers.id)
+    })
+    .from(organizations)
+    .leftJoin(crmUsers, and(eq(crmUsers.organizationId, organizations.id), eq(crmUsers.active, true)))
+    .groupBy(organizations.id)
+    .orderBy(asc(organizations.name));
+  return rows;
+}
+
+export async function listOrgMembers(db: Db, organizationId: string) {
+  return db
+    .select({
+      id: crmUsers.id,
+      email: crmUsers.email,
+      displayName: crmUsers.displayName,
+      role: crmUsers.role,
+      active: crmUsers.active,
+      createdAt: crmUsers.createdAt
+    })
+    .from(crmUsers)
+    .where(eq(crmUsers.organizationId, organizationId))
+    .orderBy(asc(crmUsers.createdAt));
+}
+
+export async function updateMemberRole(
+  db: Db,
+  organizationId: string,
+  memberId: string,
+  input: { role?: string; active?: boolean }
+) {
+  const [updated] = await db
+    .update(crmUsers)
+    .set({
+      ...(input.role !== undefined ? { role: input.role } : {}),
+      ...(input.active !== undefined ? { active: input.active } : {})
+    })
+    .where(and(eq(crmUsers.id, memberId), eq(crmUsers.organizationId, organizationId)))
+    .returning();
+  return updated ?? null;
 }
 
 export async function findOrCreateCrmUser(
@@ -104,16 +192,151 @@ export async function findOrCreateCrmUser(
     defaultRole?: string;
   }
 ) {
-  const existing = await db.select().from(crmUsers).where(eq(crmUsers.hexclaveSubject, input.subject)).limit(1);
-  if (existing[0]) return existing[0];
+  const existing = await findCrmUserBySubject(db, input.subject);
+  if (existing) return existing;
   const [created] = await db.insert(crmUsers).values({
     organizationId: input.organizationId,
     hexclaveSubject: input.subject,
     email: input.email ?? null,
     displayName: input.displayName ?? null,
-    role: input.defaultRole ?? "marketer"
+    role: input.defaultRole ?? "member"
   }).returning();
   return created;
+}
+
+export function createInviteToken(): string {
+  return randomBytes(32).toString("hex");
+}
+
+export async function createInvitation(
+  db: Db,
+  input: {
+    organizationId: string;
+    email: string;
+    role: "admin" | "member";
+    invitedByUserId?: string | null;
+    expiresInDays?: number;
+  }
+) {
+  const emailNormalized = normalizeEmail(input.email);
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + (input.expiresInDays ?? 14));
+  const token = createInviteToken();
+
+  const existing = await db
+    .select()
+    .from(organizationInvitations)
+    .where(and(
+      eq(organizationInvitations.organizationId, input.organizationId),
+      eq(organizationInvitations.emailNormalized, emailNormalized),
+      isNull(organizationInvitations.acceptedAt)
+    ))
+    .limit(1);
+
+  if (existing[0]) {
+    const [updated] = await db
+      .update(organizationInvitations)
+      .set({
+        role: input.role,
+        token,
+        invitedByUserId: input.invitedByUserId ?? null,
+        expiresAt
+      })
+      .where(eq(organizationInvitations.id, existing[0].id))
+      .returning();
+    return updated;
+  }
+
+  const [created] = await db.insert(organizationInvitations).values({
+    organizationId: input.organizationId,
+    email: input.email.trim(),
+    emailNormalized,
+    role: input.role,
+    token,
+    invitedByUserId: input.invitedByUserId ?? null,
+    expiresAt
+  }).returning();
+  return created;
+}
+
+export async function listPendingInvitations(db: Db, organizationId: string) {
+  return db
+    .select()
+    .from(organizationInvitations)
+    .where(and(
+      eq(organizationInvitations.organizationId, organizationId),
+      isNull(organizationInvitations.acceptedAt)
+    ))
+    .orderBy(desc(organizationInvitations.createdAt));
+}
+
+export async function findInvitationByToken(db: Db, token: string) {
+  const rows = await db
+    .select({
+      invitation: organizationInvitations,
+      organizationName: organizations.name
+    })
+    .from(organizationInvitations)
+    .innerJoin(organizations, eq(organizations.id, organizationInvitations.organizationId))
+    .where(eq(organizationInvitations.token, token))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function acceptInvitation(
+  db: Db,
+  input: {
+    token: string;
+    subject: string;
+    email?: string | null;
+    displayName?: string | null;
+  }
+) {
+  const found = await findInvitationByToken(db, input.token);
+  if (!found) {
+    const error = new Error("Invitation not found") as Error & { statusCode: number };
+    error.statusCode = 404;
+    throw error;
+  }
+  const { invitation } = found;
+  if (invitation.acceptedAt) {
+    const error = new Error("Invitation already accepted") as Error & { statusCode: number };
+    error.statusCode = 409;
+    throw error;
+  }
+  if (invitation.expiresAt.getTime() < Date.now()) {
+    const error = new Error("Invitation expired") as Error & { statusCode: number };
+    error.statusCode = 410;
+    throw error;
+  }
+
+  const existingUser = await findCrmUserBySubject(db, input.subject);
+  if (existingUser) {
+    const error = new Error("You already belong to a company") as Error & { statusCode: number };
+    error.statusCode = 409;
+    throw error;
+  }
+
+  if (input.email && normalizeEmail(input.email) !== invitation.emailNormalized) {
+    const error = new Error("Signed-in email does not match the invitation") as Error & { statusCode: number };
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const [user] = await db.insert(crmUsers).values({
+    organizationId: invitation.organizationId,
+    hexclaveSubject: input.subject,
+    email: input.email ?? invitation.email,
+    displayName: input.displayName ?? null,
+    role: invitation.role
+  }).returning();
+
+  await db
+    .update(organizationInvitations)
+    .set({ acceptedAt: new Date() })
+    .where(eq(organizationInvitations.id, invitation.id));
+
+  return { user, organizationId: invitation.organizationId, organizationName: found.organizationName };
 }
 
 export async function searchContacts(

@@ -1,8 +1,6 @@
-# Twiniti CRM
+# Twiniti Loop
 
-Agent-friendly marketing CRM built with React, Fastify, Neon PostgreSQL, Hexclave, and Resend.
-
-Twiniti CRM is open source and available under either the [MIT License](LICENSE-MIT) or the [Apache License 2.0](LICENSE-APACHE), at your option. See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
+Twiniti Loop is an agent-friendly marketing CRM built with React, Fastify, Neon PostgreSQL, Hexclave, and Resend. It is open source and available under either the [MIT License](LICENSE-MIT) or the [Apache License 2.0](LICENSE-APACHE), at your option. See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 
 ## Workspace
 

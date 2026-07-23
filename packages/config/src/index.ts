@@ -12,9 +12,10 @@ export const envSchema = z.object({
   HEXCLAVE_SECRET_SERVER_KEY: z.string().optional().default(""),
   RESEND_API_KEY: z.string().optional().default(""),
   RESEND_WEBHOOK_SECRET: z.string().optional().default(""),
-  RESEND_FROM_EMAIL: z.string().default("Twiniti CRM <marketing@example.com>"),
+  RESEND_FROM_EMAIL: z.string().default("Twiniti Loop <marketing@example.com>"),
   BOOTSTRAP_ORG_NAME: z.string().default("Twiniti"),
   BOOTSTRAP_OWNER_SUBJECT: z.string().optional().default(""),
+  SUPER_ADMIN_EMAILS: z.string().default("george.broadbent@twiniti.ai"),
   AUTH_DISABLED: z
     .enum(["true", "false"])
     .default("false")
@@ -22,6 +23,18 @@ export const envSchema = z.object({
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
+
+export function parseSuperAdminEmails(value: string): string[] {
+  return value
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function isSuperAdminEmail(email: string | null | undefined, env: Pick<AppEnv, "SUPER_ADMIN_EMAILS">): boolean {
+  if (!email) return false;
+  return parseSuperAdminEmails(env.SUPER_ADMIN_EMAILS).includes(email.trim().toLowerCase());
+}
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   const parsed = envSchema.safeParse(source);

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { requireRole, resolveRequestActor, type AuthActor } from "@twiniti/auth";
+import { assertOrganization, requireRole, resolveRequestActor, type AuthActor, type CrmRole } from "@twiniti/auth";
 import type { AppEnv } from "@twiniti/config";
 import type { Db } from "@twiniti/db";
 import { writeAudit } from "@twiniti/db";
@@ -43,11 +43,16 @@ export function requireActor(request: FastifyRequest): AuthActor {
   return request.actor;
 }
 
-export function requireUserRole(actor: AuthActor, role: "viewer" | "analyst" | "marketer" | "admin" | "owner") {
+export function requireUserRole(actor: AuthActor, role: CrmRole | "viewer" | "analyst" | "marketer" | "owner" | "admin" | "member") {
   if (actor.type === "agent") {
     const error = new Error(`Agent credentials cannot satisfy user role ${role}; use scoped agent endpoints`) as Error & {
       statusCode: number;
     };
+    error.statusCode = 403;
+    throw error;
+  }
+  if (actor.needsSetup || !actor.organizationId) {
+    const error = new Error("Company setup required") as Error & { statusCode: number };
     error.statusCode = 403;
     throw error;
   }
@@ -58,6 +63,18 @@ export function requireUserRole(actor: AuthActor, role: "viewer" | "analyst" | "
   }
 }
 
+export function requireSuperAdmin(actor: AuthActor) {
+  if (actor.type !== "user" || !actor.isSuperAdmin) {
+    const error = new Error("Super admin access required") as Error & { statusCode: number };
+    error.statusCode = 403;
+    throw error;
+  }
+}
+
+export function requireOrgId(actor: AuthActor): string {
+  return assertOrganization(actor);
+}
+
 export async function audit(
   db: Db,
   actor: AuthActor,
@@ -66,8 +83,10 @@ export async function audit(
   entityId?: string,
   metadata?: Record<string, unknown>
 ) {
+  const organizationId = actor.organizationId;
+  if (!organizationId) return;
   await writeAudit(db, {
-    organizationId: actor.organizationId,
+    organizationId,
     actorType: actor.type,
     actorId: actor.id,
     action,

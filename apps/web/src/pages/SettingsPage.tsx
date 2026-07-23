@@ -1,34 +1,91 @@
-import { useEffect, useState } from "react";
-import { authConfigured } from "../hexclave/client";
+import { FormEvent, useEffect, useState } from "react";
 import { api } from "../lib/api";
+import type { Me } from "../lib/me";
+import { authConfigured } from "../hexclave/client";
 
-type Me = {
-  type: string;
+type Member = {
   id: string;
-  organizationId: string;
-  role?: string;
-  email?: string | null;
-  displayName?: string | null;
+  email: string | null;
+  displayName: string | null;
+  role: string;
+  active: boolean;
 };
 
-type Bootstrap = {
-  organizationId: string;
-  name: string;
+type Invitation = {
+  id: string;
+  email: string;
+  role: string;
+  expiresAt: string;
+  inviteUrl?: string;
+  sent?: boolean;
 };
 
 export function SettingsPage() {
   const [me, setMe] = useState<Me | null>(null);
-  const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const isAdmin = me?.role === "admin";
+
+  async function refresh() {
+    const meRes = await api("/api/v1/me");
+    const nextMe = meRes.data as Me;
+    setMe(nextMe);
+    if (!nextMe.organizationId) return;
+    const membersRes = await api("/api/v1/organization/members");
+    setMembers(membersRes.data as Member[]);
+    if (nextMe.role === "admin") {
+      const invitesRes = await api("/api/v1/organization/invitations");
+      setInvitations(invitesRes.data as Invitation[]);
+    }
+  }
 
   useEffect(() => {
-    Promise.all([api("/api/v1/me"), api("/api/v1/bootstrap")])
-      .then(([meRes, bootstrapRes]) => {
-        setMe(meRes.data as Me);
-        setBootstrap(bootstrapRes.data as Bootstrap);
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load settings"));
+    refresh().catch((err) => setError(err instanceof Error ? err.message : "Failed to load settings"));
   }, []);
+
+  async function onInvite(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await api("/api/v1/organization/invitations", {
+        method: "POST",
+        body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole })
+      });
+      const invite = res.data as Invitation;
+      setInviteEmail("");
+      setMessage(
+        invite.sent
+          ? `Invitation sent to ${invite.email}.`
+          : `Invitation created. Share this link: ${invite.inviteUrl ?? "(check server logs)"}`
+      );
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invite failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onRoleChange(memberId: string, role: "admin" | "member") {
+    setError(null);
+    try {
+      await api(`/api/v1/organization/members/${memberId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ role })
+      });
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update member");
+    }
+  }
 
   return (
     <>
@@ -39,21 +96,122 @@ export function SettingsPage() {
         </div>
       </header>
       {error ? <div className="banner error">{error}</div> : null}
+      {message ? <div className="banner info">{message}</div> : null}
+
       <section className="panel">
-        <p className="eyebrow">Current actor</p>
-        <pre className="code-block">{me ? JSON.stringify(me, null, 2) : "Loading…"}</pre>
+        <p className="eyebrow">Company</p>
+        <h3>{me?.organizationName ?? "No company"}</h3>
+        <p className="muted">
+          Signed in as {me?.email ?? "unknown"} · Role: {me?.role ?? "none"}
+          {me?.isSuperAdmin ? " · Super Admin" : ""}
+        </p>
       </section>
+
       <section className="panel" style={{ marginTop: 15 }}>
-        <p className="eyebrow">Bootstrap org</p>
-        <pre className="code-block">{bootstrap ? JSON.stringify(bootstrap, null, 2) : "Loading…"}</pre>
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">People</p>
+            <h3>Members</h3>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                {isAdmin ? <th>Actions</th> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {members.map((member) => (
+                <tr key={member.id}>
+                  <td>{member.displayName ?? "—"}</td>
+                  <td>{member.email ?? "—"}</td>
+                  <td>{member.role === "admin" ? "Company Admin" : "Member"}</td>
+                  {isAdmin ? (
+                    <td className="row-actions">
+                      {member.role !== "admin" ? (
+                        <button className="secondary" type="button" onClick={() => onRoleChange(member.id, "admin")}>
+                          Make admin
+                        </button>
+                      ) : (
+                        <button className="secondary" type="button" onClick={() => onRoleChange(member.id, "member")}>
+                          Make member
+                        </button>
+                      )}
+                    </td>
+                  ) : null}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
+
+      {isAdmin ? (
+        <section className="panel" style={{ marginTop: 15 }}>
+          <p className="eyebrow">Invites</p>
+          <h3>Invite by email</h3>
+          <form className="stack-form" style={{ boxShadow: "none", border: 0, padding: 0 }} onSubmit={onInvite}>
+            <div className="form-row">
+              <label>
+                Email
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  required
+                  placeholder="colleague@company.com"
+                />
+              </label>
+              <label>
+                Role
+                <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as "admin" | "member")}>
+                  <option value="member">Member</option>
+                  <option value="admin">Company Admin</option>
+                </select>
+              </label>
+            </div>
+            <button className="primary" type="submit" disabled={busy}>
+              {busy ? "Sending…" : "Send invite"}
+            </button>
+          </form>
+          {invitations.length > 0 ? (
+            <div className="table-wrap" style={{ marginTop: 16 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Expires</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invitations.map((invite) => (
+                    <tr key={invite.id}>
+                      <td>{invite.email}</td>
+                      <td>{invite.role}</td>
+                      <td>{new Date(invite.expiresAt).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="muted" style={{ marginTop: 12 }}>No pending invitations.</p>
+          )}
+        </section>
+      ) : null}
+
       <section className="panel warm" style={{ marginTop: 15 }}>
         <p className="eyebrow">Authentication</p>
         <h3>Hexclave hosted sign-in</h3>
         <p>
           {authConfigured
-            ? "You are signed in. Use Sign out in the sidebar to end the session. Guests see the landing page and same-origin Hexclave sign-in."
-            : "Set `VITE_HEXCLAVE_PROJECT_ID` (and `VITE_HEXCLAVE_PUBLISHABLE_CLIENT_KEY` if required) to enable Hexclave sign-in. Until then the API can use bootstrap auth with `AUTH_DISABLED=true`."}
+            ? "You are signed in. Use Sign out in the sidebar to end the session."
+            : "Set `VITE_HEXCLAVE_PROJECT_ID` to enable Hexclave sign-in. Until then the API can use bootstrap auth with `AUTH_DISABLED=true`."}
         </p>
       </section>
     </>

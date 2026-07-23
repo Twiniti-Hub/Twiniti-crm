@@ -18,6 +18,7 @@ Release acceptance for the Agent-Native Marketing CRM. An agent (or human) can t
 ## Release gates
 
 - [x] HubSpot property definitions import without losing internal names or options (`POST /api/v1/imports/hubspot/properties`)
+- [x] Contact CSV import detects core contact columns and custom property columns before enqueueing the import
 - [x] Custom fields usable in forms, segments, workflows, and personalization (property pickers + `{{properties.*}}` tokens)
 - [x] Campaign send never targets suppressed or unsubscribed contacts
 - [x] Duplicate Resend webhooks do not create duplicate engagement records (unique dedupe key)
@@ -44,13 +45,25 @@ Use [`apps/api/src/tests/agent-harness.test.ts`](../apps/api/src/tests/agent-har
 
 - [x] Overview shows live `/api/v1/reports/overview` + `/api/v1/me`
 - [x] Contacts list/create with duplicate conflict messaging + schema-driven fields / detail
-- [x] Companies, segments (filter AST + property picker), campaigns (preview → approval → send), forms (property field picker), workflows, agents (token once + revoke), deliverability, settings, HubSpot import wizard
+- [x] Companies, segments (filter AST + property picker), campaigns (preview → approval → send), forms (property field picker), workflows, agents (token once + revoke), deliverability, settings (members + invites), HubSpot import wizard, Super Admin console
 
 ## Assumptions locked from plan
 
-- Single organization v1 with `organization_id` boundary for future multi-tenancy
+- Multi-tenant companies via `organizations` (`organization_id` boundary on CRM data)
+- Roles: Company Admin (`admin`), Member (`member`); platform Super Admin via `SUPER_ADMIN_EMAILS` (default `george.broadbent@twiniti.ai`)
+- Self-serve sign-up captures company name and creates a company with the signer as Company Admin
+- Additional users join by email invitation (`/accept-invite`)
+- Super Admin page (`/super-admin`) can create companies and invite people to any company
 - HubSpot migration is one-time import only (no bi-directional sync)
 - Marketing Hub core is the v1 product boundary
 - Resend is the only email delivery provider in v1
 - CRM consent/suppression state is authoritative over provider state
 - Contact fields are **schema-driven** from imported HubSpot property definitions
+
+## Multi-tenancy checks
+
+- [x] Sign-up form collects company name and creates an org with role `admin`
+- [x] Hexclave users are no longer auto-joined to the bootstrap org
+- [x] Company Admin can invite members by email; invitee accepts via token
+- [x] Super Admin can list companies, create companies, and invite to any company
+- [x] `/api/v1/me` returns `organizationName`, `needsSetup`, `isSuperAdmin`

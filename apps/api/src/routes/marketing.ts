@@ -54,7 +54,7 @@ import {
 } from "@twiniti/db";
 import { personalizeForContact, verifyResendWebhookSignature } from "@twiniti/email";
 import { z } from "zod";
-import { audit, requireActor, requireUserRole, sendError } from "../auth-hook.js";
+import { audit, requireActor, requireOrgId, requireUserRole, sendError } from "../auth-hook.js";
 
 const createTemplateSchema = z.object({
   name: z.string().trim().min(1).max(160),
@@ -73,7 +73,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
     try {
       const actor = requireActor(request);
       const query = request.query as { objectType?: string };
-      const data = await listPropertyDefinitions(db, actor.organizationId, {
+      const data = await listPropertyDefinitions(db, requireOrgId(actor), {
         objectType: query.objectType
       });
       return { data };
@@ -96,7 +96,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
         required?: boolean;
       };
       const [row] = await db.insert(propertyDefinitions).values({
-        organizationId: actor.organizationId,
+        organizationId: requireOrgId(actor),
         objectType: body.objectType,
         internalName: body.internalName,
         label: body.label,
@@ -117,7 +117,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
     try {
       const actor = requireActor(request);
       if (actor.type === "agent") assertScope(actor, "segments:read");
-      return { data: await listSegments(db, actor.organizationId) };
+      return { data: await listSegments(db, requireOrgId(actor)) };
     } catch (error) {
       return sendError(reply, error);
     }
@@ -126,11 +126,11 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.post("/api/v1/segments", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      requireUserRole(actor, "marketer");
+      requireUserRole(actor, "member");
       const input = createSegmentSchema.parse(request.body);
       parseFilterAst(input.filterAst);
       const [row] = await db.insert(segments).values({
-        organizationId: actor.organizationId,
+        organizationId: requireOrgId(actor),
         name: input.name,
         description: input.description ?? null,
         filterAst: input.filterAst
@@ -148,10 +148,10 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       const actor = requireActor(request);
       if (actor.type === "agent") assertScope(actor, "segments:read");
       const { id } = request.params as { id: string };
-      const [segment] = await db.select().from(segments).where(and(eq(segments.id, id), eq(segments.organizationId, actor.organizationId))).limit(1);
+      const [segment] = await db.select().from(segments).where(and(eq(segments.id, id), eq(segments.organizationId, requireOrgId(actor)))).limit(1);
       if (!segment) return reply.code(404).send({ error: { code: "not_found", message: "Segment not found" } });
       const filter = compileFilterAst(parseFilterAst(segment.filterAst));
-      const rows = await db.select().from(contacts).where(and(eq(contacts.organizationId, actor.organizationId), filter));
+      const rows = await db.select().from(contacts).where(and(eq(contacts.organizationId, requireOrgId(actor)), filter));
       return { data: { count: rows.length } };
     } catch (error) {
       return sendError(reply, error);
@@ -161,7 +161,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/lists", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      const data = await db.select().from(lists).where(eq(lists.organizationId, actor.organizationId));
+      const data = await db.select().from(lists).where(eq(lists.organizationId, requireOrgId(actor)));
       return { data };
     } catch (error) {
       return sendError(reply, error);
@@ -171,10 +171,10 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.post("/api/v1/lists", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      requireUserRole(actor, "marketer");
+      requireUserRole(actor, "member");
       const input = createListSchema.parse(request.body);
       const [row] = await db.insert(lists).values({
-        organizationId: actor.organizationId,
+        organizationId: requireOrgId(actor),
         name: input.name,
         listType: input.listType ?? "static",
         description: input.description ?? null
@@ -189,11 +189,11 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.post("/api/v1/lists/:id/members", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      requireUserRole(actor, "marketer");
+      requireUserRole(actor, "member");
       const { id } = request.params as { id: string };
       const body = request.body as { contactId: string };
       const [row] = await db.insert(listMemberships).values({
-        organizationId: actor.organizationId,
+        organizationId: requireOrgId(actor),
         listId: id,
         contactId: body.contactId
       }).returning();
@@ -207,7 +207,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/forms", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      const data = await db.select().from(forms).where(eq(forms.organizationId, actor.organizationId));
+      const data = await db.select().from(forms).where(eq(forms.organizationId, requireOrgId(actor)));
       return { data };
     } catch (error) {
       return sendError(reply, error);
@@ -217,10 +217,10 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.post("/api/v1/forms", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      requireUserRole(actor, "marketer");
+      requireUserRole(actor, "member");
       const input = createFormSchema.parse(request.body);
       const [row] = await db.insert(forms).values({
-        organizationId: actor.organizationId,
+        organizationId: requireOrgId(actor),
         name: input.name,
         slug: input.slug,
         fields: input.fields ?? [],
@@ -284,7 +284,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/templates", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      const data = await db.select().from(emailTemplates).where(eq(emailTemplates.organizationId, actor.organizationId));
+      const data = await db.select().from(emailTemplates).where(eq(emailTemplates.organizationId, requireOrgId(actor)));
       return { data };
     } catch (error) {
       return sendError(reply, error);
@@ -294,10 +294,10 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.post("/api/v1/templates", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      requireUserRole(actor, "marketer");
+      requireUserRole(actor, "member");
       const input = createTemplateSchema.parse(request.body);
       const [row] = await db.insert(emailTemplates).values({
-        organizationId: actor.organizationId,
+        organizationId: requireOrgId(actor),
         name: input.name,
         subject: input.subject,
         htmlBody: input.htmlBody,
@@ -314,7 +314,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/campaigns", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      return { data: await listCampaigns(db, actor.organizationId) };
+      return { data: await listCampaigns(db, requireOrgId(actor)) };
     } catch (error) {
       return sendError(reply, error);
     }
@@ -324,11 +324,11 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
     try {
       const actor = requireActor(request);
       if (actor.type === "agent") assertScope(actor, "campaigns:create");
-      else requireUserRole(actor, "marketer");
+      else requireUserRole(actor, "member");
       const input = createCampaignSchema.parse(request.body);
       const hash = contentHash([input.name, input.subject ?? "", input.htmlBody ?? ""]);
       const [row] = await db.insert(campaigns).values({
-        organizationId: actor.organizationId,
+        organizationId: requireOrgId(actor),
         name: input.name,
         templateId: input.templateId ?? null,
         segmentId: input.segmentId ?? null,
@@ -353,9 +353,9 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       const actor = requireActor(request);
       if (actor.type === "agent") assertScope(actor, "campaigns:preview");
       const { id } = request.params as { id: string };
-      const [campaign] = await db.select().from(campaigns).where(and(eq(campaigns.id, id), eq(campaigns.organizationId, actor.organizationId))).limit(1);
+      const [campaign] = await db.select().from(campaigns).where(and(eq(campaigns.id, id), eq(campaigns.organizationId, requireOrgId(actor)))).limit(1);
       if (!campaign) return reply.code(404).send({ error: { code: "not_found", message: "Campaign not found" } });
-      const sampleContacts = await searchContacts(db, actor.organizationId, { limit: 3 });
+      const sampleContacts = await searchContacts(db, requireOrgId(actor), { limit: 3 });
       const previews = sampleContacts.map((contact) => ({
         contactId: contact.id,
         email: contact.email,
@@ -368,7 +368,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
         suppressed: false
       }));
       for (const preview of previews) {
-        preview.suppressed = await isEmailSuppressed(db, actor.organizationId, preview.email);
+        preview.suppressed = await isEmailSuppressed(db, requireOrgId(actor), preview.email);
       }
       return {
         data: {
@@ -387,28 +387,28 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
     try {
       const actor = requireActor(request);
       if (actor.type === "agent") assertScope(actor, "campaigns:request_approval");
-      else requireUserRole(actor, "marketer");
+      else requireUserRole(actor, "member");
       const { id } = request.params as { id: string };
-      const [campaign] = await db.select().from(campaigns).where(and(eq(campaigns.id, id), eq(campaigns.organizationId, actor.organizationId))).limit(1);
+      const [campaign] = await db.select().from(campaigns).where(and(eq(campaigns.id, id), eq(campaigns.organizationId, requireOrgId(actor)))).limit(1);
       if (!campaign) return reply.code(404).send({ error: { code: "not_found", message: "Campaign not found" } });
-      let recipients = await searchContacts(db, actor.organizationId, { limit: 100 });
+      let recipients = await searchContacts(db, requireOrgId(actor), { limit: 100 });
       if (campaign.segmentId) {
         const [segment] = await db.select().from(segments).where(eq(segments.id, campaign.segmentId)).limit(1);
         if (segment) {
           const filter = compileFilterAst(parseFilterAst(segment.filterAst));
-          recipients = await db.select().from(contacts).where(and(eq(contacts.organizationId, actor.organizationId), filter));
+          recipients = await db.select().from(contacts).where(and(eq(contacts.organizationId, requireOrgId(actor)), filter));
         }
       }
       const allowed = [];
       for (const contact of recipients) {
-        if (!(await isEmailSuppressed(db, actor.organizationId, contact.email))) {
+        if (!(await isEmailSuppressed(db, requireOrgId(actor), contact.email))) {
           allowed.push(contact);
         }
       }
       await db.delete(campaignRecipients).where(eq(campaignRecipients.campaignId, campaign.id));
       if (allowed.length) {
         await db.insert(campaignRecipients).values(allowed.map((contact) => ({
-          organizationId: actor.organizationId,
+          organizationId: requireOrgId(actor),
           campaignId: campaign.id,
           contactId: contact.id,
           emailNormalized: normalizeEmail(contact.email),
@@ -416,7 +416,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
         })));
       }
       const [approval] = await db.insert(campaignApprovals).values({
-        organizationId: actor.organizationId,
+        organizationId: requireOrgId(actor),
         campaignId: campaign.id,
         agentId: actor.type === "agent" ? actor.id : null,
         requestedBy: actor.id,
@@ -440,7 +440,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       const { id } = request.params as { id: string };
       const pending = await db.select().from(campaignApprovals).where(and(
         eq(campaignApprovals.campaignId, id),
-        eq(campaignApprovals.organizationId, actor.organizationId),
+        eq(campaignApprovals.organizationId, requireOrgId(actor)),
         eq(campaignApprovals.status, "pending")
       )).limit(1);
       if (!pending[0]) return reply.code(404).send({ error: { code: "not_found", message: "No pending approval" } });
@@ -472,7 +472,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       }
       await db.update(campaigns).set({ status: "sending", updatedAt: new Date() }).where(eq(campaigns.id, id));
       const job = await enqueueJob(db, {
-        organizationId: actor.organizationId,
+        organizationId: requireOrgId(actor),
         kind: "campaign.send",
         payload: { campaignId: id, approvalId: approvals[0].id },
         priority: 10
@@ -488,7 +488,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
     try {
       const actor = requireActor(request);
       requireUserRole(actor, "admin");
-      const data = await db.select().from(agentIdentities).where(eq(agentIdentities.organizationId, actor.organizationId));
+      const data = await db.select().from(agentIdentities).where(eq(agentIdentities.organizationId, requireOrgId(actor)));
       return {
         data: data.map((row) => ({
           id: row.id,
@@ -512,7 +512,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       const input = agentIdentitySchema.parse(request.body);
       const credential = mintAgentCredential();
       const [row] = await db.insert(agentIdentities).values({
-        organizationId: actor.organizationId,
+        organizationId: requireOrgId(actor),
         name: input.name,
         purpose: input.purpose,
         scopes: input.scopes,
@@ -534,7 +534,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       const { id } = request.params as { id: string };
       const [row] = await db.update(agentIdentities).set({ revokedAt: new Date() }).where(and(
         eq(agentIdentities.id, id),
-        eq(agentIdentities.organizationId, actor.organizationId)
+        eq(agentIdentities.organizationId, requireOrgId(actor))
       )).returning();
       if (!row) return reply.code(404).send({ error: { code: "not_found", message: "Agent not found" } });
       await audit(db, actor, "agent.revoke", "agent", id);
@@ -566,10 +566,10 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.post("/api/v1/events", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      requireUserRole(actor, "marketer");
+      requireUserRole(actor, "member");
       const input = ingestEventSchema.parse(request.body);
       const [row] = await db.insert(customerEvents).values({
-        organizationId: actor.organizationId,
+        organizationId: requireOrgId(actor),
         contactId: input.contactId ?? null,
         companyId: input.companyId ?? null,
         eventType: input.eventType,
@@ -592,14 +592,14 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       requireUserRole(actor, "admin");
       const body = hubspotPropertyDefinitionsImportBodySchema.parse(request.body);
       const [job] = await db.insert(importJobs).values({
-        organizationId: actor.organizationId,
+        organizationId: requireOrgId(actor),
         provider: "hubspot",
         mode: "csv",
         status: "queued",
         stats: { queued: body.properties.length, kind: "properties", cursor: 0 }
       }).returning();
       await enqueueJob(db, {
-        organizationId: actor.organizationId,
+        organizationId: requireOrgId(actor),
         kind: "import.hubspot.properties",
         payload: {
           importJobId: job.id,
@@ -624,14 +624,14 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       requireUserRole(actor, "admin");
       const body = hubspotContactsImportBodySchema.parse(request.body);
       const [job] = await db.insert(importJobs).values({
-        organizationId: actor.organizationId,
+        organizationId: requireOrgId(actor),
         provider: "hubspot",
         mode: "csv",
         status: "queued",
         stats: { queued: body.contacts.length, kind: "contacts", cursor: body.cursor ?? 0 }
       }).returning();
       await enqueueJob(db, {
-        organizationId: actor.organizationId,
+        organizationId: requireOrgId(actor),
         kind: "import.hubspot",
         payload: {
           importJobId: job.id,
@@ -652,11 +652,11 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/imports/:id", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      requireUserRole(actor, "viewer");
+      requireUserRole(actor, "member");
       const { id } = request.params as { id: string };
       const [job] = await db.select().from(importJobs).where(and(
         eq(importJobs.id, id),
-        eq(importJobs.organizationId, actor.organizationId)
+        eq(importJobs.organizationId, requireOrgId(actor))
       )).limit(1);
       if (!job) return reply.code(404).send({ error: { code: "not_found", message: "Import job not found" } });
       return { data: job };
@@ -668,7 +668,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/workflows", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      const data = await db.select().from(workflows).where(eq(workflows.organizationId, actor.organizationId));
+      const data = await db.select().from(workflows).where(eq(workflows.organizationId, requireOrgId(actor)));
       return { data };
     } catch (error) {
       return sendError(reply, error);
@@ -678,10 +678,10 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.post("/api/v1/workflows", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      requireUserRole(actor, "marketer");
+      requireUserRole(actor, "member");
       const input = createWorkflowSchema.parse(request.body);
       const [row] = await db.insert(workflows).values({
-        organizationId: actor.organizationId,
+        organizationId: requireOrgId(actor),
         name: input.name,
         triggerType: input.triggerType,
         definition: input.definition ?? {},
@@ -697,17 +697,17 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.post("/api/v1/workflows/:id/enroll", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      requireUserRole(actor, "marketer");
+      requireUserRole(actor, "member");
       const { id } = request.params as { id: string };
       const body = request.body as { contactId: string };
       const [row] = await db.insert(workflowEnrollments).values({
-        organizationId: actor.organizationId,
+        organizationId: requireOrgId(actor),
         workflowId: id,
         contactId: body.contactId,
         status: "active"
       }).returning();
       await enqueueJob(db, {
-        organizationId: actor.organizationId,
+        organizationId: requireOrgId(actor),
         kind: "workflow.run_step",
         payload: { enrollmentId: row.id, workflowId: id, contactId: body.contactId, stepIndex: 0 }
       });
@@ -721,9 +721,9 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/reports/overview", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      const contactRows = await searchContacts(db, actor.organizationId, { limit: 100 });
-      const campaignRows = await listCampaigns(db, actor.organizationId);
-      const segmentRows = await listSegments(db, actor.organizationId);
+      const contactRows = await searchContacts(db, requireOrgId(actor), { limit: 100 });
+      const campaignRows = await listCampaigns(db, requireOrgId(actor));
+      const segmentRows = await listSegments(db, requireOrgId(actor));
       return {
         data: {
           contacts: contactRows.length,
@@ -742,7 +742,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.post("/api/v1/ai/suggest-segment", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      requireUserRole(actor, "marketer");
+      requireUserRole(actor, "member");
       const body = request.body as { prompt?: string };
       const prompt = (body.prompt ?? "").toLowerCase();
       const filterAst = prompt.includes("inactive")
@@ -795,9 +795,9 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/deliverability", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      requireUserRole(actor, "analyst");
-      const events = await db.select().from(emailEvents).where(eq(emailEvents.organizationId, actor.organizationId)).limit(100);
-      const suppressions = await db.select().from(suppressionEntries).where(eq(suppressionEntries.organizationId, actor.organizationId)).limit(100);
+      requireUserRole(actor, "member");
+      const events = await db.select().from(emailEvents).where(eq(emailEvents.organizationId, requireOrgId(actor))).limit(100);
+      const suppressions = await db.select().from(suppressionEntries).where(eq(suppressionEntries.organizationId, requireOrgId(actor))).limit(100);
       return {
         data: {
           recentEvents: events.length,
@@ -815,10 +815,10 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.post("/api/v1/experiments", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      requireUserRole(actor, "marketer");
+      requireUserRole(actor, "member");
       const body = request.body as { name: string; campaignId?: string; variants?: unknown[]; conversionGoal?: string };
       const [row] = await db.insert(experiments).values({
-        organizationId: actor.organizationId,
+        organizationId: requireOrgId(actor),
         name: body.name,
         campaignId: body.campaignId ?? null,
         variants: body.variants ?? [],
@@ -835,7 +835,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/reports/definitions", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      const data = await db.select().from(reportDefinitions).where(eq(reportDefinitions.organizationId, actor.organizationId));
+      const data = await db.select().from(reportDefinitions).where(eq(reportDefinitions.organizationId, requireOrgId(actor)));
       return { data };
     } catch (error) {
       return sendError(reply, error);

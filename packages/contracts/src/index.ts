@@ -8,7 +8,36 @@ export const propertyValueSchema = z.union([
   z.array(z.string())
 ]);
 
-export const roleSchema = z.enum(["viewer", "analyst", "marketer", "admin", "owner"]);
+export const roleSchema = z.enum(["admin", "member"]);
+
+export const createOrganizationSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  inviteAdminEmail: z.string().trim().email().optional(),
+  joinAsAdmin: z.boolean().optional()
+});
+
+export const inviteMemberSchema = z.object({
+  email: z.string().trim().email(),
+  role: roleSchema.default("member")
+});
+
+export const updateMemberSchema = z.object({
+  role: roleSchema.optional(),
+  active: z.boolean().optional()
+}).refine((value) => value.role !== undefined || value.active !== undefined, {
+  message: "Provide role and/or active"
+});
+
+export const acceptInvitationSchema = z.object({
+  token: z.string().trim().min(16).max(128)
+});
+
+export const organizationSummarySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  createdAt: z.string().optional(),
+  memberCount: z.number().int().nonnegative().optional()
+});
 
 export const paginationMetaSchema = z.object({
   limit: z.number().int().positive(),

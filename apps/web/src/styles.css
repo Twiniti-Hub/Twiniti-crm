@@ -5,7 +5,7 @@ button, a { font: inherit; }
 .shell { display: flex; min-height: 100vh; }
 .sidebar { width: 248px; background: #102b31; color: #dcece7; padding: 28px 18px 22px; display: flex; flex-direction: column; }
 .brand { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 750; letter-spacing: -.03em; font-size: 18px; padding: 0 12px 44px; }
-.brand-mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: #c5efc7; color: #183333; font-size: 16px; }
+.brand-logo { display: block; width: 30px; height: 30px; flex: 0 0 30px; object-fit: contain; padding: 5px; border-radius: 9px; background: #102b31; }
 nav { display: grid; gap: 7px; }
 nav a { color: #a9c2be; text-decoration: none; padding: 12px 13px; border-radius: 10px; font-size: 14px; }
 nav a:hover, nav a.active { background: #21464b; color: #fff; }
@@ -30,6 +30,9 @@ nav a:hover, nav a.active { background: #21464b; color: #fff; }
 .auth-page { min-height: 100vh; background: #f5f8f6; }
 .auth-page-header { padding: 22px clamp(20px, 5vw, 56px); }
 .auth-page-header .brand { color: #102b31; padding: 0; text-decoration: none; }
+.auth-form-wrap { max-width: 480px; margin: 0 auto; padding: 12px 20px 64px; }
+.auth-form-wrap h1 { font-size: 28px; margin-bottom: 8px; }
+.company-chip { margin: -28px 12px 22px; padding: 8px 10px; border-radius: 8px; background: #1a3d42; color: #b7d4cf; font-size: 12px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .content { flex: 1; max-width: 1480px; margin: 0 auto; padding: 38px clamp(24px, 5vw, 76px) 70px; }
 .topbar { display: flex; align-items: start; justify-content: space-between; margin-bottom: 30px; }.eyebrow { text-transform: uppercase; letter-spacing: .13em; color: #758b89; font-size: 10px; font-weight: 800; margin: 0 0 8px; }.accent { color: #1c856d; }
 h1, h2, h3, p { margin-top: 0; } h1 { font-size: clamp(28px, 3vw, 40px); line-height: 1.1; letter-spacing: -.05em; margin-bottom: 0; } h2 { font-size: 25px; letter-spacing: -.04em; margin-bottom: 9px; } h3 { font-size: 18px; letter-spacing: -.03em; margin-bottom: 0; }
@@ -56,4 +59,4 @@ th { color: #6d8480; font-size: 11px; text-transform: uppercase; letter-spacing:
 .muted { color: #7c9290; font-size: 13px; }
 .code-block { margin: 0; padding: 12px; background: #f7fbf9; border-radius: 10px; overflow: auto; font-size: 12px; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
-@media (max-width: 850px) { .sidebar { width: 70px; padding: 20px 10px; }.brand { padding: 0 10px 36px; }.brand span:last-child, nav a { font-size: 0; }.brand-mark { flex: 0 0 30px; } nav a { height: 42px; position: relative; } nav a:before { content: "•"; font-size: 20px; position: absolute; left: 26px; top: 7px; }.sidebar-footer { font-size: 0; }.content { padding: 26px 18px 50px; }.hero-orbit { display: none; }.split, .metrics { grid-template-columns: 1fr; } }
+@media (max-width: 850px) { .sidebar { width: 70px; padding: 20px 10px; }.brand { padding: 0 10px 36px; }.brand span:last-child, nav a { font-size: 0; }.brand-logo { flex: 0 0 30px; } nav a { height: 42px; position: relative; } nav a:before { content: "•"; font-size: 20px; position: absolute; left: 26px; top: 7px; }.sidebar-footer { font-size: 0; }.content { padding: 26px 18px 50px; }.hero-orbit { display: none; }.split, .metrics { grid-template-columns: 1fr; } }

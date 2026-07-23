@@ -1,13 +1,51 @@
 import { useUser } from "@hexclave/react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { api } from "../lib/api";
+import type { Me } from "../lib/me";
+import { AcceptInvitePage } from "../pages/AcceptInvitePage";
 import { LandingPage } from "../pages/LandingPage";
+import { OnboardingPage } from "../pages/OnboardingPage";
 import { SignInPage } from "../pages/SignInPage";
 import { SignUpPage } from "../pages/SignUpPage";
 import { CrmRoutes } from "./CrmRoutes";
 
-/** Guests see landing + auth pages; signed-in users get the CRM shell. */
+/** Guests see landing + auth pages; signed-in users get setup gates or CRM shell. */
 export function AuthGate() {
   const user = useUser();
+  const location = useLocation();
+  const [me, setMe] = useState<Me | null>(null);
+  const [loadingMe, setLoadingMe] = useState(false);
+  const [meError, setMeError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setMe(null);
+      setLoadingMe(false);
+      setMeError(null);
+      return;
+    }
+    let cancelled = false;
+    setLoadingMe(true);
+    api("/api/v1/me")
+      .then((res) => {
+        if (!cancelled) {
+          setMe(res.data as Me);
+          setMeError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setMeError(err instanceof Error ? err.message : "Failed to load session");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingMe(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, location.pathname]);
 
   if (!user) {
     return (
@@ -15,7 +53,45 @@ export function AuthGate() {
         <Route path="/" element={<LandingPage />} />
         <Route path="sign-in" element={<SignInPage />} />
         <Route path="sign-up" element={<SignUpPage />} />
+        <Route path="accept-invite" element={<AcceptInvitePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    );
+  }
+
+  if (loadingMe && !me) {
+    return (
+      <div className="auth-page">
+        <div className="auth-form-wrap">
+          <div className="panel">Loading workspace…</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (meError) {
+    return (
+      <div className="auth-page">
+        <div className="auth-form-wrap">
+          <div className="banner error">{meError}</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (me?.needsSetup) {
+    const onSuperAdmin = location.pathname.startsWith("/super-admin");
+    if (me.isSuperAdmin && onSuperAdmin) {
+      return <CrmRoutes />;
+    }
+    return (
+      <Routes>
+        <Route path="onboarding" element={<OnboardingPage />} />
+        <Route path="accept-invite" element={<AcceptInvitePage />} />
+        <Route
+          path="*"
+          element={<Navigate to={me.isSuperAdmin ? "/super-admin" : "/onboarding"} replace />}
+        />
       </Routes>
     );
   }

@@ -1,14 +1,11 @@
 import { SignIn } from "@hexclave/react";
-import { Link } from "react-router-dom";
+import { Brand } from "../components/Brand";
 
 export function SignInPage() {
   return (
     <div className="auth-page">
       <div className="auth-page-header">
-        <Link to="/" className="brand">
-          <span className="brand-mark">T</span>
-          <span>Twiniti CRM</span>
-        </Link>
+        <Brand link />
       </div>
       <SignIn fullPage />
     </div>

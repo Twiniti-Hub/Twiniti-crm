@@ -15,6 +15,19 @@ export const HUBSPOT_CORE_CONTACT_FIELDS = new Set([
   "lifecyclestage"
 ]);
 
+const HUBSPOT_CONTACT_FIELD_ALIASES = new Set([
+  ...HUBSPOT_CORE_CONTACT_FIELDS,
+  "email_address",
+  "emailaddress",
+  "first_name",
+  "last_name",
+  "lifecycle_stage",
+  "hs_object_id",
+  "hs_objectid",
+  "record_id",
+  "contact_id"
+]);
+
 export function mapHubspotPropertyType(
   type: string | undefined,
   fieldType: string | undefined
@@ -60,21 +73,36 @@ export function mapHubspotContactRow(
   row: Record<string, unknown>,
   definedInternalNames: Set<string>
 ): MappedContactRow | { error: string } {
-  const email = pickString(row, "email", "Email") ?? "";
+  const email = pickString(row, "email", "Email", "Email Address", "email_address", "emailaddress") ?? "";
   if (!email) return { error: "missing email" };
 
-  const firstName = pickString(row, "firstname", "firstName", "first_name");
-  const lastName = pickString(row, "lastname", "lastName", "last_name");
-  const lifecycleStage = pickString(row, "lifecyclestage", "lifecycleStage", "lifecycle_stage");
-  const externalId = pickString(row, "id", "hs_object_id", "hs_objectId") ?? null;
+  const firstName = pickString(row, "firstname", "firstName", "first_name", "First Name", "FirstName");
+  const lastName = pickString(row, "lastname", "lastName", "last_name", "Last Name", "LastName");
+  const lifecycleStage = pickString(
+    row,
+    "lifecyclestage",
+    "lifecycleStage",
+    "lifecycle_stage",
+    "Lifecycle Stage",
+    "LifecycleStage"
+  );
+  const externalId = pickString(
+    row,
+    "id",
+    "hs_object_id",
+    "hs_objectId",
+    "record_id",
+    "contact_id",
+    "Record ID",
+    "Contact ID"
+  ) ?? null;
 
   const properties: Record<string, unknown> = {};
   const unmappedKeys: string[] = [];
 
   for (const [rawKey, value] of Object.entries(row)) {
     const key = normalizeHubspotInternalName(rawKey);
-    if (HUBSPOT_CORE_CONTACT_FIELDS.has(key)) continue;
-    if (key === "id" || key === "hs_object_id") continue;
+    if (HUBSPOT_CONTACT_FIELD_ALIASES.has(key) || key === "id") continue;
     if (!definedInternalNames.has(key)) {
       unmappedKeys.push(rawKey);
       continue;

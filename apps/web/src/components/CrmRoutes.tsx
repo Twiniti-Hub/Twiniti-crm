@@ -10,6 +10,7 @@ import { ImportPage } from "../pages/ImportPage";
 import { OverviewPage } from "../pages/OverviewPage";
 import { SegmentsPage } from "../pages/SegmentsPage";
 import { SettingsPage } from "../pages/SettingsPage";
+import { SuperAdminPage } from "../pages/SuperAdminPage";
 import { WorkflowsPage } from "../pages/WorkflowsPage";
 import { Shell } from "./Shell";
 
@@ -29,6 +30,7 @@ export function CrmRoutes() {
         <Route path="agents" element={<AgentsPage />} />
         <Route path="deliverability" element={<DeliverabilityPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="super-admin" element={<SuperAdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

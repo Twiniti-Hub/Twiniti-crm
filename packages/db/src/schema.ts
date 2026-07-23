@@ -25,11 +25,29 @@ export const crmUsers = pgTable("crm_users", {
   hexclaveSubject: varchar("hexclave_subject", { length: 255 }).notNull(),
   email: varchar("email", { length: 320 }),
   displayName: varchar("display_name", { length: 200 }),
-  role: varchar("role", { length: 32 }).notNull().default("viewer"),
+  role: varchar("role", { length: 32 }).notNull().default("member"),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => ({
   subjectIndex: uniqueIndex("crm_users_subject_idx").on(table.hexclaveSubject)
+}));
+
+export const organizationInvitations = pgTable("organization_invitations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  email: varchar("email", { length: 320 }).notNull(),
+  emailNormalized: varchar("email_normalized", { length: 320 }).notNull(),
+  role: varchar("role", { length: 32 }).notNull().default("member"),
+  token: varchar("token", { length: 64 }).notNull(),
+  invitedByUserId: uuid("invited_by_user_id").references(() => crmUsers.id),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  tokenIndex: uniqueIndex("organization_invitations_token_idx").on(table.token),
+  pendingEmailIndex: uniqueIndex("organization_invitations_org_email_pending_idx")
+    .on(table.organizationId, table.emailNormalized)
+    .where(sql`${table.acceptedAt} is null`)
 }));
 
 export const contacts = pgTable("contacts", {

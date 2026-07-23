@@ -1,5 +1,6 @@
 import { useHexclaveApp } from "@hexclave/react";
 import { Link } from "react-router-dom";
+import { Brand } from "../components/Brand";
 
 export function LandingPage() {
   const app = useHexclaveApp();
@@ -7,10 +8,7 @@ export function LandingPage() {
   return (
     <div className="landing">
       <header className="landing-bar">
-        <div className="brand">
-          <span className="brand-mark">T</span>
-          <span>Twiniti CRM</span>
-        </div>
+        <Brand />
         <div className="landing-actions">
           <Link className="secondary" to="/sign-up">
             Sign up
@@ -22,7 +20,7 @@ export function LandingPage() {
       </header>
 
       <section className="landing-hero">
-        <p className="eyebrow">Twiniti</p>
+        <p className="eyebrow">Twiniti Loop</p>
         <h1>
           Marketing CRM for
           <span className="accent"> agent-ready teams</span>

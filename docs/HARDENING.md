@@ -1,6 +1,6 @@
 # Phase 7 — Enterprise hardening checklist
 
-Production-ready cutover for Twiniti CRM. Work through each section before go-live sign-off.
+Production-ready cutover for Twiniti Loop. Work through each section before go-live sign-off.
 
 ## 1. Load testing
 
@@ -20,7 +20,7 @@ Production-ready cutover for Twiniti CRM. Work through each section before go-li
 
 ### Neon backup / PITR (procedure)
 
-1. Open the Neon console for the Twiniti CRM project → **Branches** / **Backup & restore**.
+1. Open the Neon console for the Twiniti Loop project → **Branches** / **Backup & restore**.
 2. Note the current production branch and earliest available PITR timestamp.
 3. To restore: create a new branch from a point in time (or snapshot), then update `DATABASE_URL` on Render (API + worker) to the restored connection string for validation.
 4. Run `pnpm db:migrate` only if the restored schema is behind; otherwise verify with `/health` and a contact search.

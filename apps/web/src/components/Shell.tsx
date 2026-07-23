@@ -1,6 +1,10 @@
 import { useHexclaveApp, useUser } from "@hexclave/react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { authConfigured } from "../hexclave/client";
+import { api } from "../lib/api";
+import type { Me } from "../lib/me";
+import { Brand } from "./Brand";
 
 const links = [
   { to: "/", label: "Overview", end: true },
@@ -16,10 +20,10 @@ const links = [
   { to: "/settings", label: "Settings" }
 ] as const;
 
-function AccountFooter() {
+function AccountFooter({ me }: { me: Me | null }) {
   const app = useHexclaveApp();
   const user = useUser();
-  const label = user?.displayName ?? user?.primaryEmail ?? "Signed in";
+  const label = user?.displayName ?? user?.primaryEmail ?? me?.email ?? "Signed in";
 
   return (
     <div className="account-block">
@@ -37,13 +41,23 @@ function AccountFooter() {
 }
 
 export function Shell() {
+  const [me, setMe] = useState<Me | null>(null);
+
+  useEffect(() => {
+    api("/api/v1/me")
+      .then((res) => setMe(res.data as Me))
+      .catch(() => setMe(null));
+  }, []);
+
   return (
     <main className="shell">
       <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-mark">T</span>
-          <span>Twiniti CRM</span>
-        </div>
+        <Brand />
+        {me?.organizationName ? (
+          <div className="company-chip" title={me.organizationName}>
+            {me.organizationName}
+          </div>
+        ) : null}
         <nav>
           {links.map((link) => (
             <NavLink
@@ -55,10 +69,18 @@ export function Shell() {
               {link.label}
             </NavLink>
           ))}
+          {me?.isSuperAdmin ? (
+            <NavLink
+              to="/super-admin"
+              className={({ isActive }) => (isActive ? "active" : undefined)}
+            >
+              Super Admin
+            </NavLink>
+          ) : null}
         </nav>
         <div className="sidebar-footer">
           {authConfigured ? (
-            <AccountFooter />
+            <AccountFooter me={me} />
           ) : (
             <>
               <span className="status-dot" />

@@ -1,9 +1,11 @@
 import { HexclaveServerApp } from "@hexclave/js";
-import type { AppEnv } from "@twiniti/config";
+import { isSuperAdminEmail, type AppEnv } from "@twiniti/config";
 import {
   ensureBootstrapOrg,
   findAgentByCredentialHash,
+  findCrmUserBySubject,
   findOrCreateCrmUser,
+  getOrganizationById,
   hashCredential,
   touchAgent,
   type Db
@@ -12,21 +14,32 @@ import {
 export type AuthActor = {
   type: "user" | "agent" | "system";
   id: string;
-  organizationId: string;
+  organizationId: string | null;
   role?: string;
   scopes?: string[];
   email?: string | null;
   displayName?: string | null;
+  needsSetup?: boolean;
+  isSuperAdmin?: boolean;
+  hexclaveSubject?: string;
+  organizationName?: string | null;
 };
 
-export type CrmRole = "viewer" | "analyst" | "marketer" | "admin" | "owner";
+export type CrmRole = "admin" | "member";
 
 export const ROLE_RANK: Record<CrmRole, number> = {
-  viewer: 1,
-  analyst: 2,
-  marketer: 3,
-  admin: 4,
-  owner: 5
+  member: 1,
+  admin: 2
+};
+
+/** Map legacy role names used in older call sites onto the two-role model. */
+const LEGACY_ROLE_ALIASES: Record<string, CrmRole> = {
+  viewer: "member",
+  analyst: "member",
+  marketer: "member",
+  member: "member",
+  admin: "admin",
+  owner: "admin"
 };
 
 export type RequestLike = {
@@ -53,13 +66,20 @@ export function createHexclaveServerApp(env?: Partial<AppEnv>) {
   });
 }
 
-function roleRank(role: string | undefined): number {
-  if (!role) return 0;
-  return ROLE_RANK[role as CrmRole] ?? 0;
+function normalizeRole(role: string | undefined): CrmRole | null {
+  if (!role) return null;
+  return LEGACY_ROLE_ALIASES[role] ?? null;
 }
 
-export function requireRole(actor: AuthActor, minRole: CrmRole): boolean {
-  return roleRank(actor.role) >= ROLE_RANK[minRole];
+function roleRank(role: string | undefined): number {
+  const normalized = normalizeRole(role);
+  if (!normalized) return 0;
+  return ROLE_RANK[normalized];
+}
+
+export function requireRole(actor: AuthActor, minRole: CrmRole | "viewer" | "analyst" | "marketer" | "owner"): boolean {
+  const required = LEGACY_ROLE_ALIASES[minRole] ?? (minRole as CrmRole);
+  return roleRank(actor.role) >= ROLE_RANK[required];
 }
 
 export function hasScope(actor: AuthActor, scope: string): boolean {
@@ -75,6 +95,15 @@ export function assertScope(actor: AuthActor, scope: string): void {
     error.statusCode = 403;
     throw error;
   }
+}
+
+export function assertOrganization(actor: AuthActor): string {
+  if (!actor.organizationId) {
+    const error = new Error("Company setup required") as Error & { statusCode: number };
+    error.statusCode = 403;
+    throw error;
+  }
+  return actor.organizationId;
 }
 
 function getHeader(headers: RequestLike["headers"], name: string): string | undefined {
@@ -131,15 +160,19 @@ async function resolveBootstrapActor(db: Db, env: AppEnv): Promise<AuthActor> {
     subject: "dev-owner",
     email: "owner@localhost",
     displayName: "Dev Owner",
-    defaultRole: "owner"
+    defaultRole: "admin"
   });
   return {
     type: "user",
     id: user.id,
     organizationId: user.organizationId,
-    role: user.role || "owner",
+    role: normalizeRole(user.role) ?? "admin",
     email: user.email,
-    displayName: user.displayName
+    displayName: user.displayName,
+    needsSetup: false,
+    isSuperAdmin: true,
+    hexclaveSubject: user.hexclaveSubject,
+    organizationName: org.name
   };
 }
 
@@ -160,7 +193,9 @@ export async function resolveRequestActor(
       id: agent.id,
       organizationId: agent.organizationId,
       scopes: parseScopes(agent.scopes),
-      displayName: agent.name
+      displayName: agent.name,
+      needsSetup: false,
+      isSuperAdmin: false
     };
   }
 
@@ -182,25 +217,36 @@ export async function resolveRequestActor(
     ?? (user as { email?: string | null }).email
     ?? null;
   const displayName = (user as { displayName?: string | null }).displayName ?? null;
+  const superAdmin = isSuperAdminEmail(email, env);
 
-  const org = await ensureBootstrapOrg(db, {
-    orgName: env.BOOTSTRAP_ORG_NAME,
-    ownerSubject: env.BOOTSTRAP_OWNER_SUBJECT || undefined
-  });
-  const crmUser = await findOrCreateCrmUser(db, {
-    organizationId: org.id,
-    subject,
-    email,
-    displayName,
-    defaultRole: "marketer"
-  });
+  const crmUser = await findCrmUserBySubject(db, subject);
+  if (!crmUser || !crmUser.active) {
+    return {
+      type: "user",
+      id: subject,
+      organizationId: null,
+      role: undefined,
+      email,
+      displayName,
+      needsSetup: true,
+      isSuperAdmin: superAdmin,
+      hexclaveSubject: subject,
+      organizationName: null
+    };
+  }
+
+  const organization = await getOrganizationById(db, crmUser.organizationId);
 
   return {
     type: "user",
     id: crmUser.id,
     organizationId: crmUser.organizationId,
-    role: crmUser.role,
-    email: crmUser.email,
-    displayName: crmUser.displayName
+    role: normalizeRole(crmUser.role) ?? "member",
+    email: crmUser.email ?? email,
+    displayName: crmUser.displayName ?? displayName,
+    needsSetup: false,
+    isSuperAdmin: superAdmin,
+    hexclaveSubject: subject,
+    organizationName: organization?.name ?? null
   };
 }

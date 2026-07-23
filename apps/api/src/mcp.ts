@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { resolveRequestActor, assertScope } from "@twiniti/auth";
+import { resolveRequestActor, assertScope, assertOrganization } from "@twiniti/auth";
 import { loadEnv } from "@twiniti/config";
 import {
   contactSearchSchema,
@@ -139,16 +139,16 @@ export async function registerMcpRoutes(app: FastifyInstance, db: Db) {
         switch (tool.name) {
           case "search_contacts": {
             const query = contactSearchSchema.parse(args);
-            result = await searchContacts(db, actor.organizationId, query);
+            result = await searchContacts(db, assertOrganization(actor), query);
             break;
           }
           case "get_contact": {
-            result = await getContactById(db, actor.organizationId, String(args.id ?? ""));
+            result = await getContactById(db, assertOrganization(actor), String(args.id ?? ""));
             break;
           }
           case "create_contact": {
             const input = createContactSchema.parse(args);
-            const existing = await findContactByEmail(db, actor.organizationId, input.email);
+            const existing = await findContactByEmail(db, assertOrganization(actor), input.email);
             result = existing
               ? {
                   status: "conflict",
@@ -156,28 +156,28 @@ export async function registerMcpRoutes(app: FastifyInstance, db: Db) {
                   existing_contact_id: existing.id,
                   next_actions: ["update_existing", "create_anyway"]
                 }
-              : await createContact(db, { organizationId: actor.organizationId, ...input });
+              : await createContact(db, { organizationId: assertOrganization(actor), ...input });
             break;
           }
           case "upsert_contact": {
             const input = upsertContactSchema.parse(args);
-            const existing = await findContactByEmail(db, actor.organizationId, input.email);
+            const existing = await findContactByEmail(db, assertOrganization(actor), input.email);
             if (existing) {
-              const updated = await updateContact(db, actor.organizationId, existing.id, input);
+              const updated = await updateContact(db, assertOrganization(actor), existing.id, input);
               result = updated && !updated.conflict ? updated.row : existing;
             } else {
-              result = await createContact(db, { organizationId: actor.organizationId, ...input });
+              result = await createContact(db, { organizationId: assertOrganization(actor), ...input });
             }
             break;
           }
           case "update_contact": {
             const input = updateContactSchema.parse(args);
-            const updated = await updateContact(db, actor.organizationId, String(args.id), input);
+            const updated = await updateContact(db, assertOrganization(actor), String(args.id), input);
             result = updated && !updated.conflict ? updated.row : null;
             break;
           }
           case "get_contact_timeline": {
-            result = await getContactTimeline(db, actor.organizationId, String(args.id));
+            result = await getContactTimeline(db, assertOrganization(actor), String(args.id));
             break;
           }
           case "create_campaign_draft": {
@@ -185,7 +185,7 @@ export async function registerMcpRoutes(app: FastifyInstance, db: Db) {
             break;
           }
           case "get_campaign_status": {
-            result = await listCampaigns(db, actor.organizationId);
+            result = await listCampaigns(db, assertOrganization(actor));
             break;
           }
           default: {

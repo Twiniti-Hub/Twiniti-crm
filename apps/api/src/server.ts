@@ -11,6 +11,7 @@ import { registerAuthHook } from "./auth-hook.js";
 import { registerMcpRoutes } from "./mcp.js";
 import { registerCrmRoutes } from "./routes/crm.js";
 import { registerMarketingRoutes } from "./routes/marketing.js";
+import { registerOrganizationRoutes } from "./routes/organizations.js";
 
 const env = loadEnv({
   ...process.env,
@@ -28,7 +29,7 @@ await app.register(cors, {
 
 await app.register(swagger, {
   openapi: {
-    info: { title: "Twiniti CRM API", version: "0.1.0" },
+    info: { title: "Twiniti Loop API", version: "0.1.0" },
     servers: [{ url: `http://localhost:${env.PORT}` }]
   }
 });
@@ -49,6 +50,7 @@ app.get("/api/v1/bootstrap", async () => {
   return { data: { organizationId: org.id, name: org.name } };
 });
 
+await registerOrganizationRoutes(app, db, env);
 await registerCrmRoutes(app, db);
 await registerMarketingRoutes(app, db, env);
 await registerMcpRoutes(app, db);
