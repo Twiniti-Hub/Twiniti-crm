@@ -37,6 +37,7 @@ With `AUTH_DISABLED=true` (default when Hexclave secret is unset), the API boots
 | Area | Status |
 |---|---|
 | Contacts / companies / properties | Live API + UI |
+| Immutable contact IDs + identity/history tracking | Live API + UI |
 | Segments (filter AST) / lists / forms | Live API + UI |
 | Campaigns + approval-gated send | Live API + worker |
 | Agents + scoped credentials + MCP | Live |

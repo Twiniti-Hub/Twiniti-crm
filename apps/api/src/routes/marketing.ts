@@ -261,9 +261,11 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
         contact = await createContact(db, {
           organizationId: form.organizationId,
           email,
+          phone: typeof input.payload.phone === "string" ? input.payload.phone : null,
           firstName: typeof input.payload.firstName === "string" ? input.payload.firstName : null,
           lastName: typeof input.payload.lastName === "string" ? input.payload.lastName : null,
-          properties: input.payload
+          properties: input.payload,
+          change: { actorType: "public_form", actorId: form.id, source: "public.form" }
         });
       }
       const [submission] = await db.insert(formSubmissions).values({

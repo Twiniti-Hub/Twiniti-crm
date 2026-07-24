@@ -55,17 +55,43 @@ export const contacts = pgTable("contacts", {
   organizationId: uuid("organization_id").notNull().references(() => organizations.id),
   email: varchar("email", { length: 320 }).notNull(),
   emailNormalized: varchar("email_normalized", { length: 320 }).notNull(),
+  phone: varchar("phone", { length: 80 }),
+  phoneNormalized: varchar("phone_normalized", { length: 40 }),
   firstName: varchar("first_name", { length: 100 }),
   lastName: varchar("last_name", { length: 100 }),
   lifecycleStage: varchar("lifecycle_stage", { length: 80 }),
   properties: jsonb("properties").notNull().default({}),
   version: integer("version").notNull().default(1),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
+  mergedIntoContactId: uuid("merged_into_contact_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => ({
   emailIndex: uniqueIndex("contacts_org_email_idx").on(table.organizationId, table.emailNormalized),
   searchIndex: index("contacts_org_updated_idx").on(table.organizationId, table.updatedAt)
+}));
+
+export const contactIdentities = pgTable("contact_identities", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  contactId: uuid("contact_id").notNull().references(() => contacts.id),
+  identityType: varchar("identity_type", { length: 40 }).notNull(),
+  provider: varchar("provider", { length: 80 }).notNull().default("crm"),
+  normalizedValue: varchar("normalized_value", { length: 500 }).notNull(),
+  displayValue: varchar("display_value", { length: 500 }),
+  isPrimary: boolean("is_primary").notNull().default(false),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  source: varchar("source", { length: 80 }),
+  firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).defaultNow().notNull(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+  metadata: jsonb("metadata").notNull().default({})
+}, (table) => ({
+  activeIdentityIndex: uniqueIndex("contact_identities_active_value_idx")
+    .on(table.organizationId, table.identityType, table.provider, table.normalizedValue)
+    .where(sql`${table.endedAt} IS NULL`),
+  contactIndex: index("contact_identities_contact_idx").on(table.organizationId, table.contactId, table.identityType),
+  lookupIndex: index("contact_identities_lookup_idx").on(table.organizationId, table.normalizedValue)
 }));
 
 export const companies = pgTable("companies", {
@@ -126,11 +152,14 @@ export const propertyHistory = pgTable("property_history", {
   propertyName: varchar("property_name", { length: 150 }).notNull(),
   oldValue: jsonb("old_value"),
   newValue: jsonb("new_value"),
+  changeSetId: uuid("change_set_id"),
   actorType: varchar("actor_type", { length: 20 }).notNull(),
   actorId: varchar("actor_id", { length: 255 }).notNull(),
+  source: varchar("source", { length: 80 }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => ({
-  recordIndex: index("property_history_record_idx").on(table.organizationId, table.objectType, table.recordId)
+  recordIndex: index("property_history_record_idx").on(table.organizationId, table.objectType, table.recordId),
+  changeSetIndex: index("property_history_change_set_idx").on(table.organizationId, table.changeSetId)
 }));
 
 export const externalRecordIds = pgTable("external_record_ids", {
@@ -552,6 +581,7 @@ export const schema = {
   contactSubscriptions,
   suppressionEntries,
   customerEvents,
+  contactIdentities,
   emailTrackingAddresses,
   lists,
   listMemberships,

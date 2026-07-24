@@ -13,6 +13,7 @@ import {
   enqueueJob,
   getContactById,
   findContactsByEmails,
+  findContactByExternalRecordId,
   getDb,
   HUBSPOT_CORE_CONTACT_FIELDS,
   importJobs,
@@ -27,6 +28,7 @@ import {
   mapHubspotContactRow,
   organizations,
   upsertContactByEmail,
+  updateContact,
   upsertExternalRecordId,
   upsertPropertyDefinitionFromHubspot,
   webhookEvents,
@@ -269,14 +271,40 @@ async function processHubspotImport(payload: {
         });
       } else {
         unmapped += mapped.unmappedKeys.length;
-        const result = await upsertContactByEmail(db, {
-          organizationId: job.organizationId,
-          email: mapped.email,
-          firstName: mapped.firstName,
-          lastName: mapped.lastName,
-          lifecycleStage: mapped.lifecycleStage,
-          properties: mapped.properties
-        });
+        const externalContact = mapped.externalId
+          ? await findContactByExternalRecordId(db, {
+              organizationId: job.organizationId,
+              provider: "hubspot",
+              objectType: "contact",
+              externalId: mapped.externalId
+            })
+          : null;
+        const result = await (externalContact
+          ? (() => {
+              const currentProperties = (externalContact.properties ?? {}) as Record<string, unknown>;
+              return updateContact(db, job.organizationId, externalContact.id, {
+                email: mapped.email,
+                phone: mapped.phone,
+                firstName: mapped.firstName,
+                lastName: mapped.lastName,
+                lifecycleStage: mapped.lifecycleStage,
+                properties: { ...currentProperties, ...mapped.properties },
+                change: { actorType: "worker", actorId: job.id, source: "hubspot.import" }
+              }).then((updated) => {
+                if (!updated || updated.conflict) throw new Error("Failed to update imported contact");
+                return { row: updated.row, created: false as const };
+              });
+            })()
+          : upsertContactByEmail(db, {
+              organizationId: job.organizationId,
+              email: mapped.email,
+              phone: mapped.phone,
+              firstName: mapped.firstName,
+              lastName: mapped.lastName,
+              lifecycleStage: mapped.lifecycleStage,
+              properties: mapped.properties,
+              change: { actorType: "worker", actorId: job.id, source: "hubspot.import" }
+            }));
         if (result.created) imported += 1;
         else updated += 1;
 

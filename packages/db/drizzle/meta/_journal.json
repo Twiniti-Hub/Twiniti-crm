@@ -22,6 +22,13 @@
       "when": 1753350000000,
       "tag": "0002_email_tracking",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1753436400000,
+      "tag": "0003_contact_identity_history",
+      "breakpoints": true
     }
   ]
 }

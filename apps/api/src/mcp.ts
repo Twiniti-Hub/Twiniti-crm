@@ -156,23 +156,37 @@ export async function registerMcpRoutes(app: FastifyInstance, db: Db) {
                   existing_contact_id: existing.id,
                   next_actions: ["update_existing", "create_anyway"]
                 }
-              : await createContact(db, { organizationId: assertOrganization(actor), ...input });
+              : await createContact(db, {
+                  organizationId: assertOrganization(actor),
+                  ...input,
+                  change: { actorType: actor.type, actorId: actor.id, source: "mcp.contact.create" }
+                });
             break;
           }
           case "upsert_contact": {
             const input = upsertContactSchema.parse(args);
             const existing = await findContactByEmail(db, assertOrganization(actor), input.email);
             if (existing) {
-              const updated = await updateContact(db, assertOrganization(actor), existing.id, input);
+              const updated = await updateContact(db, assertOrganization(actor), existing.id, {
+                ...input,
+                change: { actorType: actor.type, actorId: actor.id, source: "mcp.contact.upsert" }
+              });
               result = updated && !updated.conflict ? updated.row : existing;
             } else {
-              result = await createContact(db, { organizationId: assertOrganization(actor), ...input });
+              result = await createContact(db, {
+                organizationId: assertOrganization(actor),
+                ...input,
+                change: { actorType: actor.type, actorId: actor.id, source: "mcp.contact.upsert" }
+              });
             }
             break;
           }
           case "update_contact": {
             const input = updateContactSchema.parse(args);
-            const updated = await updateContact(db, assertOrganization(actor), String(args.id), input);
+            const updated = await updateContact(db, assertOrganization(actor), String(args.id), {
+              ...input,
+              change: { actorType: actor.type, actorId: actor.id, source: "mcp.contact.update" }
+            });
             result = updated && !updated.conflict ? updated.row : null;
             break;
           }

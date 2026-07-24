@@ -16,6 +16,7 @@ import {
   customerEvents,
   findContactByEmail,
   getContactById,
+  getContactPropertyHistory,
   getContactTimeline,
   listCompanies,
   normalizeDomain,
@@ -31,6 +32,7 @@ import { audit, requireActor, requireOrgId, requireUserRole, sendError } from ".
 function mapContact(row: {
   id: string;
   email: string;
+  phone: string | null;
   firstName: string | null;
   lastName: string | null;
   lifecycleStage: string | null;
@@ -40,6 +42,7 @@ function mapContact(row: {
   return {
     id: row.id,
     email: row.email,
+    phone: row.phone,
     firstName: row.firstName,
     lastName: row.lastName,
     lifecycleStage: row.lifecycleStage,
@@ -87,6 +90,18 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
     }
   });
 
+  app.get("/api/v1/contacts/:id/history", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      if (actor.type === "agent") assertScope(actor, "contacts:read");
+      const { id } = request.params as { id: string };
+      const data = await getContactPropertyHistory(db, requireOrgId(actor), id);
+      return { data };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
   app.post("/api/v1/contacts", async (request, reply) => {
     try {
       const actor = requireActor(request);
@@ -106,7 +121,11 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
       if (dryRun) {
         return { data: { ...input, id: "dry-run" }, meta: { dryRun: true } };
       }
-      const row = await createContact(db, { organizationId: requireOrgId(actor), ...input });
+      const row = await createContact(db, {
+        organizationId: requireOrgId(actor),
+        ...input,
+        change: { actorType: actor.type, actorId: actor.id, source: "api.contact.create" }
+      });
       await db.insert(customerEvents).values({
         organizationId: requireOrgId(actor),
         contactId: row.id,
@@ -134,14 +153,21 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
       const input = upsertContactSchema.parse(request.body);
       const existing = await findContactByEmail(db, requireOrgId(actor), input.email);
       if (existing) {
-        const result = await updateContact(db, requireOrgId(actor), existing.id, input);
+        const result = await updateContact(db, requireOrgId(actor), existing.id, {
+          ...input,
+          change: { actorType: actor.type, actorId: actor.id, source: "api.contact.upsert" }
+        });
         if (!result || result.conflict) {
           return reply.code(409).send({ error: { code: "version_conflict", message: "Contact version conflict" } });
         }
         await audit(db, actor, "contact.upsert_update", "contact", result.row.id);
         return { data: mapContact(result.row), meta: { upserted: "update" } };
       }
-      const row = await createContact(db, { organizationId: requireOrgId(actor), ...input });
+      const row = await createContact(db, {
+        organizationId: requireOrgId(actor),
+        ...input,
+        change: { actorType: actor.type, actorId: actor.id, source: "api.contact.upsert" }
+      });
       await audit(db, actor, "contact.upsert_create", "contact", row.id);
       reply.code(201);
       return { data: mapContact(row), meta: { upserted: "create" } };
@@ -157,7 +183,10 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
       else requireUserRole(actor, "member");
       const { id } = request.params as { id: string };
       const input = updateContactSchema.parse(request.body);
-      const result = await updateContact(db, requireOrgId(actor), id, input);
+      const result = await updateContact(db, requireOrgId(actor), id, {
+        ...input,
+        change: { actorType: actor.type, actorId: actor.id, source: "api.contact.update" }
+      });
       if (!result) return reply.code(404).send({ error: { code: "not_found", message: "Contact not found" } });
       if (result.conflict) {
         return reply.code(409).send({ error: { code: "version_conflict", message: "Contact version conflict", details: { current: result.current } } });
@@ -238,6 +267,7 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
         ...(primary.properties as Record<string, unknown>)
       };
       const result = await updateContact(db, requireOrgId(actor), primary.id, {
+        phone: primary.phone ?? secondary.phone,
         firstName: primary.firstName ?? secondary.firstName,
         lastName: primary.lastName ?? secondary.lastName,
         lifecycleStage: primary.lifecycleStage ?? secondary.lifecycleStage,
@@ -247,6 +277,7 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
         return reply.code(409).send({ error: { code: "version_conflict", message: "Merge conflict" } });
       }
       await db.update(contactsTable).set({ archivedAt: new Date() }).where(eqOp(contactsTable.id, secondary.id));
+      await db.update(contactsTable).set({ mergedIntoContactId: primary.id }).where(eqOp(contactsTable.id, secondary.id));
       await db.insert(customerEvents).values({
         organizationId: requireOrgId(actor),
         contactId: primary.id,
@@ -267,8 +298,8 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
       const actor = requireActor(request);
       requireUserRole(actor, "member");
       const rows = await searchContacts(db, requireOrgId(actor), { limit: 100 });
-      const csv = ["email,firstName,lastName,lifecycleStage", ...rows.map((row) =>
-        [row.email, row.firstName ?? "", row.lastName ?? "", row.lifecycleStage ?? ""].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")
+      const csv = ["email,phone,firstName,lastName,lifecycleStage", ...rows.map((row) =>
+        [row.email, row.phone ?? "", row.firstName ?? "", row.lastName ?? "", row.lifecycleStage ?? ""].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")
       )].join("\n");
       reply.header("content-type", "text/csv; charset=utf-8");
       return csv;

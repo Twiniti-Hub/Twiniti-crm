@@ -16,6 +16,7 @@ type PropertyDefinition = {
 type Contact = {
   id: string;
   email: string;
+  phone: string | null;
   firstName: string | null;
   lastName: string | null;
   lifecycleStage: string | null;
@@ -31,6 +32,16 @@ type TimelineEvent = {
   payload: Record<string, unknown>;
 };
 
+type PropertyHistory = {
+  id: string;
+  propertyName: string;
+  oldValue: unknown;
+  newValue: unknown;
+  actorType: string;
+  source: string | null;
+  createdAt: string;
+};
+
 const CORE_NAMES = new Set(["email", "firstname", "lastname", "lifecyclestage"]);
 
 export function ContactDetailPage() {
@@ -38,11 +49,13 @@ export function ContactDetailPage() {
   const [contact, setContact] = useState<Contact | null>(null);
   const [definitions, setDefinitions] = useState<PropertyDefinition[]>([]);
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [lifecycleStage, setLifecycleStage] = useState("");
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
+  const [history, setHistory] = useState<PropertyHistory[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -63,12 +76,14 @@ export function ContactDetailPage() {
     Promise.all([
       api(`/api/v1/contacts/${id}`),
       api("/api/v1/properties?objectType=contact"),
-      api(`/api/v1/contacts/${id}/timeline`)
+      api(`/api/v1/contacts/${id}/timeline`),
+      api(`/api/v1/contacts/${id}/history`)
     ])
-      .then(([contactRes, propsRes, timelineRes]) => {
+      .then(([contactRes, propsRes, timelineRes, historyRes]) => {
         const row = contactRes.data as Contact;
         setContact(row);
         setEmail(row.email);
+        setPhone(row.phone ?? "");
         setFirstName(row.firstName ?? "");
         setLastName(row.lastName ?? "");
         setLifecycleStage(row.lifecycleStage ?? "");
@@ -79,6 +94,7 @@ export function ContactDetailPage() {
         setCustomValues(next);
         setDefinitions((propsRes.data ?? []) as PropertyDefinition[]);
         setTimeline((timelineRes.data ?? []) as TimelineEvent[]);
+        setHistory((historyRes.data ?? []) as PropertyHistory[]);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load contact"));
   }, [id]);
@@ -100,6 +116,7 @@ export function ContactDetailPage() {
         method: "PATCH",
         body: JSON.stringify({
           email,
+          phone: phone || null,
           firstName: firstName || null,
           lastName: lastName || null,
           lifecycleStage: lifecycleStage || null,
@@ -139,6 +156,10 @@ export function ContactDetailPage() {
             <label>
               Email
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </label>
+            <label>
+              Phone
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} />
             </label>
             <label>
               First name
@@ -196,6 +217,27 @@ export function ContactDetailPage() {
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+        <section className="panel" style={{ marginTop: 15 }}>
+          <p className="eyebrow">Audit trail</p>
+          <h3>Contact changes</h3>
+          {history.length === 0 ? <p className="muted">No field changes recorded yet.</p> : (
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>When</th><th>Field</th><th>Change</th><th>Source</th></tr></thead>
+                <tbody>
+                  {history.map((change) => (
+                    <tr key={change.id}>
+                      <td>{new Date(change.createdAt).toLocaleString()}</td>
+                      <td>{change.propertyName}</td>
+                      <td>{JSON.stringify(change.oldValue) ?? "null"} → {JSON.stringify(change.newValue) ?? "null"}</td>
+                      <td>{change.source ?? change.actorType}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

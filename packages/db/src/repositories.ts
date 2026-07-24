@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 // neon-http workers use optimistic claim rather than SKIP LOCKED transactions
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import type { Db } from "./client.js";
 import {
   mapHubspotPropertyType,
@@ -13,6 +13,7 @@ import {
   campaigns,
   companies,
   contacts,
+  contactIdentities,
   crmUsers,
   customerEvents,
   emailActivities,
@@ -22,6 +23,7 @@ import {
   organizationInvitations,
   organizations,
   propertyDefinitions,
+  propertyHistory,
   segments,
   suppressionEntries,
   webhookEvents
@@ -29,6 +31,187 @@ import {
 
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+export function normalizePhone(phone: string): string {
+  const trimmed = phone.trim();
+  const digits = trimmed.replace(/\D/g, "");
+  return trimmed.startsWith("+") ? `+${digits}` : digits;
+}
+
+function normalizeIdentityValue(identityType: string, value: string): string {
+  if (identityType === "email") return normalizeEmail(value);
+  if (identityType === "phone") return normalizePhone(value);
+  if (identityType === "linkedin" || identityType === "facebook" || identityType === "url") {
+    return value.trim().toLowerCase().replace(/\/$/, "");
+  }
+  return value.trim();
+}
+
+type ContactChangeContext = {
+  actorType?: string;
+  actorId?: string;
+  source?: string;
+};
+
+function canonicalValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => [key, canonicalValue(item)]));
+  }
+  return value;
+}
+
+function valuesEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(canonicalValue(left)) === JSON.stringify(canonicalValue(right));
+}
+
+async function recordContactChanges(
+  db: Db,
+  input: {
+    organizationId: string;
+    contactId: string;
+    previous: Record<string, unknown>;
+    next: Record<string, unknown>;
+    context?: ContactChangeContext;
+  }
+) {
+  const keys = new Set([
+    ...Object.keys(input.previous),
+    ...Object.keys(input.next)
+  ]);
+  const changes = [...keys]
+    .filter((key) => !valuesEqual(input.previous[key], input.next[key]));
+  if (changes.length === 0) return;
+  const changeSetId = randomUUID();
+  await db.insert(propertyHistory).values(changes.map((propertyName) => ({
+    organizationId: input.organizationId,
+    objectType: "contact",
+    recordId: input.contactId,
+    propertyName,
+    oldValue: input.previous[propertyName] ?? null,
+    newValue: input.next[propertyName] ?? null,
+    changeSetId,
+    actorType: input.context?.actorType ?? "system",
+    actorId: input.context?.actorId ?? "system",
+    source: input.context?.source ?? "contact.update"
+  })));
+}
+
+async function syncContactIdentities(
+  db: Db,
+  input: {
+    organizationId: string;
+    contactId: string;
+    email: string;
+    phone?: string | null;
+    context?: ContactChangeContext;
+  }
+) {
+  const now = new Date();
+  const desired = [
+    { identityType: "email", provider: "crm", value: input.email, isPrimary: true },
+    ...(input.phone?.trim() ? [{ identityType: "phone", provider: "crm", value: input.phone, isPrimary: true }] : [])
+  ].map((identity) => ({
+    ...identity,
+    normalizedValue: normalizeIdentityValue(identity.identityType, identity.value)
+  }));
+  const active = await db.select().from(contactIdentities).where(and(
+    eq(contactIdentities.organizationId, input.organizationId),
+    eq(contactIdentities.contactId, input.contactId),
+    isNull(contactIdentities.endedAt)
+  ));
+  for (const identity of active) {
+    const stillPresent = desired.some((item) =>
+      item.identityType === identity.identityType &&
+      item.provider === identity.provider &&
+      item.normalizedValue === identity.normalizedValue
+    );
+    if (!stillPresent) {
+      await db.update(contactIdentities).set({ endedAt: now, isPrimary: false, lastSeenAt: now })
+        .where(eq(contactIdentities.id, identity.id));
+    }
+  }
+  for (const identity of desired) {
+    const [existing] = await db.select().from(contactIdentities).where(and(
+      eq(contactIdentities.organizationId, input.organizationId),
+      eq(contactIdentities.identityType, identity.identityType),
+      eq(contactIdentities.provider, identity.provider),
+      eq(contactIdentities.normalizedValue, identity.normalizedValue),
+      isNull(contactIdentities.endedAt)
+    )).limit(1);
+    if (existing && existing.contactId !== input.contactId) {
+      throw new Error(`${identity.identityType} identity is already assigned to another contact`);
+    }
+    if (existing) {
+      await db.update(contactIdentities).set({ lastSeenAt: now, isPrimary: identity.isPrimary, displayValue: identity.value })
+        .where(eq(contactIdentities.id, existing.id));
+    } else {
+      await db.insert(contactIdentities).values({
+        organizationId: input.organizationId,
+        contactId: input.contactId,
+        identityType: identity.identityType,
+        provider: identity.provider,
+        normalizedValue: identity.normalizedValue,
+        displayValue: identity.value,
+        isPrimary: identity.isPrimary,
+        source: input.context?.source ?? "crm",
+        firstSeenAt: now,
+        lastSeenAt: now
+      });
+    }
+  }
+}
+
+export async function upsertContactIdentity(
+  db: Db,
+  input: {
+    organizationId: string;
+    contactId: string;
+    identityType: string;
+    provider?: string;
+    value: string;
+    verifiedAt?: Date | null;
+    source?: string | null;
+    metadata?: Record<string, unknown>;
+  }
+) {
+  const provider = input.provider ?? "crm";
+  const normalizedValue = normalizeIdentityValue(input.identityType, input.value);
+  const [conflict] = await db.select().from(contactIdentities).where(and(
+    eq(contactIdentities.organizationId, input.organizationId),
+    eq(contactIdentities.identityType, input.identityType),
+    eq(contactIdentities.provider, provider),
+    eq(contactIdentities.normalizedValue, normalizedValue),
+    isNull(contactIdentities.endedAt)
+  )).limit(1);
+  if (conflict && conflict.contactId !== input.contactId) {
+    throw new Error(`${input.identityType} identity is already assigned to another contact`);
+  }
+  if (conflict) {
+    const [row] = await db.update(contactIdentities).set({
+      displayValue: input.value,
+      verifiedAt: input.verifiedAt ?? conflict.verifiedAt,
+      source: input.source ?? conflict.source,
+      metadata: input.metadata ?? conflict.metadata,
+      lastSeenAt: new Date()
+    }).where(eq(contactIdentities.id, conflict.id)).returning();
+    return row;
+  }
+  const [row] = await db.insert(contactIdentities).values({
+    organizationId: input.organizationId,
+    contactId: input.contactId,
+    identityType: input.identityType,
+    provider,
+    normalizedValue,
+    displayValue: input.value,
+    verifiedAt: input.verifiedAt ?? null,
+    source: input.source ?? null,
+    metadata: input.metadata ?? {}
+  }).returning();
+  return row;
 }
 
 export function normalizeDomain(domain: string | null | undefined): string | null {
@@ -355,6 +538,7 @@ export async function searchContacts(
     const q = `%${options.query}%`;
     filters.push(or(
       ilike(contacts.email, q),
+      ilike(contacts.phone, q),
       ilike(contacts.firstName, q),
       ilike(contacts.lastName, q)
     )!);
@@ -367,22 +551,49 @@ export async function createContact(
   input: {
     organizationId: string;
     email: string;
+    phone?: string | null;
     firstName?: string | null;
     lastName?: string | null;
     lifecycleStage?: string | null;
     properties?: Record<string, unknown>;
+    change?: ContactChangeContext;
   }
 ) {
   const emailNormalized = normalizeEmail(input.email);
+  const phone = input.phone?.trim() || null;
   const [row] = await db.insert(contacts).values({
     organizationId: input.organizationId,
     email: input.email.trim(),
     emailNormalized,
+    phone,
+    phoneNormalized: phone ? normalizePhone(phone) : null,
     firstName: input.firstName ?? null,
     lastName: input.lastName ?? null,
     lifecycleStage: input.lifecycleStage ?? null,
     properties: input.properties ?? {}
   }).returning();
+  await recordContactChanges(db, {
+    organizationId: input.organizationId,
+    contactId: row.id,
+    previous: {},
+    next: {
+      email: row.email,
+      phone: row.phone,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      lifecycleStage: row.lifecycleStage,
+      ...Object.fromEntries(Object.entries((row.properties ?? {}) as Record<string, unknown>)
+        .map(([key, value]) => [`properties.${key}`, value]))
+    },
+    context: { ...input.change, source: input.change?.source ?? "contact.create" }
+  });
+  await syncContactIdentities(db, {
+    organizationId: input.organizationId,
+    contactId: row.id,
+    email: row.email,
+    phone: row.phone,
+    context: input.change
+  });
   return row;
 }
 
@@ -392,11 +603,13 @@ export async function updateContact(
   id: string,
   input: {
     email?: string;
+    phone?: string | null;
     firstName?: string | null;
     lastName?: string | null;
     lifecycleStage?: string | null;
     properties?: Record<string, unknown>;
     version?: number;
+    change?: ContactChangeContext;
   }
 ) {
   const existing = await db.select().from(contacts).where(and(eq(contacts.id, id), eq(contacts.organizationId, organizationId))).limit(1);
@@ -405,16 +618,51 @@ export async function updateContact(
   if (input.version !== undefined && input.version !== current.version) {
     return { conflict: true as const, current };
   }
+  const nextEmail = input.email?.trim() ?? current.email;
+  const nextPhone = input.phone === undefined ? current.phone : input.phone?.trim() || null;
+  const nextProperties = input.properties ?? current.properties;
   const [row] = await db.update(contacts).set({
-    email: input.email?.trim() ?? current.email,
+    email: nextEmail,
     emailNormalized: input.email ? normalizeEmail(input.email) : current.emailNormalized,
+    phone: nextPhone,
+    phoneNormalized: nextPhone ? normalizePhone(nextPhone) : null,
     firstName: input.firstName === undefined ? current.firstName : input.firstName,
     lastName: input.lastName === undefined ? current.lastName : input.lastName,
     lifecycleStage: input.lifecycleStage === undefined ? current.lifecycleStage : input.lifecycleStage,
-    properties: input.properties ?? current.properties,
+    properties: nextProperties,
     version: current.version + 1,
     updatedAt: new Date()
   }).where(eq(contacts.id, id)).returning();
+  await recordContactChanges(db, {
+    organizationId,
+    contactId: row.id,
+    previous: {
+      email: current.email,
+      phone: current.phone,
+      firstName: current.firstName,
+      lastName: current.lastName,
+      lifecycleStage: current.lifecycleStage,
+      ...Object.fromEntries(Object.entries((current.properties ?? {}) as Record<string, unknown>)
+        .map(([key, value]) => [`properties.${key}`, value]))
+    },
+    next: {
+      email: row.email,
+      phone: row.phone,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      lifecycleStage: row.lifecycleStage,
+      ...Object.fromEntries(Object.entries((row.properties ?? {}) as Record<string, unknown>)
+        .map(([key, value]) => [`properties.${key}`, value]))
+    },
+    context: input.change
+  });
+  await syncContactIdentities(db, {
+    organizationId,
+    contactId: row.id,
+    email: row.email,
+    phone: row.phone,
+    context: input.change
+  });
   return { conflict: false as const, row };
 }
 
@@ -423,7 +671,30 @@ export async function findContactByEmail(db: Db, organizationId: string, email: 
     eq(contacts.organizationId, organizationId),
     eq(contacts.emailNormalized, normalizeEmail(email))
   )).limit(1);
-  return rows[0] ?? null;
+  if (rows[0]) return rows[0];
+  const identities = await db.select({ contactId: contactIdentities.contactId }).from(contactIdentities).where(and(
+    eq(contactIdentities.organizationId, organizationId),
+    eq(contactIdentities.identityType, "email"),
+    eq(contactIdentities.provider, "crm"),
+    eq(contactIdentities.normalizedValue, normalizeEmail(email)),
+    isNull(contactIdentities.endedAt)
+  )).limit(1);
+  if (!identities[0]) return null;
+  return getContactById(db, organizationId, identities[0].contactId);
+}
+
+export async function findContactByExternalRecordId(
+  db: Db,
+  input: { organizationId: string; provider: string; objectType: string; externalId: string }
+) {
+  const rows = await db.select({ internalId: externalRecordIds.internalId }).from(externalRecordIds).where(and(
+    eq(externalRecordIds.organizationId, input.organizationId),
+    eq(externalRecordIds.provider, input.provider),
+    eq(externalRecordIds.objectType, input.objectType),
+    eq(externalRecordIds.externalId, input.externalId)
+  )).limit(1);
+  if (!rows[0]) return null;
+  return getContactById(db, input.organizationId, rows[0].internalId);
 }
 
 export async function findContactsByEmails(db: Db, organizationId: string, emails: string[]) {
@@ -567,6 +838,14 @@ export async function getContactTimeline(db: Db, organizationId: string, contact
     .slice(0, 100);
 }
 
+export async function getContactPropertyHistory(db: Db, organizationId: string, contactId: string) {
+  return db.select().from(propertyHistory).where(and(
+    eq(propertyHistory.organizationId, organizationId),
+    eq(propertyHistory.objectType, "contact"),
+    eq(propertyHistory.recordId, contactId)
+  )).orderBy(desc(propertyHistory.createdAt)).limit(250);
+}
+
 export async function findAgentByCredentialHash(db: Db, credentialHash: string) {
   const rows = await db.select().from(agentIdentities).where(eq(agentIdentities.credentialHash, credentialHash)).limit(1);
   const agent = rows[0];
@@ -708,10 +987,12 @@ export async function upsertContactByEmail(
   input: {
     organizationId: string;
     email: string;
+    phone?: string | null;
     firstName?: string | null;
     lastName?: string | null;
     lifecycleStage?: string | null;
     properties?: Record<string, unknown>;
+    change?: ContactChangeContext;
   }
 ) {
   const existing = await findContactByEmail(db, input.organizationId, input.email);
@@ -724,10 +1005,13 @@ export async function upsertContactByEmail(
     ...(input.properties ?? {})
   };
   const result = await updateContact(db, input.organizationId, existing.id, {
+    email: input.email,
     firstName: input.firstName === undefined ? existing.firstName : input.firstName,
     lastName: input.lastName === undefined ? existing.lastName : input.lastName,
+    phone: input.phone === undefined ? existing.phone : input.phone,
     lifecycleStage: input.lifecycleStage === undefined ? existing.lifecycleStage : input.lifecycleStage,
-    properties: mergedProperties
+    properties: mergedProperties,
+    change: input.change
   });
   if (!result || result.conflict) {
     throw new Error("Failed to upsert contact");

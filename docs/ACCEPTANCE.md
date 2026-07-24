@@ -19,6 +19,7 @@ Release acceptance for the Agent-Native Marketing CRM. An agent (or human) can t
 
 - [x] HubSpot property definitions import without losing internal names or options (`POST /api/v1/imports/hubspot/properties`)
 - [x] Contact CSV import detects core contact columns and custom property columns before enqueueing the import
+- [x] Contact UUIDs remain stable across email/phone changes; identity aliases and field-level history are retained
 - [x] Custom fields usable in forms, segments, workflows, and personalization (property pickers + `{{properties.*}}` tokens)
 - [x] Campaign send never targets suppressed or unsubscribed contacts
 - [x] Duplicate Resend webhooks do not create duplicate engagement records (unique dedupe key)

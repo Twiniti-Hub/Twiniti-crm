@@ -10,6 +10,7 @@ export type PropertyDataType =
 /** HubSpot contact fields that map to first-class columns. */
 export const HUBSPOT_CORE_CONTACT_FIELDS = new Set([
   "email",
+  "phone",
   "firstname",
   "lastname",
   "lifecyclestage"
@@ -19,6 +20,8 @@ const HUBSPOT_CONTACT_FIELD_ALIASES = new Set([
   ...HUBSPOT_CORE_CONTACT_FIELDS,
   "email_address",
   "emailaddress",
+  "phone_number",
+  "mobilephone",
   "first_name",
   "last_name",
   "lifecycle_stage",
@@ -49,6 +52,7 @@ export function normalizeHubspotInternalName(name: string): string {
 
 export type MappedContactRow = {
   email: string;
+  phone: string | null;
   firstName: string | null;
   lastName: string | null;
   lifecycleStage: string | null;
@@ -76,6 +80,7 @@ export function mapHubspotContactRow(
   const email = pickString(row, "email", "Email", "Email Address", "email_address", "emailaddress") ?? "";
   if (!email) return { error: "missing email" };
 
+  const phone = pickString(row, "phone", "Phone", "phone_number", "mobilephone", "Mobile Phone");
   const firstName = pickString(row, "firstname", "firstName", "first_name", "First Name", "FirstName");
   const lastName = pickString(row, "lastname", "lastName", "last_name", "Last Name", "LastName");
   const lifecycleStage = pickString(
@@ -113,6 +118,7 @@ export function mapHubspotContactRow(
 
   return {
     email,
+    phone,
     firstName,
     lastName,
     lifecycleStage,

@@ -35,9 +35,10 @@ describe("hubspot contact row mapping", () => {
     assert.ok(!("error" in mapped));
     if ("error" in mapped) return;
     assert.equal(mapped.email, "ada@example.com");
+    assert.equal(mapped.phone, "123");
     assert.equal(mapped.firstName, "Ada");
     assert.equal(mapped.properties.jobtitle, "Analyst");
-    assert.equal(mapped.properties.phone, "123");
+    assert.ok(!("phone" in mapped.properties));
     assert.ok(!("mystery" in mapped.properties));
     assert.deepEqual(mapped.unmappedKeys, ["mystery"]);
     assert.equal(mapped.externalId, "hs-1");

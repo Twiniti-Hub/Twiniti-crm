@@ -64,6 +64,7 @@ export const duplicateEmailConflictSchema = z.object({
 export const contactSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
+  phone: z.string().trim().max(80).nullable(),
   firstName: z.string().nullable(),
   lastName: z.string().nullable(),
   lifecycleStage: z.string().nullable(),
@@ -72,6 +73,7 @@ export const contactSchema = z.object({
 
 export const createContactSchema = z.object({
   email: z.string().email(),
+  phone: z.string().trim().max(80).nullable().optional(),
   firstName: z.string().trim().max(100).optional(),
   lastName: z.string().trim().max(100).optional(),
   lifecycleStage: z.string().trim().max(80).optional(),
