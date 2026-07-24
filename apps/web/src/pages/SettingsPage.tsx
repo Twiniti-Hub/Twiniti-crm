@@ -20,6 +20,8 @@ type Invitation = {
   sent?: boolean;
 };
 
+type TrackingAddress = { address: string; domain: string };
+
 export function SettingsPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -29,6 +31,8 @@ export function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [trackingAddress, setTrackingAddress] = useState<TrackingAddress | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const isAdmin = me?.role === "admin";
 
@@ -37,6 +41,12 @@ export function SettingsPage() {
     const nextMe = meRes.data as Me;
     setMe(nextMe);
     if (!nextMe.organizationId) return;
+    try {
+      const trackingRes = await api("/api/v1/email/tracking-address");
+      setTrackingAddress(trackingRes.data as TrackingAddress);
+    } catch {
+      setTrackingAddress(null);
+    }
     const membersRes = await api("/api/v1/organization/members");
     setMembers(membersRes.data as Member[]);
     if (nextMe.role === "admin") {
@@ -148,6 +158,35 @@ export function SettingsPage() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="panel" style={{ marginTop: 15 }}>
+        <p className="eyebrow">Email tracking</p>
+        <h3>Personal BCC address</h3>
+        <p className="muted">
+          BCC this address on an email and Loop will match the recipients or sender to contacts and add the message to their timeline.
+        </p>
+        {trackingAddress ? (
+          <div className="form-row" style={{ alignItems: "end" }}>
+            <label style={{ flex: 1 }}>
+              Tracking address
+              <input readOnly value={trackingAddress.address} />
+            </label>
+            <button
+              className="secondary"
+              type="button"
+              onClick={() => {
+                void navigator.clipboard?.writeText(trackingAddress.address);
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 1600);
+              }}
+            >
+              {copied ? "Copied" : "Copy address"}
+            </button>
+          </div>
+        ) : (
+          <p className="muted">Tracking address unavailable until the email tracking migration is applied.</p>
+        )}
       </section>
 
       {isAdmin ? (

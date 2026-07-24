@@ -24,11 +24,13 @@ import {
   contentHash,
   createContact,
   customerEvents,
+  emailTrackingAddresses,
   emailEvents,
   emailTemplates,
   enqueueJob,
   experiments,
   findContactByEmail,
+  getEmailTrackingAddress,
   forms,
   formSubmissions,
   importJobs,
@@ -39,8 +41,9 @@ import {
   listSegments,
   lists,
   mintAgentCredential,
+  mintEmailTrackingToken,
+  buildEmailTrackingAddress,
   normalizeEmail,
-  organizations,
   parseFilterAst,
   propertyDefinitions,
   reportDefinitions,
@@ -761,6 +764,32 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
     }
   });
 
+  app.get("/api/v1/email/tracking-address", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireUserRole(actor, "member");
+      const organizationId = requireOrgId(actor);
+      let address = await getEmailTrackingAddress(db, organizationId, actor.id);
+      if (!address) {
+        await db.insert(emailTrackingAddresses).values({
+          organizationId,
+          userId: actor.id,
+          token: mintEmailTrackingToken()
+        }).onConflictDoNothing();
+        address = await getEmailTrackingAddress(db, organizationId, actor.id);
+      }
+      if (!address) throw new Error("Unable to create email tracking address");
+      return {
+        data: {
+          address: buildEmailTrackingAddress(env.EMAIL_TRACKING_DOMAIN, address.token),
+          domain: env.EMAIL_TRACKING_DOMAIN
+        }
+      };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
   app.post("/api/v1/webhooks/resend", async (request, reply) => {
     try {
       const raw = typeof request.body === "string" ? request.body : JSON.stringify(request.body ?? {});
@@ -773,18 +802,17 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
         });
       }
       const payload = typeof request.body === "object" && request.body ? request.body as Record<string, unknown> : { raw };
-      const [org] = await db.select().from(organizations).limit(1);
       const event = await storeWebhookEvent(db, {
-        organizationId: org?.id ?? null,
+        organizationId: null,
         provider: "resend",
         eventType: typeof payload.type === "string" ? payload.type : "unknown",
         payload,
         signatureValid: true
       });
       await enqueueJob(db, {
-        organizationId: org?.id ?? null,
+        organizationId: null,
         kind: "webhook.resend.process",
-        payload: { webhookEventId: event.id, organizationId: org?.id ?? null }
+        payload: { webhookEventId: event.id, organizationId: null }
       });
       return { data: { accepted: true, signatureValid: true } };
     } catch (error) {

@@ -12,6 +12,7 @@ export const envSchema = z.object({
   HEXCLAVE_SECRET_SERVER_KEY: z.string().optional().default(""),
   RESEND_API_KEY: z.string().optional().default(""),
   RESEND_WEBHOOK_SECRET: z.string().optional().default(""),
+  EMAIL_TRACKING_DOMAIN: z.string().default("inbound.twiniti.ai"),
   RESEND_FROM_EMAIL: z.string().default("Twiniti Loop <marketing@example.com>"),
   BOOTSTRAP_ORG_NAME: z.string().default("Twiniti"),
   BOOTSTRAP_OWNER_SUBJECT: z.string().optional().default(""),

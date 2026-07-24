@@ -26,6 +26,8 @@ services:
         sync: false
       - key: RESEND_WEBHOOK_SECRET
         sync: false
+      - key: EMAIL_TRACKING_DOMAIN
+        sync: false
       - key: RESEND_FROM_EMAIL
         sync: false
       - key: AUTH_DISABLED
@@ -75,4 +77,6 @@ services:
       - key: RESEND_FROM_EMAIL
         sync: false
       - key: RESEND_WEBHOOK_SECRET
+        sync: false
+      - key: EMAIL_TRACKING_DOMAIN
         sync: false

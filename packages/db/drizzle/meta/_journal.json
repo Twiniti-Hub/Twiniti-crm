@@ -15,6 +15,13 @@
       "when": 1753299000000,
       "tag": "0001_multi_tenant",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1753350000000,
+      "tag": "0002_email_tracking",
+      "breakpoints": true
     }
   ]
 }

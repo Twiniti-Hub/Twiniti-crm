@@ -2,6 +2,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { Resend } from "resend";
 import { z } from "zod";
 
+const emailListSchema = z.union([z.string().email(), z.array(z.string().email()).min(1)]);
+
 const sendEmailInputSchema = z.object({
   apiKey: z.string().min(1),
   from: z.string().min(1),
@@ -9,6 +11,10 @@ const sendEmailInputSchema = z.object({
   subject: z.string().min(1),
   html: z.string().min(1),
   text: z.string().optional(),
+  bcc: emailListSchema.optional(),
+  cc: emailListSchema.optional(),
+  replyTo: emailListSchema.optional(),
+  headers: z.record(z.string()).optional(),
   idempotencyKey: z.string().min(1).optional()
 });
 
@@ -27,11 +33,41 @@ export async function sendEmail(input: SendEmailInput) {
       to: parsed.to,
       subject: parsed.subject,
       html: parsed.html,
-      text: parsed.text
+      text: parsed.text,
+      bcc: parsed.bcc,
+      cc: parsed.cc,
+      replyTo: parsed.replyTo,
+      headers: parsed.headers
     },
     parsed.idempotencyKey ? { idempotencyKey: parsed.idempotencyKey } : undefined
   );
   return result;
+}
+
+export type ReceivedEmail = {
+  id: string;
+  to?: string[];
+  from?: string;
+  cc?: string[] | null;
+  bcc?: string[] | null;
+  subject?: string | null;
+  html?: string | null;
+  text?: string | null;
+  headers?: Record<string, string | string[] | undefined>;
+  message_id?: string | null;
+  created_at?: string | null;
+};
+
+export async function getReceivedEmail(input: { apiKey: string; emailId: string }): Promise<{
+  data: ReceivedEmail | null;
+  error: unknown;
+}> {
+  const response = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(input.emailId)}`, {
+    headers: { Authorization: `Bearer ${input.apiKey}` }
+  });
+  const body = await response.json() as { data?: ReceivedEmail; error?: unknown };
+  if (!response.ok) return { data: null, error: body.error ?? `Resend receiving request failed (${response.status})` };
+  return { data: body.data ?? null, error: null };
 }
 
 /**

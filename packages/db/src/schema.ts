@@ -200,6 +200,18 @@ export const customerEvents = pgTable("customer_events", {
   dedupeIndex: uniqueIndex("customer_events_dedupe_idx").on(table.organizationId, table.dedupeKey)
 }));
 
+export const emailTrackingAddresses = pgTable("email_tracking_addresses", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  userId: uuid("user_id").notNull().references(() => crmUsers.id),
+  token: varchar("token", { length: 128 }).notNull(),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  tokenIndex: uniqueIndex("email_tracking_addresses_token_idx").on(table.token),
+  userIndex: uniqueIndex("email_tracking_addresses_org_user_idx").on(table.organizationId, table.userId)
+}));
+
 export const lists = pgTable("lists", {
   id: uuid("id").defaultRandom().primaryKey(),
   organizationId: uuid("organization_id").notNull().references(() => organizations.id),
@@ -341,6 +353,35 @@ export const emailEvents = pgTable("email_events", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => ({
   dedupeIndex: uniqueIndex("email_events_dedupe_idx").on(table.organizationId, table.dedupeKey)
+}));
+
+export const emailActivities = pgTable("email_activities", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  contactId: uuid("contact_id").references(() => contacts.id),
+  trackingAddressId: uuid("tracking_address_id").references(() => emailTrackingAddresses.id),
+  direction: varchar("direction", { length: 20 }).notNull(),
+  activityType: varchar("activity_type", { length: 40 }).notNull(),
+  provider: varchar("provider", { length: 50 }).notNull().default("resend"),
+  providerEmailId: varchar("provider_email_id", { length: 255 }),
+  fromEmail: varchar("from_email", { length: 320 }),
+  toEmails: jsonb("to_emails").notNull().default([]),
+  ccEmails: jsonb("cc_emails").notNull().default([]),
+  bccEmails: jsonb("bcc_emails").notNull().default([]),
+  subject: varchar("subject", { length: 500 }),
+  messageId: varchar("message_id", { length: 500 }),
+  inReplyTo: varchar("in_reply_to", { length: 500 }),
+  threadKey: varchar("thread_key", { length: 500 }),
+  bodyText: text("body_text"),
+  bodyHtml: text("body_html"),
+  metadata: jsonb("metadata").notNull().default({}),
+  dedupeKey: varchar("dedupe_key", { length: 500 }).notNull(),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  contactIndex: index("email_activities_contact_idx").on(table.organizationId, table.contactId, table.occurredAt),
+  dedupeIndex: uniqueIndex("email_activities_dedupe_idx").on(table.organizationId, table.dedupeKey),
+  providerIndex: index("email_activities_provider_idx").on(table.organizationId, table.providerEmailId)
 }));
 
 export const webhookEvents = pgTable("webhook_events", {
@@ -511,6 +552,7 @@ export const schema = {
   contactSubscriptions,
   suppressionEntries,
   customerEvents,
+  emailTrackingAddresses,
   lists,
   listMemberships,
   segments,
@@ -522,6 +564,7 @@ export const schema = {
   campaignRecipients,
   emailSends,
   emailEvents,
+  emailActivities,
   webhookEvents,
   agentIdentities,
   workflows,

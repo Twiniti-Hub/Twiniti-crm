@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 // neon-http workers use optimistic claim rather than SKIP LOCKED transactions
 import { randomBytes } from "node:crypto";
 import type { Db } from "./client.js";
@@ -15,6 +15,8 @@ import {
   contacts,
   crmUsers,
   customerEvents,
+  emailActivities,
+  emailTrackingAddresses,
   externalRecordIds,
   jobs,
   organizationInvitations,
@@ -424,6 +426,24 @@ export async function findContactByEmail(db: Db, organizationId: string, email: 
   return rows[0] ?? null;
 }
 
+export async function findContactsByEmails(db: Db, organizationId: string, emails: string[]) {
+  const normalized = [...new Set(emails.map(normalizeEmail).filter(Boolean))];
+  if (normalized.length === 0) return [];
+  return db.select().from(contacts).where(and(
+    eq(contacts.organizationId, organizationId),
+    inArray(contacts.emailNormalized, normalized)
+  ));
+}
+
+export async function getEmailTrackingAddress(db: Db, organizationId: string, userId: string) {
+  const rows = await db.select().from(emailTrackingAddresses).where(and(
+    eq(emailTrackingAddresses.organizationId, organizationId),
+    eq(emailTrackingAddresses.userId, userId),
+    eq(emailTrackingAddresses.active, true)
+  )).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function isEmailSuppressed(db: Db, organizationId: string, email: string) {
   const rows = await db.select().from(suppressionEntries).where(and(
     eq(suppressionEntries.organizationId, organizationId),
@@ -504,10 +524,47 @@ export async function listCompanies(db: Db, organizationId: string, query?: stri
 }
 
 export async function getContactTimeline(db: Db, organizationId: string, contactId: string) {
-  return db.select().from(customerEvents).where(and(
-    eq(customerEvents.organizationId, organizationId),
-    eq(customerEvents.contactId, contactId)
-  )).orderBy(desc(customerEvents.occurredAt)).limit(100);
+  const [events, activities] = await Promise.all([
+    db.select().from(customerEvents).where(and(
+      eq(customerEvents.organizationId, organizationId),
+      eq(customerEvents.contactId, contactId)
+    )).orderBy(desc(customerEvents.occurredAt)).limit(100),
+    db.select().from(emailActivities).where(and(
+      eq(emailActivities.organizationId, organizationId),
+      eq(emailActivities.contactId, contactId)
+    )).orderBy(desc(emailActivities.occurredAt)).limit(100)
+  ]);
+  const emailEvents = activities.map((activity) => ({
+    id: activity.id,
+    organizationId: activity.organizationId,
+    contactId: activity.contactId,
+    companyId: null,
+    eventType: `email.${activity.activityType}`,
+    source: activity.direction === "inbound" ? "email_inbound" : "email_outbound",
+    occurredAt: activity.occurredAt,
+    payload: {
+      direction: activity.direction,
+      activityType: activity.activityType,
+      provider: activity.provider,
+      providerEmailId: activity.providerEmailId,
+      fromEmail: activity.fromEmail,
+      toEmails: activity.toEmails,
+      ccEmails: activity.ccEmails,
+      bccEmails: activity.bccEmails,
+      subject: activity.subject,
+      messageId: activity.messageId,
+      inReplyTo: activity.inReplyTo,
+      threadKey: activity.threadKey,
+      bodyText: activity.bodyText,
+      metadata: activity.metadata
+    },
+    dedupeKey: activity.dedupeKey,
+    privacyClass: "standard",
+    createdAt: activity.createdAt
+  }));
+  return [...events, ...emailEvents]
+    .sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime())
+    .slice(0, 100);
 }
 
 export async function findAgentByCredentialHash(db: Db, credentialHash: string) {

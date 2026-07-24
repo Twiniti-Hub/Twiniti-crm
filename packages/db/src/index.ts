@@ -4,3 +4,4 @@ export * from "./repositories.js";
 export * from "./filters.js";
 export * from "./jobs.js";
 export * from "./hubspot.js";
+export * from "./email-tracking.js";

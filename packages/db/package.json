@@ -7,7 +7,7 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/hubspot.test.ts",
+    "test": "tsx --test src/hubspot.test.ts src/email-tracking.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },

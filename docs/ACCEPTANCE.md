@@ -22,6 +22,7 @@ Release acceptance for the Agent-Native Marketing CRM. An agent (or human) can t
 - [x] Custom fields usable in forms, segments, workflows, and personalization (property pickers + `{{properties.*}}` tokens)
 - [x] Campaign send never targets suppressed or unsubscribed contacts
 - [x] Duplicate Resend webhooks do not create duplicate engagement records (unique dedupe key)
+- [x] User BCC addresses match inbound messages to contacts and expose email activity in the contact timeline
 - [x] Interrupted imports resume safely (job `stats.cursor` checkpoints)
 - [x] Campaign retries cannot duplicate a recipient send (idempotency key)
 - [x] Every sensitive administrative action appears in the audit log (import/campaign/agent writes)

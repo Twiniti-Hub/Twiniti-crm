@@ -43,11 +43,16 @@ With `AUTH_DISABLED=true` (default when Hexclave secret is unset), the API boots
 | HubSpot CSV/API import jobs | Live worker path |
 | Workflows / experiments / reports | Live API |
 | Deliverability + Resend webhooks | Live |
+| BCC email tracking + contact activity timeline | Live (requires Resend Receiving setup) |
 | Hardening runbooks | [docs/HARDENING.md](docs/HARDENING.md), [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) |
 
 ## Render
 
 `render.yaml` deploys API, static web, and worker from `development`. Secrets use `sync: false`.
+
+## Email activity tracking
+
+Each signed-in user can copy a personal BCC address from Settings. BCCing that address records the email against matching contacts, including replies, and shows it in the contact timeline. The `EMAIL_TRACKING_DOMAIN` must be a Resend receiving domain with its MX records configured and an `email.received` webhook pointed at `/api/v1/webhooks/resend`. The worker uses Resend's receiving API to retrieve message content after the webhook arrives.
 
 ## Security principles
 

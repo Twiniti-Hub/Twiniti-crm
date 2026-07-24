@@ -23,6 +23,14 @@ type Contact = {
   version: number;
 };
 
+type TimelineEvent = {
+  id: string;
+  eventType: string;
+  source: string;
+  occurredAt: string;
+  payload: Record<string, unknown>;
+};
+
 const CORE_NAMES = new Set(["email", "firstname", "lastname", "lifecyclestage"]);
 
 export function ContactDetailPage() {
@@ -34,6 +42,7 @@ export function ContactDetailPage() {
   const [lastName, setLastName] = useState("");
   const [lifecycleStage, setLifecycleStage] = useState("");
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
+  const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -53,9 +62,10 @@ export function ContactDetailPage() {
     if (!id) return;
     Promise.all([
       api(`/api/v1/contacts/${id}`),
-      api("/api/v1/properties?objectType=contact")
+      api("/api/v1/properties?objectType=contact"),
+      api(`/api/v1/contacts/${id}/timeline`)
     ])
-      .then(([contactRes, propsRes]) => {
+      .then(([contactRes, propsRes, timelineRes]) => {
         const row = contactRes.data as Contact;
         setContact(row);
         setEmail(row.email);
@@ -68,6 +78,7 @@ export function ContactDetailPage() {
         }
         setCustomValues(next);
         setDefinitions((propsRes.data ?? []) as PropertyDefinition[]);
+        setTimeline((timelineRes.data ?? []) as TimelineEvent[]);
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load contact"));
   }, [id]);
@@ -122,6 +133,7 @@ export function ContactDetailPage() {
       </header>
       {error ? <div className="banner error">{error}</div> : null}
       {contact ? (
+        <>
         <form className="stack-form" onSubmit={onSave}>
           <div className="form-row">
             <label>
@@ -165,6 +177,31 @@ export function ContactDetailPage() {
             {busy ? "Saving…" : "Save contact"}
           </button>
         </form>
+        <section className="panel" style={{ marginTop: 15 }}>
+          <p className="eyebrow">Activity</p>
+          <h3>Email and customer activity</h3>
+          {timeline.length === 0 ? <p className="muted">No activity recorded yet.</p> : (
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>When</th><th>Activity</th><th>Details</th></tr></thead>
+                <tbody>
+                  {timeline.map((event) => {
+                    const subject = typeof event.payload.subject === "string" ? event.payload.subject : null;
+                    const fromEmail = typeof event.payload.fromEmail === "string" ? event.payload.fromEmail : null;
+                    return (
+                      <tr key={event.id}>
+                        <td>{new Date(event.occurredAt).toLocaleString()}</td>
+                        <td>{event.eventType.replace(/^email\./, "")}</td>
+                        <td>{subject ?? fromEmail ?? event.source}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+        </>
       ) : null}
     </>
   );
