@@ -220,6 +220,37 @@ export function normalizeDomain(domain: string | null | undefined): string | nul
   return domain.trim().toLowerCase().replace(/^www\./, "");
 }
 
+const CONTACT_COMPANY_PROPERTY_KEYS = [
+  "company",
+  "company_name",
+  "companyname",
+  "associatedcompany",
+  "associated_company",
+  "primary_company",
+  "primary_company_name"
+] as const;
+
+export function extractContactCompanyName(properties: Record<string, unknown> | null | undefined): string | null {
+  if (!properties) return null;
+  for (const key of CONTACT_COMPANY_PROPERTY_KEYS) {
+    const value = properties[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+export function stripContactCompanyProperties(properties: Record<string, unknown> | null | undefined) {
+  const next = { ...(properties ?? {}) };
+  let removed = false;
+  for (const key of CONTACT_COMPANY_PROPERTY_KEYS) {
+    if (key in next) {
+      delete next[key];
+      removed = true;
+    }
+  }
+  return { properties: next, removed };
+}
+
 async function seedDefaultPropertyDefinitions(db: Db, organizationId: string) {
   await db.insert(propertyDefinitions).values([
     {
@@ -665,6 +696,116 @@ export async function updateContact(
     context: input.change
   });
   return { conflict: false as const, row };
+}
+
+export async function setPrimaryCompanyAssociation(
+  db: Db,
+  input: {
+    organizationId: string;
+    contactId: string;
+    companyId: string;
+  }
+) {
+  await db.update(contactCompanyAssociations)
+    .set({ label: "secondary" })
+    .where(and(
+      eq(contactCompanyAssociations.organizationId, input.organizationId),
+      eq(contactCompanyAssociations.contactId, input.contactId),
+      eq(contactCompanyAssociations.label, "primary")
+    ));
+
+  await db.insert(contactCompanyAssociations).values({
+    organizationId: input.organizationId,
+    contactId: input.contactId,
+    companyId: input.companyId,
+    label: "primary"
+  }).onConflictDoNothing();
+
+  const [row] = await db.update(contactCompanyAssociations).set({ label: "primary" })
+    .where(and(
+      eq(contactCompanyAssociations.organizationId, input.organizationId),
+      eq(contactCompanyAssociations.contactId, input.contactId),
+      eq(contactCompanyAssociations.companyId, input.companyId)
+    ))
+    .returning();
+  return row;
+}
+
+export async function resolveContactCompanyAssociation(
+  db: Db,
+  input: {
+    organizationId: string;
+    contactId: string;
+    companyName?: string | null;
+    companyIndustry?: string | null;
+  }
+) {
+  const companyName = input.companyName?.trim();
+  if (!companyName) return null;
+  const company = await upsertCompanyByName(db, {
+    organizationId: input.organizationId,
+    name: companyName,
+    industry: input.companyIndustry ?? undefined
+  });
+  await setPrimaryCompanyAssociation(db, {
+    organizationId: input.organizationId,
+    contactId: input.contactId,
+    companyId: company.row.id
+  });
+  return company.row;
+}
+
+export async function reconcileContactCompanyAssociations(
+  db: Db,
+  input: {
+    organizationId: string;
+  }
+) {
+  const rows = await db.select().from(contacts).where(and(
+    eq(contacts.organizationId, input.organizationId),
+    isNull(contacts.archivedAt)
+  ));
+
+  let matched = 0;
+  let createdCompanies = 0;
+  let cleanedProperties = 0;
+  let skipped = 0;
+
+  for (const contact of rows) {
+    const companyName = extractContactCompanyName((contact.properties ?? {}) as Record<string, unknown>);
+    if (!companyName) {
+      skipped += 1;
+      continue;
+    }
+
+    const existingCompany = await findCompanyByName(db, input.organizationId, companyName);
+    const company = await resolveContactCompanyAssociation(db, {
+      organizationId: input.organizationId,
+      contactId: contact.id,
+      companyName
+    });
+    if (!company) {
+      skipped += 1;
+      continue;
+    }
+    matched += 1;
+    if (!existingCompany) createdCompanies += 1;
+
+    const stripped = stripContactCompanyProperties((contact.properties ?? {}) as Record<string, unknown>);
+    if (stripped.removed) {
+      await updateContact(db, input.organizationId, contact.id, {
+        properties: stripped.properties,
+        change: {
+          actorType: "system",
+          actorId: "reconcile-contact-companies",
+          source: "contact.company.reconcile"
+        }
+      });
+      cleanedProperties += 1;
+    }
+  }
+
+  return { scanned: rows.length, matched, createdCompanies, cleanedProperties, skipped };
 }
 
 export async function findContactByEmail(db: Db, organizationId: string, email: string) {

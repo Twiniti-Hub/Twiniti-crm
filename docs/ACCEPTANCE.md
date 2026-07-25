@@ -19,6 +19,7 @@ Release acceptance for the Agent-Native Marketing CRM. An agent (or human) can t
 
 - [x] HubSpot property definitions import without losing internal names or options (`POST /api/v1/imports/hubspot/properties`)
 - [x] Single-file contact CSV import detects core fields, identity columns, and tenant custom properties before enqueueing the import
+- [x] Contact imports match company-name columns to existing companies or create a new company, then store the relationship as a canonical company association
 - [x] Single-file company CSV import accepts supported company columns and stores non-core fields in `company.properties`
 - [x] Large contact CSV imports are split into worker chunks and keep reporting progress without a fixed 2-minute browser timeout
 - [x] Import UI exposes recent history and failed-row diagnostics for completed or failed jobs

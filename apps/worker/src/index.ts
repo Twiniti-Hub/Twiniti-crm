@@ -27,6 +27,9 @@ import {
   listPropertyDefinitions,
   mapHubspotContactRow,
   organizations,
+  reconcileContactCompanyAssociations,
+  resolveContactCompanyAssociation,
+  stripContactCompanyProperties,
   upsertCompanyByName,
   upsertContactByEmail,
   upsertContactIdentity,
@@ -386,13 +389,17 @@ async function processHubspotImport(payload: {
         const result = await (externalContact
           ? (() => {
               const currentProperties = (externalContact.properties ?? {}) as Record<string, unknown>;
+              const cleaned = stripContactCompanyProperties({
+                ...currentProperties,
+                ...mapped.properties
+              });
               return updateContact(db, job.organizationId, externalContact.id, {
                 email: mapped.email,
                 phone: mapped.phone,
                 firstName: mapped.firstName,
                 lastName: mapped.lastName,
                 lifecycleStage: mapped.lifecycleStage,
-                properties: { ...currentProperties, ...mapped.properties },
+                properties: cleaned.properties,
                 change: { actorType: "worker", actorId: job.id, source: job.provider === "csv" ? "csv.import" : "hubspot.import" }
               }).then((updated) => {
                 if (!updated || updated.conflict) throw new Error("Failed to update imported contact");
@@ -406,11 +413,17 @@ async function processHubspotImport(payload: {
               firstName: mapped.firstName,
               lastName: mapped.lastName,
               lifecycleStage: mapped.lifecycleStage,
-              properties: mapped.properties,
+              properties: stripContactCompanyProperties(mapped.properties).properties,
               change: { actorType: "worker", actorId: job.id, source: job.provider === "csv" ? "csv.import" : "hubspot.import" }
             }));
         if (result.created) imported += 1;
         else updated += 1;
+
+        await resolveContactCompanyAssociation(db, {
+          organizationId: job.organizationId,
+          contactId: result.row.id,
+          companyName: mapped.companyName
+        });
 
         if (mapped.externalId) {
           await upsertExternalRecordId(db, {
@@ -842,6 +855,12 @@ async function processWorkflowStep(payload: {
   }
 }
 
+async function processContactCompanyReconciliation(payload: { organizationId: string }) {
+  return reconcileContactCompanyAssociations(db, {
+    organizationId: payload.organizationId
+  });
+}
+
 async function handleJob(kind: string, payload: Record<string, unknown>) {
   switch (kind) {
     case "campaign.send":
@@ -890,6 +909,9 @@ async function handleJob(kind: string, payload: Record<string, unknown>) {
         stepIndex?: number;
         formId?: string;
       });
+      return;
+    case "contacts.reconcile_companies":
+      await processContactCompanyReconciliation(payload as { organizationId: string });
       return;
     case "noop":
       return;

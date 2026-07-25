@@ -55,6 +55,8 @@ With `AUTH_DISABLED=true` (default when Hexclave secret is unset), the API boots
 
 Contact and company CSV imports are queued for worker execution. The API creates any missing tenant property definitions before enqueueing the job, then splits each payload into 250-row worker chunks so smaller imports finish quickly and larger imports continue safely in the background.
 
+Contact imports now resolve company columns to canonical CRM company records. When a contact row includes a company name, the worker matches it against the company list, reuses the existing company when found, and creates a new company when no match exists. The contact-to-company relationship is stored through the company ID association table rather than relying on a free-text company name on the contact.
+
 The import page now includes:
 
 - side-by-side contact and company CSV upload flows

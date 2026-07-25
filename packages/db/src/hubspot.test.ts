@@ -71,6 +71,24 @@ describe("hubspot contact row mapping", () => {
     assert.equal(mapped.externalId, "hs-1");
     assert.deepEqual(mapped.unmappedKeys, []);
   });
+
+  it("extracts company aliases without storing them as custom properties", () => {
+    const mapped = mapHubspotContactRow(
+      {
+        email: "ada@example.com",
+        "Company Name": "Analytical Engines Ltd",
+        company_name: "Analytical Engines Ltd",
+        job_title: "Founder"
+      },
+      new Set(["job_title"])
+    );
+    assert.ok(!("error" in mapped));
+    if ("error" in mapped) return;
+    assert.equal(mapped.companyName, "Analytical Engines Ltd");
+    assert.equal(mapped.properties.job_title, "Founder");
+    assert.ok(!("company_name" in mapped.properties));
+    assert.deepEqual(mapped.unmappedKeys, []);
+  });
 });
 
 describe("filter AST", () => {

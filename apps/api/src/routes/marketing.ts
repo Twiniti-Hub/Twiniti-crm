@@ -34,6 +34,7 @@ import {
   findContactByEmail,
   getEmailTrackingAddress,
   HUBSPOT_CONTACT_FIELD_ALIASES,
+  HUBSPOT_CONTACT_COMPANY_FIELD_ALIASES,
   forms,
   formSubmissions,
   importJobs,
@@ -86,7 +87,12 @@ async function ensureCsvContactProperties(db: Db, organizationId: string, header
   const created: string[] = [];
   for (const header of headers) {
     const internalName = normalizeHubspotInternalName(header);
-    if (HUBSPOT_CONTACT_FIELD_ALIASES.has(internalName) || internalName === "id" || known.has(internalName)) continue;
+    if (
+      HUBSPOT_CONTACT_FIELD_ALIASES.has(internalName) ||
+      HUBSPOT_CONTACT_COMPANY_FIELD_ALIASES.has(internalName) ||
+      internalName === "id" ||
+      known.has(internalName)
+    ) continue;
     await upsertPropertyDefinition(db, {
       organizationId,
       objectType: "contact",

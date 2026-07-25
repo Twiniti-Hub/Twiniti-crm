@@ -16,8 +16,19 @@ export const HUBSPOT_CORE_CONTACT_FIELDS = new Set([
   "lifecyclestage"
 ]);
 
+export const HUBSPOT_CONTACT_COMPANY_FIELD_ALIASES = new Set([
+  "company",
+  "company_name",
+  "companyname",
+  "associatedcompany",
+  "associated_company",
+  "primary_company",
+  "primary_company_name"
+]);
+
 export const HUBSPOT_CONTACT_FIELD_ALIASES = new Set([
   ...HUBSPOT_CORE_CONTACT_FIELDS,
+  ...HUBSPOT_CONTACT_COMPANY_FIELD_ALIASES,
   "email_address",
   "emailaddress",
   "phone_number",
@@ -69,6 +80,7 @@ export type MappedContactRow = {
   firstName: string | null;
   lastName: string | null;
   lifecycleStage: string | null;
+  companyName: string | null;
   properties: Record<string, unknown>;
   externalId: string | null;
   unmappedKeys: string[];
@@ -107,6 +119,21 @@ export function mapHubspotContactRow(
     "Lifecycle Stage",
     "LifecycleStage"
   );
+  const companyName = pickString(
+    row,
+    "company",
+    "Company",
+    "Company Name",
+    "company_name",
+    "companyName",
+    "Associated Company",
+    "associated_company",
+    "associatedcompany",
+    "Primary Company",
+    "primary_company",
+    "Primary Company Name",
+    "primary_company_name"
+  );
   const externalId = pickString(
     row,
     "id",
@@ -141,6 +168,7 @@ export function mapHubspotContactRow(
     firstName,
     lastName,
     lifecycleStage,
+    companyName,
     properties,
     externalId,
     unmappedKeys
