@@ -25,6 +25,9 @@ type ImportPreview = ImportFieldClassification & {
   rowCount: number;
 };
 
+const IMPORT_JOB_TIMEOUT_MS = 2 * 60 * 1000;
+const IMPORT_JOB_POLL_INTERVAL_MS = 1000;
+
 async function readRowsFile(file: File): Promise<Record<string, unknown>[]> {
   const text = await file.text();
   const isCsv = file.name.toLowerCase().endsWith(".csv") || file.type.toLowerCase().includes("csv");
@@ -57,13 +60,14 @@ export function ImportPage() {
   );
 
   async function pollJob(id: string): Promise<ImportJob> {
-    for (let i = 0; i < 60; i += 1) {
+    const deadline = Date.now() + IMPORT_JOB_TIMEOUT_MS;
+    while (Date.now() < deadline) {
       const res = await api(`/api/v1/imports/${id}`);
       const job = res.data as ImportJob;
       if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
         return job;
       }
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, IMPORT_JOB_POLL_INTERVAL_MS));
     }
     throw new Error("Timed out waiting for import job");
   }
@@ -165,3 +169,6 @@ export function ImportPage() {
     </>
   );
 }
+
+
+
