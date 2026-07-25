@@ -18,7 +18,7 @@ Release acceptance for the Agent-Native Marketing CRM. An agent (or human) can t
 ## Release gates
 
 - [x] HubSpot property definitions import without losing internal names or options (`POST /api/v1/imports/hubspot/properties`)
-- [x] Contact CSV import detects core contact columns and custom property columns before enqueueing the import
+- [x] Single-file contact CSV import detects core fields, identity columns, and tenant custom properties before enqueueing the import
 - [x] Contact UUIDs remain stable across email/phone changes; identity aliases and field-level history are retained
 - [x] Custom fields usable in forms, segments, workflows, and personalization (property pickers + `{{properties.*}}` tokens)
 - [x] Campaign send never targets suppressed or unsubscribed contacts
@@ -47,7 +47,7 @@ Use [`apps/api/src/tests/agent-harness.test.ts`](../apps/api/src/tests/agent-har
 
 - [x] Overview shows live `/api/v1/reports/overview` + `/api/v1/me`
 - [x] Contacts list/create with duplicate conflict messaging + schema-driven fields / detail
-- [x] Companies, segments (filter AST + property picker), campaigns (preview → approval → send), forms (property field picker), workflows, agents (token once + revoke), deliverability, settings (members + invites), HubSpot import wizard, Super Admin console
+- [x] Companies, segments (filter AST + property picker), campaigns (preview → approval → send), forms (property field picker), workflows, agents (token once + revoke), deliverability, settings (members + invites), single-file CSV import, Super Admin console
 
 ## Assumptions locked from plan
 

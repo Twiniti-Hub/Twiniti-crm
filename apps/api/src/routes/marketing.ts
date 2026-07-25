@@ -10,6 +10,7 @@ import {
   createListSchema,
   createWorkflowSchema,
   filterAstSchema,
+  csvContactsImportBodySchema,
   hubspotContactsImportBodySchema,
   hubspotPropertyDefinitionsImportBodySchema,
   ingestEventSchema
@@ -31,6 +32,7 @@ import {
   experiments,
   findContactByEmail,
   getEmailTrackingAddress,
+  HUBSPOT_CONTACT_FIELD_ALIASES,
   forms,
   formSubmissions,
   importJobs,
@@ -44,8 +46,10 @@ import {
   mintEmailTrackingToken,
   buildEmailTrackingAddress,
   normalizeEmail,
+  normalizeHubspotInternalName,
   parseFilterAst,
   propertyDefinitions,
+  upsertPropertyDefinition,
   reportDefinitions,
   searchContacts,
   segments,
@@ -66,6 +70,32 @@ const createTemplateSchema = z.object({
   textBody: z.string().optional(),
   status: z.enum(["draft", "review", "published", "archived"]).optional()
 });
+
+async function ensureCsvContactProperties(db: Db, organizationId: string, headers: string[]) {
+  const definitions = await listPropertyDefinitions(db, organizationId, { objectType: "contact" });
+  const known = new Set(definitions.flatMap((definition) => [
+    normalizeHubspotInternalName(definition.internalName),
+    normalizeHubspotInternalName(definition.label)
+  ]));
+  const created: string[] = [];
+  for (const header of headers) {
+    const internalName = normalizeHubspotInternalName(header);
+    if (HUBSPOT_CONTACT_FIELD_ALIASES.has(internalName) || internalName === "id" || known.has(internalName)) continue;
+    await upsertPropertyDefinition(db, {
+      organizationId,
+      objectType: "contact",
+      internalName,
+      label: header.trim(),
+      dataType: "string",
+      fieldGroup: "CSV import",
+      searchable: false,
+      hubspotMetadata: { source: "csv", originalHeader: header }
+    });
+    known.add(internalName);
+    created.push(internalName);
+  }
+  return created;
+}
 
 const publicFormSubmitSchema = z.object({
   payload: z.record(z.unknown())
@@ -615,6 +645,40 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       });
       await audit(db, actor, "import.hubspot.properties", "import_job", job.id, {
         count: body.properties.length
+      });
+      reply.code(202);
+      return { data: job };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.post("/api/v1/imports/contacts/csv", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireUserRole(actor, "admin");
+      const body = csvContactsImportBodySchema.parse(request.body);
+      const organizationId = requireOrgId(actor);
+      const createdProperties = await ensureCsvContactProperties(db, organizationId, body.headers);
+      const [job] = await db.insert(importJobs).values({
+        organizationId,
+        provider: "csv",
+        mode: "csv",
+        status: "queued",
+        stats: { queued: body.contacts.length, kind: "contacts", cursor: body.cursor ?? 0, createdProperties }
+      }).returning();
+      await enqueueJob(db, {
+        organizationId,
+        kind: "import.contacts.csv",
+        payload: {
+          importJobId: job.id,
+          contacts: body.contacts,
+          cursor: body.cursor ?? 0
+        }
+      });
+      await audit(db, actor, "import.contacts.csv", "import_job", job.id, {
+        count: body.contacts.length,
+        createdProperties
       });
       reply.code(202);
       return { data: job };

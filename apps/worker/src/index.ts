@@ -28,6 +28,7 @@ import {
   mapHubspotContactRow,
   organizations,
   upsertContactByEmail,
+  upsertContactIdentity,
   updateContact,
   upsertExternalRecordId,
   upsertPropertyDefinitionFromHubspot,
@@ -289,7 +290,7 @@ async function processHubspotImport(payload: {
                 lastName: mapped.lastName,
                 lifecycleStage: mapped.lifecycleStage,
                 properties: { ...currentProperties, ...mapped.properties },
-                change: { actorType: "worker", actorId: job.id, source: "hubspot.import" }
+                change: { actorType: "worker", actorId: job.id, source: job.provider === "csv" ? "csv.import" : "hubspot.import" }
               }).then((updated) => {
                 if (!updated || updated.conflict) throw new Error("Failed to update imported contact");
                 return { row: updated.row, created: false as const };
@@ -303,7 +304,7 @@ async function processHubspotImport(payload: {
               lastName: mapped.lastName,
               lifecycleStage: mapped.lifecycleStage,
               properties: mapped.properties,
-              change: { actorType: "worker", actorId: job.id, source: "hubspot.import" }
+              change: { actorType: "worker", actorId: job.id, source: job.provider === "csv" ? "csv.import" : "hubspot.import" }
             }));
         if (result.created) imported += 1;
         else updated += 1;
@@ -316,6 +317,17 @@ async function processHubspotImport(payload: {
             externalId: mapped.externalId,
             internalId: result.row.id,
             rawPayload: row
+          });
+        }
+        for (const [identityType, value] of Object.entries(mapped.identities)) {
+          if (!value) continue;
+          await upsertContactIdentity(db, {
+            organizationId: job.organizationId,
+            contactId: result.row.id,
+            identityType,
+            provider: identityType,
+            value,
+            source: job.provider === "csv" ? "csv.import" : "hubspot.import"
           });
         }
 
@@ -612,6 +624,13 @@ async function handleJob(kind: string, payload: Record<string, unknown>) {
       });
       return;
     case "import.hubspot":
+      await processHubspotImport(payload as {
+        importJobId: string;
+        contacts?: Array<Record<string, unknown>>;
+        cursor?: number;
+      });
+      return;
+    case "import.contacts.csv":
       await processHubspotImport(payload as {
         importJobId: string;
         contacts?: Array<Record<string, unknown>>;

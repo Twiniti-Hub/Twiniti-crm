@@ -41,7 +41,7 @@ With `AUTH_DISABLED=true` (default when Hexclave secret is unset), the API boots
 | Segments (filter AST) / lists / forms | Live API + UI |
 | Campaigns + approval-gated send | Live API + worker |
 | Agents + scoped credentials + MCP | Live |
-| HubSpot CSV/API import jobs | Live worker path |
+| Single-file contact CSV import + tenant custom properties | Live worker path |
 | Workflows / experiments / reports | Live API |
 | Deliverability + Resend webhooks | Live |
 | BCC email tracking + contact activity timeline | Live (requires Resend Receiving setup) |

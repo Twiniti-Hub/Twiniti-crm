@@ -398,6 +398,13 @@ export const hubspotPropertyDefinitionsImportBodySchema = z.object({
 
 export const hubspotContactsImportBodySchema = z.object({
   contacts: z.array(z.record(z.unknown())).min(1).max(50_000),
+  headers: z.array(z.string().trim().min(1).max(200)).max(500).optional(),
+  cursor: z.number().int().nonnegative().optional()
+});
+
+export const csvContactsImportBodySchema = z.object({
+  contacts: z.array(z.record(z.unknown())).min(1).max(50_000),
+  headers: z.array(z.string().trim().min(1).max(200)).min(1).max(500),
   cursor: z.number().int().nonnegative().optional()
 });
 

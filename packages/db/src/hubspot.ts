@@ -16,12 +16,21 @@ export const HUBSPOT_CORE_CONTACT_FIELDS = new Set([
   "lifecyclestage"
 ]);
 
-const HUBSPOT_CONTACT_FIELD_ALIASES = new Set([
+export const HUBSPOT_CONTACT_FIELD_ALIASES = new Set([
   ...HUBSPOT_CORE_CONTACT_FIELDS,
   "email_address",
   "emailaddress",
   "phone_number",
   "mobilephone",
+  "linkedin",
+  "linkedin_url",
+  "linkedin_profile",
+  "linkedin_profile_url",
+  "facebook",
+  "facebook_url",
+  "facebook_profile",
+  "facebook_profile_url",
+  "external_id",
   "first_name",
   "last_name",
   "lifecycle_stage",
@@ -53,6 +62,10 @@ export function normalizeHubspotInternalName(name: string): string {
 export type MappedContactRow = {
   email: string;
   phone: string | null;
+  identities: {
+    linkedin: string | null;
+    facebook: string | null;
+  };
   firstName: string | null;
   lastName: string | null;
   lifecycleStage: string | null;
@@ -79,8 +92,11 @@ export function mapHubspotContactRow(
 ): MappedContactRow | { error: string } {
   const email = pickString(row, "email", "Email", "Email Address", "email_address", "emailaddress") ?? "";
   if (!email) return { error: "missing email" };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "invalid email" };
 
   const phone = pickString(row, "phone", "Phone", "phone_number", "mobilephone", "Mobile Phone");
+  const linkedin = pickString(row, "linkedin", "LinkedIn", "linkedin_url", "LinkedIn URL", "linkedin_profile", "LinkedIn Profile", "linkedin_profile_url");
+  const facebook = pickString(row, "facebook", "Facebook", "facebook_url", "Facebook URL", "facebook_profile", "Facebook Profile", "facebook_profile_url");
   const firstName = pickString(row, "firstname", "firstName", "first_name", "First Name", "FirstName");
   const lastName = pickString(row, "lastname", "lastName", "last_name", "Last Name", "LastName");
   const lifecycleStage = pickString(
@@ -99,7 +115,9 @@ export function mapHubspotContactRow(
     "record_id",
     "contact_id",
     "Record ID",
-    "Contact ID"
+    "Contact ID",
+    "External ID",
+    "external_id"
   ) ?? null;
 
   const properties: Record<string, unknown> = {};
@@ -119,6 +137,7 @@ export function mapHubspotContactRow(
   return {
     email,
     phone,
+    identities: { linkedin, facebook },
     firstName,
     lastName,
     lifecycleStage,

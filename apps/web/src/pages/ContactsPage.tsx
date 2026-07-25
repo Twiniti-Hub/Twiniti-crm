@@ -16,18 +16,20 @@ type PropertyDefinition = {
 type Contact = {
   id: string;
   email: string;
+  phone: string | null;
   firstName: string | null;
   lastName: string | null;
   lifecycleStage: string | null;
   properties: Record<string, unknown>;
 };
 
-const CORE_NAMES = new Set(["email", "firstname", "lastname", "lifecyclestage"]);
+const CORE_NAMES = new Set(["email", "phone", "firstname", "lastname", "lifecyclestage"]);
 
 export function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [definitions, setDefinitions] = useState<PropertyDefinition[]>([]);
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [lifecycleStage, setLifecycleStage] = useState("");
@@ -75,6 +77,7 @@ export function ContactsPage() {
         method: "POST",
         body: JSON.stringify({
           email,
+          phone: phone || undefined,
           firstName: firstName || undefined,
           lastName: lastName || undefined,
           lifecycleStage: lifecycleStage || undefined,
@@ -82,6 +85,7 @@ export function ContactsPage() {
         })
       });
       setEmail("");
+      setPhone("");
       setFirstName("");
       setLastName("");
       setLifecycleStage("");
@@ -102,7 +106,7 @@ export function ContactsPage() {
           <h1>Contacts</h1>
         </div>
         <Link className="secondary" to="/import">
-          HubSpot import
+          CSV import
         </Link>
       </header>
       {error ? <div className="banner error">{error}</div> : null}
@@ -111,6 +115,10 @@ export function ContactsPage() {
           <label>
             Email
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </label>
+          <label>
+            Phone
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} />
           </label>
           <label>
             First name
@@ -146,6 +154,7 @@ export function ContactsPage() {
           <thead>
             <tr>
               <th>Email</th>
+              <th>Phone</th>
               <th>Name</th>
               <th>Lifecycle</th>
               {listColumns.map((col) => (
@@ -159,6 +168,7 @@ export function ContactsPage() {
                 <td>
                   <Link to={`/contacts/${contact.id}`}>{contact.email}</Link>
                 </td>
+                <td>{contact.phone ?? "—"}</td>
                 <td>{[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}</td>
                 <td>{contact.lifecycleStage ?? "—"}</td>
                 {listColumns.map((col) => (
@@ -168,7 +178,7 @@ export function ContactsPage() {
             ))}
             {!contacts.length ? (
               <tr>
-                <td colSpan={3 + listColumns.length}>No contacts yet. Import HubSpot properties then contacts.</td>
+                <td colSpan={4 + listColumns.length}>No contacts yet. Import a CSV file to get started.</td>
               </tr>
             ) : null}
           </tbody>

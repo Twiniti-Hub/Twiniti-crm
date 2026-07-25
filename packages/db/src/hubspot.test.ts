@@ -28,6 +28,7 @@ describe("hubspot contact row mapping", () => {
         lifecyclestage: "customer",
         jobtitle: "Analyst",
         phone: "123",
+        linkedin_url: "https://linkedin.com/in/ada",
         mystery: "drop-me"
       },
       defined
@@ -36,6 +37,8 @@ describe("hubspot contact row mapping", () => {
     if ("error" in mapped) return;
     assert.equal(mapped.email, "ada@example.com");
     assert.equal(mapped.phone, "123");
+    assert.equal(mapped.identities.linkedin, "https://linkedin.com/in/ada");
+    assert.equal(mapped.identities.facebook, null);
     assert.equal(mapped.firstName, "Ada");
     assert.equal(mapped.properties.jobtitle, "Analyst");
     assert.ok(!("phone" in mapped.properties));

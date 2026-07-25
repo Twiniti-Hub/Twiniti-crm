@@ -10,8 +10,8 @@ describe("contact CSV import", () => {
   });
 
   it("separates contact columns from defined and undefined properties", () => {
-    const fields = classifyImportFields(["Email", "First Name", "Job Title", "Unknown"], ["job_title", "Job Title"]);
-    assert.deepEqual(fields.contactFields, ["Email", "First Name"]);
+    const fields = classifyImportFields(["Email", "Phone", "LinkedIn URL", "First Name", "Job Title", "Unknown"], ["job_title", "Job Title"]);
+    assert.deepEqual(fields.contactFields, ["Email", "Phone", "LinkedIn URL", "First Name"]);
     assert.deepEqual(fields.propertyFields, ["Job Title", "Unknown"]);
     assert.deepEqual(fields.undefinedPropertyFields, ["Unknown"]);
   });

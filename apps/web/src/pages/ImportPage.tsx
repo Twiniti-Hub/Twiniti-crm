@@ -25,45 +25,19 @@ type ImportPreview = ImportFieldClassification & {
   rowCount: number;
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 async function readRowsFile(file: File): Promise<Record<string, unknown>[]> {
   const text = await file.text();
   const isCsv = file.name.toLowerCase().endsWith(".csv") || file.type.toLowerCase().includes("csv");
-  if (isCsv) return parseCsv(text).rows;
-
-  const parsed = JSON.parse(text) as unknown;
-  const rows = Array.isArray(parsed)
-    ? parsed
-    : isRecord(parsed) && Array.isArray(parsed.contacts)
-      ? parsed.contacts
-      : isRecord(parsed) && Array.isArray(parsed.properties)
-        ? parsed.properties
-        : null;
-  if (!rows || !rows.every(isRecord)) {
-    throw new Error("File must be a CSV, a JSON array, or a JSON object containing contacts/properties");
-  }
-  return rows;
-}
-
-function propertyRowsForImport(rows: Record<string, unknown>[]) {
-  return rows.map((row) => {
-    if (typeof row.name === "string" && row.name.trim()) return row;
-    const alias = row.internalName ?? row.propertyName;
-    return typeof alias === "string" && alias.trim() ? { ...row, name: alias } : row;
-  });
+  if (!isCsv) throw new Error("Upload one CSV file containing the contact fields and custom properties");
+  return parseCsv(text).rows;
 }
 
 export function ImportPage() {
-  const [propertiesFile, setPropertiesFile] = useState<File | null>(null);
   const [contactsFile, setContactsFile] = useState<File | null>(null);
   const [contactsRows, setContactsRows] = useState<Record<string, unknown>[]>([]);
   const [contactsHeaders, setContactsHeaders] = useState<string[]>([]);
   const [propertyDefinitions, setPropertyDefinitions] = useState<PropertyDefinition[]>([]);
   const [contactsPreview, setContactsPreview] = useState<ImportPreview | null>(null);
-  const [propertiesJob, setPropertiesJob] = useState<ImportJob | null>(null);
   const [contactsJob, setContactsJob] = useState<ImportJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -92,27 +66,6 @@ export function ImportPage() {
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
     throw new Error("Timed out waiting for import job");
-  }
-
-  async function onImportProperties(event: FormEvent) {
-    event.preventDefault();
-    if (!propertiesFile) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const properties = propertyRowsForImport(await readRowsFile(propertiesFile));
-      if (!properties.length) throw new Error("Properties file must contain at least one row");
-      const res = await api("/api/v1/imports/hubspot/properties", {
-        method: "POST",
-        body: JSON.stringify({ objectType: "contact", properties })
-      });
-      const job = await pollJob((res.data as ImportJob).id);
-      setPropertiesJob(job);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Properties import failed");
-    } finally {
-      setBusy(false);
-    }
   }
 
   async function onContactsFileChange(file: File | null) {
@@ -150,9 +103,9 @@ export function ImportPage() {
         propertyDefinitions.filter((field) => !field.archived)
       );
       if (!contacts.length) throw new Error("Contacts file must contain at least one contact");
-      const res = await api("/api/v1/imports/hubspot", {
+      const res = await api("/api/v1/imports/contacts/csv", {
         method: "POST",
-        body: JSON.stringify({ contacts })
+        body: JSON.stringify({ contacts, headers: contactsHeaders })
       });
       const job = await pollJob((res.data as ImportJob).id);
       setContactsJob(job);
@@ -175,36 +128,18 @@ export function ImportPage() {
         </Link>
       </header>
       <p className="muted">
-        One-time schema-driven import. Upload property definitions first, then a CSV or JSON contacts export. Contact fields are detected from the header row; every other column is treated as a custom property. Sample fixtures live in{" "}
+        Upload one CSV file. Contact fields and identity columns are detected from the header row; every other column becomes a tenant custom property and is stored in the contact JSON structure. Sample fixtures live in{" "}
         <code>fixtures/hubspot/</code>.
       </p>
       {error ? <div className="banner error">{error}</div> : null}
 
-      <form className="stack-form" onSubmit={onImportProperties}>
-        <h3>1. Property definitions</h3>
-        <label>
-          JSON or CSV file
-          <input
-            type="file"
-            accept="application/json,.json,text/csv,.csv"
-            onChange={(e) => setPropertiesFile(e.target.files?.[0] ?? null)}
-          />
-        </label>
-        <button className="primary" type="submit" disabled={busy || !propertiesFile}>
-          {busy ? "Working…" : "Import properties"}
-        </button>
-        {propertiesJob ? (
-          <pre className="code-block">{JSON.stringify(propertiesJob, null, 2)}</pre>
-        ) : null}
-      </form>
-
       <form className="stack-form" onSubmit={onImportContacts}>
-        <h3>2. Contacts</h3>
+        <h3>Contact CSV</h3>
         <label>
-          CSV or JSON file
+          CSV file
           <input
             type="file"
-            accept="text/csv,.csv,application/json,.json"
+            accept="text/csv,.csv"
             onChange={(e) => void onContactsFileChange(e.target.files?.[0] ?? null)}
           />
         </label>
@@ -213,11 +148,9 @@ export function ImportPage() {
             <div>Detected {contactsPreview.rowCount} contact rows.</div>
             <div>Contact fields: {detectedFields.contactFields.join(", ") || "none"}</div>
             <div>Property fields: {detectedFields.propertyFields.join(", ") || "none"}</div>
-            {detectedFields.undefinedPropertyFields.length || (propertyDefinitions.length === 0 && detectedFields.propertyFields.length) ? (
+            {detectedFields.propertyFields.length ? (
               <div className="muted">
-                {detectedFields.undefinedPropertyFields.length
-                  ? `Not defined yet and will be skipped: ${detectedFields.undefinedPropertyFields.join(", ")}. Import their property definitions first if they should be retained.`
-                  : "No contact property definitions are loaded; custom property columns will be skipped until their definitions are imported."}
+                Custom columns are created automatically for this tenant if they do not already have a property definition.
               </div>
             ) : null}
           </div>
