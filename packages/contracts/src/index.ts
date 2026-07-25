@@ -91,6 +91,7 @@ export const upsertContactSchema = createContactSchema.extend({
 export const contactSearchSchema = z.object({
   query: z.string().trim().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
+  page: z.coerce.number().int().min(1).default(1),
   cursor: z.string().optional()
 });
 

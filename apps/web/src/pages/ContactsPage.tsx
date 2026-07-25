@@ -23,7 +23,15 @@ type Contact = {
   properties: Record<string, unknown>;
 };
 
+type ContactsMeta = {
+  limit: number;
+  page: number;
+  total: number;
+  pageCount: number;
+};
+
 const CORE_NAMES = new Set(["email", "phone", "firstname", "lastname", "lifecyclestage"]);
+const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 
 export function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -36,6 +44,9 @@ export function ContactsPage() {
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(25);
+  const [page, setPage] = useState(1);
+  const [meta, setMeta] = useState<ContactsMeta | null>(null);
 
   const listColumns = useMemo(
     () =>
@@ -50,18 +61,19 @@ export function ContactsPage() {
     [definitions]
   );
 
-  async function load() {
+  async function load(nextPage = page, nextPageSize = pageSize) {
     const [contactsRes, propsRes] = await Promise.all([
-      api("/api/v1/contacts"),
+      api(`/api/v1/contacts?limit=${nextPageSize}&page=${nextPage}`),
       api("/api/v1/properties?objectType=contact")
     ]);
     setContacts((contactsRes.data ?? []) as Contact[]);
+    setMeta((contactsRes.meta ?? null) as ContactsMeta | null);
     setDefinitions((propsRes.data ?? []) as PropertyDefinition[]);
   }
 
   useEffect(() => {
     load().catch((err) => setError(err instanceof Error ? err.message : "Failed to load contacts"));
-  }, []);
+  }, [page, pageSize]);
 
   async function onCreate(event: FormEvent) {
     event.preventDefault();
@@ -150,6 +162,28 @@ export function ContactsPage() {
         </button>
       </form>
       <div className="table-wrap">
+        <div className="topbar">
+          <div className="muted">
+            Showing {contacts.length ? `${(page - 1) * pageSize + 1}-${(page - 1) * pageSize + contacts.length}` : "0"} of {meta?.total ?? contacts.length} contacts
+          </div>
+          <label>
+            Per page
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                const nextSize = Number(e.target.value) as (typeof PAGE_SIZE_OPTIONS)[number];
+                setPageSize(nextSize);
+                setPage(1);
+              }}
+            >
+              {PAGE_SIZE_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <table>
           <thead>
             <tr>
@@ -183,6 +217,22 @@ export function ContactsPage() {
             ) : null}
           </tbody>
         </table>
+        <div className="topbar">
+          <button className="secondary" type="button" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>
+            Previous
+          </button>
+          <div className="muted">
+            Page {meta?.page ?? page} of {meta?.pageCount ?? 1}
+          </div>
+          <button
+            className="secondary"
+            type="button"
+            disabled={meta ? page >= meta.pageCount : contacts.length < pageSize}
+            onClick={() => setPage((current) => current + 1)}
+          >
+            Next
+          </button>
+        </div>
       </div>
     </>
   );

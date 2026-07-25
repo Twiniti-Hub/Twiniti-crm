@@ -36,12 +36,12 @@ With `AUTH_DISABLED=true` (default when Hexclave secret is unset), the API boots
 
 | Area | Status |
 |---|---|
-| Contacts / companies / properties | Live API + UI |
+| Contacts / companies / properties | Live API + UI with company drill-down |
 | Immutable contact IDs + identity/history tracking | Live API + UI |
 | Segments (filter AST) / lists / forms | Live API + UI |
 | Campaigns + approval-gated send | Live API + worker |
 | Agents + scoped credentials + MCP | Live |
-| Single-file contact CSV import + tenant custom properties | Live worker path with chunked background processing |
+| Single-file contact/company CSV import + tenant custom properties | Live worker path with chunked background processing |
 | Workflows / experiments / reports | Live API |
 | Deliverability + Resend webhooks | Live |
 | BCC email tracking + contact activity timeline | Live (requires Resend Receiving setup) |
@@ -51,9 +51,33 @@ With `AUTH_DISABLED=true` (default when Hexclave secret is unset), the API boots
 
 `render.yaml` deploys API, static web, and worker from `development`. Secrets use `sync: false`.
 
-## Contact import behavior
+## Import behavior
 
-Contact CSV imports are queued for worker execution. The API creates any missing tenant property definitions before enqueueing the job, then splits the contact payload into 250-row worker chunks so smaller imports finish quickly and larger imports continue safely in the background. The import page polls job status until the job reaches a terminal state instead of failing after a fixed browser wait window.
+Contact and company CSV imports are queued for worker execution. The API creates any missing tenant property definitions before enqueueing the job, then splits each payload into 250-row worker chunks so smaller imports finish quickly and larger imports continue safely in the background.
+
+The import page now includes:
+
+- side-by-side contact and company CSV upload flows
+- recent import history
+- per-import failed row inspection
+- background status polling until each job reaches a terminal state
+
+Company imports support these core CSV columns:
+
+- `Company name`
+- `Industry`
+- `Company owner`
+- `Create Date`
+- `Phone Number`
+- `Last Activity Date`
+- `City`
+- `Country/Region`
+
+`Company name` and `Industry` map to first-class company fields; the remaining supported columns are stored in `company.properties`.
+
+## Contact browsing
+
+The contacts list supports pagination with `25`, `50`, or `100` contacts per page. The overview dashboard now uses the live contact count instead of a 100-row sample so the total contacts metric reflects current CRM state.
 
 ## Email activity tracking
 

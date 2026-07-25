@@ -5,11 +5,13 @@ import {
   createContactSchema,
   createCompanySchema,
   companySearchSchema,
+  type ContactSearch,
   updateContactSchema,
   upsertContactSchema
 } from "@twiniti/contracts";
 import {
   companies,
+  countContacts,
   contactCompanyAssociations,
   contacts as contactsTable,
   createContact,
@@ -26,7 +28,7 @@ import {
   updateContact,
   type Db
 } from "@twiniti/db";
-import { eq as eqOp } from "drizzle-orm";
+import { and as andOp, eq as eqOp, isNull } from "drizzle-orm";
 import { audit, requireActor, requireOrgId, requireUserRole, sendError } from "../auth-hook.js";
 
 function mapContact(row: {
@@ -51,15 +53,54 @@ function mapContact(row: {
   };
 }
 
+function mapCompany(row: {
+  id: string;
+  name: string;
+  domain: string | null;
+  industry: string | null;
+  properties: unknown;
+  version: number;
+}) {
+  return {
+    id: row.id,
+    name: row.name,
+    domain: row.domain,
+    industry: row.industry,
+    properties: (row.properties ?? {}) as Record<string, unknown>,
+    version: row.version
+  };
+}
+
 export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
+  function normalizeContactQuery(query: ContactSearch) {
+    return {
+      query: query.query,
+      limit: query.limit,
+      page: query.page
+    };
+  }
+
   app.get("/api/v1/contacts", async (request, reply) => {
     try {
       const actor = requireActor(request);
       if (actor.type === "agent") assertScope(actor, "contacts:read");
       else requireUserRole(actor, "member");
       const query = contactSearchSchema.parse(request.query);
-      const data = await searchContacts(db, requireOrgId(actor), query);
-      return { data: data.map(mapContact), meta: { limit: query.limit, cursor: query.cursor ?? null } };
+      const options = normalizeContactQuery(query);
+      const [data, total] = await Promise.all([
+        searchContacts(db, requireOrgId(actor), options),
+        countContacts(db, requireOrgId(actor), { query: query.query })
+      ]);
+      return {
+        data: data.map(mapContact),
+        meta: {
+          limit: query.limit,
+          page: query.page,
+          total,
+          pageCount: Math.max(1, Math.ceil(total / query.limit)),
+          cursor: query.cursor ?? null
+        }
+      };
     } catch (error) {
       return sendError(reply, error);
     }
@@ -205,6 +246,41 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
       const query = companySearchSchema.parse(request.query);
       const data = await listCompanies(db, requireOrgId(actor), query.query);
       return { data, meta: { limit: query.limit } };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.get("/api/v1/companies/:id", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      if (actor.type === "agent") assertScope(actor, "companies:read");
+      const { id } = request.params as { id: string };
+      const organizationId = requireOrgId(actor);
+      const [company] = await db.select().from(companies).where(andOp(
+        eqOp(companies.id, id),
+        eqOp(companies.organizationId, organizationId),
+        isNull(companies.archivedAt)
+      )).limit(1);
+      if (!company) return reply.code(404).send({ error: { code: "not_found", message: "Company not found" } });
+
+      const associated = await db.select({
+        contact: contactsTable
+      }).from(contactCompanyAssociations)
+        .innerJoin(contactsTable, eqOp(contactsTable.id, contactCompanyAssociations.contactId))
+        .where(andOp(
+          eqOp(contactCompanyAssociations.companyId, id),
+          eqOp(contactCompanyAssociations.organizationId, organizationId),
+          eqOp(contactsTable.organizationId, organizationId),
+          isNull(contactsTable.archivedAt)
+        ));
+
+      return {
+        data: {
+          ...mapCompany(company),
+          contacts: associated.map((row) => mapContact(row.contact))
+        }
+      };
     } catch (error) {
       return sendError(reply, error);
     }

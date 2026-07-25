@@ -527,9 +527,32 @@ export async function acceptInvitation(
 export async function searchContacts(
   db: Db,
   organizationId: string,
-  options: { query?: string; limit?: number; includeArchived?: boolean }
+  options: { query?: string; limit?: number; page?: number; includeArchived?: boolean }
 ) {
   const limit = options.limit ?? 25;
+  const page = options.page ?? 1;
+  const offset = Math.max(0, (page - 1) * limit);
+  const filters: SQL[] = [eq(contacts.organizationId, organizationId)];
+  if (!options.includeArchived) {
+    filters.push(isNull(contacts.archivedAt));
+  }
+  if (options.query) {
+    const q = `%${options.query}%`;
+    filters.push(or(
+      ilike(contacts.email, q),
+      ilike(contacts.phone, q),
+      ilike(contacts.firstName, q),
+      ilike(contacts.lastName, q)
+      )!);
+  }
+  return db.select().from(contacts).where(and(...filters)).orderBy(desc(contacts.updatedAt)).limit(limit).offset(offset);
+}
+
+export async function countContacts(
+  db: Db,
+  organizationId: string,
+  options: { query?: string; includeArchived?: boolean } = {}
+) {
   const filters: SQL[] = [eq(contacts.organizationId, organizationId)];
   if (!options.includeArchived) {
     filters.push(isNull(contacts.archivedAt));
@@ -543,7 +566,8 @@ export async function searchContacts(
       ilike(contacts.lastName, q)
     )!);
   }
-  return db.select().from(contacts).where(and(...filters)).orderBy(desc(contacts.updatedAt)).limit(limit);
+  const rows = await db.select({ value: count() }).from(contacts).where(and(...filters));
+  return Number(rows[0]?.value ?? 0);
 }
 
 export async function createContact(

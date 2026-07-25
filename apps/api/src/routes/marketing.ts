@@ -47,6 +47,7 @@ import {
   mintAgentCredential,
   mintEmailTrackingToken,
   buildEmailTrackingAddress,
+  countContacts,
   normalizeEmail,
   normalizeHubspotInternalName,
   parseFilterAst,
@@ -1010,12 +1011,14 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/reports/overview", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      const contactRows = await searchContacts(db, requireOrgId(actor), { limit: 100 });
-      const campaignRows = await listCampaigns(db, requireOrgId(actor));
-      const segmentRows = await listSegments(db, requireOrgId(actor));
+      const [contactCount, campaignRows, segmentRows] = await Promise.all([
+        countContacts(db, requireOrgId(actor)),
+        listCampaigns(db, requireOrgId(actor)),
+        listSegments(db, requireOrgId(actor))
+      ]);
       return {
         data: {
-          contacts: contactRows.length,
+          contacts: contactCount,
           campaigns: campaignRows.length,
           segments: segmentRows.length,
           attributionModel: "last_touch",

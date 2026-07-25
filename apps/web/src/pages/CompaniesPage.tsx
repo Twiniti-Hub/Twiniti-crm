@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 
 type Company = {
@@ -89,7 +90,9 @@ export function CompaniesPage() {
           <tbody>
             {companies.map((company) => (
               <tr key={company.id}>
-                <td>{company.name}</td>
+                <td>
+                  <Link to={`/companies/${company.id}`}>{company.name}</Link>
+                </td>
                 <td>{company.domain ?? "—"}</td>
                 <td>{company.industry ?? "—"}</td>
               </tr>
