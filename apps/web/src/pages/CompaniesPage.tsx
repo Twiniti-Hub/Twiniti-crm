@@ -9,6 +9,15 @@ type Company = {
   industry: string | null;
 };
 
+type CompaniesMeta = {
+  limit: number;
+  page: number;
+  total: number;
+  pageCount: number;
+};
+
+const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
+
 export function CompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [name, setName] = useState("");
@@ -16,15 +25,26 @@ export function CompaniesPage() {
   const [industry, setIndustry] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(25);
+  const [page, setPage] = useState(1);
+  const [meta, setMeta] = useState<CompaniesMeta | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
-  async function load() {
-    const res = await api("/api/v1/companies");
+  async function load(nextPage = page, nextPageSize = pageSize, nextQuery = searchQuery) {
+    const params = new URLSearchParams({
+      limit: String(nextPageSize),
+      page: String(nextPage)
+    });
+    if (nextQuery.trim()) params.set("query", nextQuery.trim());
+    const res = await api(`/api/v1/companies?${params.toString()}`);
     setCompanies((res.data ?? []) as Company[]);
+    setMeta((res.meta ?? null) as CompaniesMeta | null);
   }
 
   useEffect(() => {
     load().catch((err) => setError(err instanceof Error ? err.message : "Failed to load companies"));
-  }, []);
+  }, [page, pageSize, searchQuery]);
 
   async function onCreate(event: FormEvent) {
     event.preventDefault();
@@ -79,6 +99,65 @@ export function CompaniesPage() {
         </button>
       </form>
       <div className="table-wrap">
+        <div className="topbar">
+          <label style={{ flex: 1 }}>
+            Filter by company name
+            <input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  setPage(1);
+                  setSearchQuery(searchInput.trim());
+                }
+              }}
+              placeholder="Search by company name or domain"
+            />
+          </label>
+          <div className="muted">
+            Showing {companies.length ? `${(page - 1) * pageSize + 1}-${(page - 1) * pageSize + companies.length}` : "0"} of {meta?.total ?? companies.length} companies
+          </div>
+          <button
+            className="secondary"
+            type="button"
+            onClick={() => {
+              setPage(1);
+              setSearchQuery(searchInput.trim());
+            }}
+          >
+            Apply filter
+          </button>
+          <label>
+            Per page
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                const nextSize = Number(e.target.value) as (typeof PAGE_SIZE_OPTIONS)[number];
+                setPageSize(nextSize);
+                setPage(1);
+              }}
+            >
+              {PAGE_SIZE_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="secondary"
+            type="button"
+            disabled={!searchInput && !searchQuery}
+            onClick={() => {
+              setSearchInput("");
+              setSearchQuery("");
+              setPage(1);
+            }}
+          >
+            Clear
+          </button>
+        </div>
         <table>
           <thead>
             <tr>
@@ -104,6 +183,22 @@ export function CompaniesPage() {
             ) : null}
           </tbody>
         </table>
+        <div className="topbar">
+          <button className="secondary" type="button" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>
+            Previous
+          </button>
+          <div className="muted">
+            Page {meta?.page ?? page} of {meta?.pageCount ?? 1}
+          </div>
+          <button
+            className="secondary"
+            type="button"
+            disabled={meta ? page >= meta.pageCount : companies.length < pageSize}
+            onClick={() => setPage((current) => current + 1)}
+          >
+            Next
+          </button>
+        </div>
       </div>
     </>
   );

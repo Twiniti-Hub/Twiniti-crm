@@ -11,6 +11,7 @@ import {
 } from "@twiniti/contracts";
 import {
   companies,
+  countCompanies,
   countContacts,
   contactCompanyAssociations,
   contacts as contactsTable,
@@ -244,8 +245,24 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
       const actor = requireActor(request);
       if (actor.type === "agent") assertScope(actor, "companies:read");
       const query = companySearchSchema.parse(request.query);
-      const data = await listCompanies(db, requireOrgId(actor), query.query);
-      return { data, meta: { limit: query.limit } };
+      const [data, total] = await Promise.all([
+        listCompanies(db, requireOrgId(actor), {
+          query: query.query,
+          limit: query.limit,
+          page: query.page
+        }),
+        countCompanies(db, requireOrgId(actor), { query: query.query })
+      ]);
+      return {
+        data,
+        meta: {
+          limit: query.limit,
+          page: query.page,
+          total,
+          pageCount: Math.max(1, Math.ceil(total / query.limit)),
+          cursor: query.cursor ?? null
+        }
+      };
     } catch (error) {
       return sendError(reply, error);
     }

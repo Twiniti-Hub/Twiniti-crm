@@ -13,6 +13,7 @@ import {
   campaigns,
   companies,
   contacts,
+  contactCompanyAssociations,
   contactIdentities,
   crmUsers,
   customerEvents,
@@ -532,19 +533,7 @@ export async function searchContacts(
   const limit = options.limit ?? 25;
   const page = options.page ?? 1;
   const offset = Math.max(0, (page - 1) * limit);
-  const filters: SQL[] = [eq(contacts.organizationId, organizationId)];
-  if (!options.includeArchived) {
-    filters.push(isNull(contacts.archivedAt));
-  }
-  if (options.query) {
-    const q = `%${options.query}%`;
-    filters.push(or(
-      ilike(contacts.email, q),
-      ilike(contacts.phone, q),
-      ilike(contacts.firstName, q),
-      ilike(contacts.lastName, q)
-      )!);
-  }
+  const filters = buildContactSearchFilters(organizationId, options);
   return db.select().from(contacts).where(and(...filters)).orderBy(desc(contacts.updatedAt)).limit(limit).offset(offset);
 }
 
@@ -553,19 +542,7 @@ export async function countContacts(
   organizationId: string,
   options: { query?: string; includeArchived?: boolean } = {}
 ) {
-  const filters: SQL[] = [eq(contacts.organizationId, organizationId)];
-  if (!options.includeArchived) {
-    filters.push(isNull(contacts.archivedAt));
-  }
-  if (options.query) {
-    const q = `%${options.query}%`;
-    filters.push(or(
-      ilike(contacts.email, q),
-      ilike(contacts.phone, q),
-      ilike(contacts.firstName, q),
-      ilike(contacts.lastName, q)
-    )!);
-  }
+  const filters = buildContactSearchFilters(organizationId, options);
   const rows = await db.select({ value: count() }).from(contacts).where(and(...filters));
   return Number(rows[0]?.value ?? 0);
 }
@@ -809,13 +786,64 @@ export async function getContactById(db: Db, organizationId: string, id: string)
   return rows[0] ?? null;
 }
 
-export async function listCompanies(db: Db, organizationId: string, query?: string) {
+function buildContactSearchFilters(
+  organizationId: string,
+  options: { query?: string; includeArchived?: boolean }
+) {
+  const filters: SQL[] = [eq(contacts.organizationId, organizationId)];
+  if (!options.includeArchived) {
+    filters.push(isNull(contacts.archivedAt));
+  }
+  if (options.query) {
+    const q = `%${options.query}%`;
+    filters.push(or(
+      ilike(contacts.email, q),
+      ilike(contacts.phone, q),
+      ilike(contacts.firstName, q),
+      ilike(contacts.lastName, q),
+      sql`exists (
+        select 1
+        from ${contactCompanyAssociations}
+        inner join ${companies} on ${companies.id} = ${contactCompanyAssociations.companyId}
+        where ${contactCompanyAssociations.contactId} = ${contacts.id}
+          and ${contactCompanyAssociations.organizationId} = ${organizationId}
+          and ${companies.organizationId} = ${organizationId}
+          and ${companies.archivedAt} is null
+          and ${companies.name} ilike ${q}
+      )`
+    )!);
+  }
+  return filters;
+}
+
+export async function listCompanies(
+  db: Db,
+  organizationId: string,
+  options: { query?: string; limit?: number; page?: number } = {}
+) {
+  const limit = options.limit ?? 25;
+  const page = options.page ?? 1;
+  const offset = Math.max(0, (page - 1) * limit);
   const filters: SQL[] = [eq(companies.organizationId, organizationId), isNull(companies.archivedAt)];
-  if (query) {
-    const q = `%${query}%`;
+  if (options.query) {
+    const q = `%${options.query}%`;
     filters.push(or(ilike(companies.name, q), ilike(companies.domain, q))!);
   }
-  return db.select().from(companies).where(and(...filters)).orderBy(asc(companies.name)).limit(50);
+  return db.select().from(companies).where(and(...filters)).orderBy(asc(companies.name)).limit(limit).offset(offset);
+}
+
+export async function countCompanies(
+  db: Db,
+  organizationId: string,
+  options: { query?: string } = {}
+) {
+  const filters: SQL[] = [eq(companies.organizationId, organizationId), isNull(companies.archivedAt)];
+  if (options.query) {
+    const q = `%${options.query}%`;
+    filters.push(or(ilike(companies.name, q), ilike(companies.domain, q))!);
+  }
+  const rows = await db.select({ value: count() }).from(companies).where(and(...filters));
+  return Number(rows[0]?.value ?? 0);
 }
 
 export async function findCompanyByName(db: Db, organizationId: string, name: string) {

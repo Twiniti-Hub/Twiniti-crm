@@ -51,7 +51,9 @@ Use [`apps/api/src/tests/agent-harness.test.ts`](../apps/api/src/tests/agent-har
 - [x] Overview shows live `/api/v1/reports/overview` + `/api/v1/me`, including the true current contact count
 - [x] Contacts list/create with duplicate conflict messaging + schema-driven fields / detail
 - [x] Contacts list supports 25/50/100 page sizes with paginated navigation
+- [x] Contacts list can filter by contact fields or associated company name
 - [x] Company detail pages show company fields plus associated contacts, with drill-through into contact detail
+- [x] Companies list supports 25/50/100 page sizes with paginated navigation and company/domain filtering
 - [x] Companies, segments (filter AST + property picker), campaigns (preview → approval → send), forms (property field picker), workflows, agents (token once + revoke), deliverability, settings (members + invites), single-file CSV import, Super Admin console
 
 ## Assumptions locked from plan

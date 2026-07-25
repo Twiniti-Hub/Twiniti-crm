@@ -77,7 +77,11 @@ Company imports support these core CSV columns:
 
 ## Contact browsing
 
-The contacts list supports pagination with `25`, `50`, or `100` contacts per page. The overview dashboard now uses the live contact count instead of a 100-row sample so the total contacts metric reflects current CRM state.
+The contacts list supports pagination with `25`, `50`, or `100` contacts per page plus text filtering by contact fields or associated company name. The overview dashboard now uses the live contact count instead of a 100-row sample so the total contacts metric reflects current CRM state.
+
+## Company browsing
+
+The companies list now matches the contacts list with `25`, `50`, or `100` row pagination and text filtering by company name or domain.
 
 ## Email activity tracking
 

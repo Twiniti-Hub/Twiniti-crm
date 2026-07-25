@@ -47,6 +47,8 @@ export function ContactsPage() {
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(25);
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState<ContactsMeta | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const listColumns = useMemo(
     () =>
@@ -61,9 +63,14 @@ export function ContactsPage() {
     [definitions]
   );
 
-  async function load(nextPage = page, nextPageSize = pageSize) {
+  async function load(nextPage = page, nextPageSize = pageSize, nextQuery = searchQuery) {
+    const params = new URLSearchParams({
+      limit: String(nextPageSize),
+      page: String(nextPage)
+    });
+    if (nextQuery.trim()) params.set("query", nextQuery.trim());
     const [contactsRes, propsRes] = await Promise.all([
-      api(`/api/v1/contacts?limit=${nextPageSize}&page=${nextPage}`),
+      api(`/api/v1/contacts?${params.toString()}`),
       api("/api/v1/properties?objectType=contact")
     ]);
     setContacts((contactsRes.data ?? []) as Contact[]);
@@ -73,7 +80,7 @@ export function ContactsPage() {
 
   useEffect(() => {
     load().catch((err) => setError(err instanceof Error ? err.message : "Failed to load contacts"));
-  }, [page, pageSize]);
+  }, [page, pageSize, searchQuery]);
 
   async function onCreate(event: FormEvent) {
     event.preventDefault();
@@ -163,9 +170,34 @@ export function ContactsPage() {
       </form>
       <div className="table-wrap">
         <div className="topbar">
+          <label style={{ flex: 1 }}>
+            Filter by contact or company
+            <input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  setPage(1);
+                  setSearchQuery(searchInput.trim());
+                }
+              }}
+              placeholder="Search by name, email, phone, or company"
+            />
+          </label>
           <div className="muted">
             Showing {contacts.length ? `${(page - 1) * pageSize + 1}-${(page - 1) * pageSize + contacts.length}` : "0"} of {meta?.total ?? contacts.length} contacts
           </div>
+          <button
+            className="secondary"
+            type="button"
+            onClick={() => {
+              setPage(1);
+              setSearchQuery(searchInput.trim());
+            }}
+          >
+            Apply filter
+          </button>
           <label>
             Per page
             <select
@@ -183,6 +215,18 @@ export function ContactsPage() {
               ))}
             </select>
           </label>
+          <button
+            className="secondary"
+            type="button"
+            disabled={!searchInput && !searchQuery}
+            onClick={() => {
+              setSearchInput("");
+              setSearchQuery("");
+              setPage(1);
+            }}
+          >
+            Clear
+          </button>
         </div>
         <table>
           <thead>
