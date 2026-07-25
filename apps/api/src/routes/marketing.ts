@@ -71,6 +71,8 @@ const createTemplateSchema = z.object({
   status: z.enum(["draft", "review", "published", "archived"]).optional()
 });
 
+const CONTACT_IMPORT_CHUNK_SIZE = 250;
+
 async function ensureCsvContactProperties(db: Db, organizationId: string, headers: string[]) {
   const definitions = await listPropertyDefinitions(db, organizationId, { objectType: "contact" });
   const known = new Set(definitions.flatMap((definition) => [
@@ -95,6 +97,34 @@ async function ensureCsvContactProperties(db: Db, organizationId: string, header
     created.push(internalName);
   }
   return created;
+}
+
+async function enqueueContactImportChunks(
+  db: Db,
+  input: {
+    organizationId: string;
+    importJobId: string;
+    contacts: Array<Record<string, unknown>>;
+  }
+) {
+  const chunkCount = Math.max(1, Math.ceil(input.contacts.length / CONTACT_IMPORT_CHUNK_SIZE));
+  for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
+    const offset = chunkIndex * CONTACT_IMPORT_CHUNK_SIZE;
+    const contacts = input.contacts.slice(offset, offset + CONTACT_IMPORT_CHUNK_SIZE);
+    await enqueueJob(db, {
+      organizationId: input.organizationId,
+      kind: "import.contacts.csv",
+      payload: {
+        importJobId: input.importJobId,
+        contacts,
+        offset,
+        total: input.contacts.length,
+        chunkIndex,
+        chunkCount
+      }
+    });
+  }
+  return chunkCount;
 }
 
 const publicFormSubmitSchema = z.object({
@@ -665,23 +695,55 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
         provider: "csv",
         mode: "csv",
         status: "queued",
-        stats: { queued: body.contacts.length, kind: "contacts", cursor: body.cursor ?? 0, createdProperties }
-      }).returning();
-      await enqueueJob(db, {
-        organizationId,
-        kind: "import.contacts.csv",
-        payload: {
-          importJobId: job.id,
-          contacts: body.contacts,
-          cursor: body.cursor ?? 0
+        stats: {
+          queued: body.contacts.length,
+          kind: "contacts",
+          cursor: 0,
+          total: body.contacts.length,
+          chunkSize: CONTACT_IMPORT_CHUNK_SIZE,
+          chunkCount: 0,
+          completedChunks: 0,
+          createdProperties
         }
+      }).returning();
+      const chunkCount = await enqueueContactImportChunks(db, {
+        organizationId,
+        importJobId: job.id,
+        contacts: body.contacts
       });
+      await db.update(importJobs).set({
+        stats: {
+          queued: body.contacts.length,
+          kind: "contacts",
+          cursor: 0,
+          total: body.contacts.length,
+          chunkSize: CONTACT_IMPORT_CHUNK_SIZE,
+          chunkCount,
+          completedChunks: 0,
+          createdProperties
+        }
+      }).where(eq(importJobs.id, job.id));
       await audit(db, actor, "import.contacts.csv", "import_job", job.id, {
         count: body.contacts.length,
-        createdProperties
+        createdProperties,
+        chunkCount
       });
       reply.code(202);
-      return { data: job };
+      return {
+        data: {
+          ...job,
+          stats: {
+            queued: body.contacts.length,
+            kind: "contacts",
+            cursor: 0,
+            total: body.contacts.length,
+            chunkSize: CONTACT_IMPORT_CHUNK_SIZE,
+            chunkCount,
+            completedChunks: 0,
+            createdProperties
+          }
+        }
+      };
     } catch (error) {
       return sendError(reply, error);
     }

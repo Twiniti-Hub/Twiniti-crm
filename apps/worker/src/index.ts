@@ -48,6 +48,39 @@ const env = loadEnv({
 const db = getDb(env.DATABASE_URL);
 const CHECKPOINT_EVERY = 25;
 
+type ContactImportStats = {
+  imported?: number;
+  updated?: number;
+  failed?: number;
+  unmapped?: number;
+  cursor?: number;
+  total?: number;
+  chunkCount?: number;
+  completedChunks?: number;
+};
+
+function mergeContactImportStats(
+  base: ContactImportStats,
+  delta: ContactImportStats
+): Required<ContactImportStats> {
+  const imported = Number(base.imported ?? 0) + Number(delta.imported ?? 0);
+  const updated = Number(base.updated ?? 0) + Number(delta.updated ?? 0);
+  const failed = Number(base.failed ?? 0) + Number(delta.failed ?? 0);
+  const unmapped = Number(base.unmapped ?? 0) + Number(delta.unmapped ?? 0);
+  const completedChunks = Number(base.completedChunks ?? 0) + Number(delta.completedChunks ?? 0);
+  const total = Number(delta.total ?? base.total ?? imported + updated + failed);
+  return {
+    imported,
+    updated,
+    failed,
+    unmapped,
+    cursor: imported + updated + failed,
+    total,
+    chunkCount: Number(delta.chunkCount ?? base.chunkCount ?? 1),
+    completedChunks
+  };
+}
+
 async function processCampaignSend(payload: { campaignId: string }) {
   const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, payload.campaignId)).limit(1);
   if (!campaign) throw new Error("Campaign not found");
@@ -237,11 +270,18 @@ async function processHubspotImport(payload: {
   importJobId: string;
   contacts?: Array<Record<string, unknown>>;
   cursor?: number;
+  offset?: number;
+  total?: number;
+  chunkIndex?: number;
+  chunkCount?: number;
 }) {
   const [job] = await db.select().from(importJobs).where(eq(importJobs.id, payload.importJobId)).limit(1);
   if (!job) throw new Error("Import job not found");
   const contactsPayload = payload.contacts ?? [];
-  const start = Math.max(0, Number(payload.cursor ?? (job.stats as { cursor?: number })?.cursor ?? 0));
+  const start = Math.max(0, Number(payload.cursor ?? 0));
+  const existingStats = (job.stats ?? {}) as ContactImportStats;
+  const total = Number(payload.total ?? existingStats.total ?? contactsPayload.length);
+  const chunkCount = Number(payload.chunkCount ?? existingStats.chunkCount ?? 1);
 
   await db.update(importJobs).set({ status: "running" }).where(eq(importJobs.id, job.id));
 
@@ -249,10 +289,10 @@ async function processHubspotImport(payload: {
   const definedNames = new Set(definitions.map((d) => d.internalName));
   for (const core of HUBSPOT_CORE_CONTACT_FIELDS) definedNames.add(core);
 
-  let imported = Number((job.stats as { imported?: number })?.imported ?? 0);
-  let updated = Number((job.stats as { updated?: number })?.updated ?? 0);
-  let failed = Number((job.stats as { failed?: number })?.failed ?? 0);
-  let unmapped = Number((job.stats as { unmapped?: number })?.unmapped ?? 0);
+  let imported = 0;
+  let updated = 0;
+  let failed = 0;
+  let unmapped = 0;
   let cursor = start;
 
   for (let i = start; i < contactsPayload.length; i += 1) {
@@ -355,16 +395,40 @@ async function processHubspotImport(payload: {
 
     cursor = i + 1;
     if (cursor % CHECKPOINT_EVERY === 0 || cursor === contactsPayload.length) {
+      const merged = mergeContactImportStats(existingStats, {
+        imported,
+        updated,
+        failed,
+        unmapped,
+        total,
+        chunkCount
+      });
       await db.update(importJobs).set({
-        stats: { imported, updated, failed, unmapped, cursor, total: contactsPayload.length }
+        stats: {
+          ...existingStats,
+          ...merged
+        }
       }).where(eq(importJobs.id, job.id));
     }
   }
 
+  const merged = mergeContactImportStats(existingStats, {
+    imported,
+    updated,
+    failed,
+    unmapped,
+    total,
+    chunkCount,
+    completedChunks: 1
+  });
+  const isComplete = merged.completedChunks >= merged.chunkCount;
   await db.update(importJobs).set({
-    status: "completed",
-    stats: { imported, updated, failed, unmapped, cursor, total: contactsPayload.length },
-    completedAt: new Date()
+    status: isComplete ? "completed" : "running",
+    stats: {
+      ...existingStats,
+      ...merged
+    },
+    completedAt: isComplete ? new Date() : null
   }).where(eq(importJobs.id, job.id));
 }
 

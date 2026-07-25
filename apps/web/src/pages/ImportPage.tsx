@@ -25,8 +25,11 @@ type ImportPreview = ImportFieldClassification & {
   rowCount: number;
 };
 
-const IMPORT_JOB_TIMEOUT_MS = 2 * 60 * 1000;
-const IMPORT_JOB_POLL_INTERVAL_MS = 1000;
+const IMPORT_JOB_POLL_INTERVAL_MS = 1500;
+
+function isTerminalJobStatus(status: string | undefined): boolean {
+  return status === "completed" || status === "failed" || status === "cancelled";
+}
 
 async function readRowsFile(file: File): Promise<Record<string, unknown>[]> {
   const text = await file.text();
@@ -59,24 +62,12 @@ export function ImportPage() {
     [contactsHeaders, propertyDefinitions]
   );
 
-  async function pollJob(id: string): Promise<ImportJob> {
-    const deadline = Date.now() + IMPORT_JOB_TIMEOUT_MS;
-    while (Date.now() < deadline) {
-      const res = await api(`/api/v1/imports/${id}`);
-      const job = res.data as ImportJob;
-      if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
-        return job;
-      }
-      await new Promise((resolve) => setTimeout(resolve, IMPORT_JOB_POLL_INTERVAL_MS));
-    }
-    throw new Error("Timed out waiting for import job");
-  }
-
   async function onContactsFileChange(file: File | null) {
     setContactsFile(file);
     setContactsRows([]);
     setContactsHeaders([]);
     setContactsPreview(null);
+    setContactsJob(null);
     setError(null);
     if (!file) return;
     try {
@@ -111,14 +102,33 @@ export function ImportPage() {
         method: "POST",
         body: JSON.stringify({ contacts, headers: contactsHeaders })
       });
-      const job = await pollJob((res.data as ImportJob).id);
-      setContactsJob(job);
+      setContactsJob(res.data as ImportJob);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Contacts import failed");
     } finally {
       setBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (!contactsJob?.id || isTerminalJobStatus(contactsJob.status)) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void api(`/api/v1/imports/${contactsJob.id}`)
+        .then((res) => {
+          if (cancelled) return;
+          setContactsJob(res.data as ImportJob);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setError(err instanceof Error ? err.message : "Unable to refresh import status");
+        });
+    }, IMPORT_JOB_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [contactsJob]);
 
   return (
     <>
@@ -162,6 +172,11 @@ export function ImportPage() {
         <button className="primary" type="submit" disabled={busy || !contactsFile}>
           {busy ? "Working…" : "Import contacts"}
         </button>
+        {contactsJob && !isTerminalJobStatus(contactsJob.status) ? (
+          <div className="muted">
+            Import is running in the background. You can keep this page open for live status while larger files finish.
+          </div>
+        ) : null}
         {contactsJob ? (
           <pre className="code-block">{JSON.stringify(contactsJob, null, 2)}</pre>
         ) : null}

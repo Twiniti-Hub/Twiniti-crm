@@ -13,18 +13,19 @@ Release acceptance for the Agent-Native Marketing CRM. An agent (or human) can t
 - [x] Migration: HubSpot-like export fixtures import cleanly (`fixtures/hubspot/*` + schema-mapped worker)
 - [ ] E2E: Playwright smoke for shell routes + create contact
 - [ ] Load: 100,000 contacts / large segments
-- [ ] Failure: provider rate limits, worker crashes, retries, partial imports (cursor resume implemented; failure suite TBD)
+- [ ] Failure: provider rate limits, worker crashes, retries, partial imports (chunked worker checkpoints implemented; failure suite TBD)
 
 ## Release gates
 
 - [x] HubSpot property definitions import without losing internal names or options (`POST /api/v1/imports/hubspot/properties`)
 - [x] Single-file contact CSV import detects core fields, identity columns, and tenant custom properties before enqueueing the import
+- [x] Large contact CSV imports are split into worker chunks and keep reporting progress without a fixed 2-minute browser timeout
 - [x] Contact UUIDs remain stable across email/phone changes; identity aliases and field-level history are retained
 - [x] Custom fields usable in forms, segments, workflows, and personalization (property pickers + `{{properties.*}}` tokens)
 - [x] Campaign send never targets suppressed or unsubscribed contacts
 - [x] Duplicate Resend webhooks do not create duplicate engagement records (unique dedupe key)
 - [x] User BCC addresses match inbound messages to contacts and expose email activity in the contact timeline
-- [x] Interrupted imports resume safely (job `stats.cursor` checkpoints)
+- [x] Interrupted imports resume safely (job `stats.cursor` checkpoints across chunked worker execution)
 - [x] Campaign retries cannot duplicate a recipient send (idempotency key)
 - [x] Every sensitive administrative action appears in the audit log (import/campaign/agent writes)
 - [ ] Contact and segment queries meet p95 ≤ 2s at 100k contacts
