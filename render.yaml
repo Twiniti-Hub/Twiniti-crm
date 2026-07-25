@@ -61,7 +61,7 @@ services:
   - type: worker
     name: twiniti-crm-worker
     runtime: node
-    plan: free
+    plan: starter
     region: frankfurt
     branch: development
     autoDeploy: true

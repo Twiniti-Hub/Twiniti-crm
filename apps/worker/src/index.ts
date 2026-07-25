@@ -27,6 +27,7 @@ import {
   listPropertyDefinitions,
   mapHubspotContactRow,
   organizations,
+  upsertCompanyByName,
   upsertContactByEmail,
   upsertContactIdentity,
   updateContact,
@@ -59,6 +60,16 @@ type ContactImportStats = {
   completedChunks?: number;
 };
 
+type CompanyImportStats = {
+  imported?: number;
+  updated?: number;
+  failed?: number;
+  cursor?: number;
+  total?: number;
+  chunkCount?: number;
+  completedChunks?: number;
+};
+
 function mergeContactImportStats(
   base: ContactImportStats,
   delta: ContactImportStats
@@ -79,6 +90,58 @@ function mergeContactImportStats(
     chunkCount: Number(delta.chunkCount ?? base.chunkCount ?? 1),
     completedChunks
   };
+}
+
+function mergeCompanyImportStats(
+  base: CompanyImportStats,
+  delta: CompanyImportStats
+): Required<CompanyImportStats> {
+  const imported = Number(base.imported ?? 0) + Number(delta.imported ?? 0);
+  const updated = Number(base.updated ?? 0) + Number(delta.updated ?? 0);
+  const failed = Number(base.failed ?? 0) + Number(delta.failed ?? 0);
+  const completedChunks = Number(base.completedChunks ?? 0) + Number(delta.completedChunks ?? 0);
+  const total = Number(delta.total ?? base.total ?? imported + updated + failed);
+  return {
+    imported,
+    updated,
+    failed,
+    cursor: imported + updated + failed,
+    total,
+    chunkCount: Number(delta.chunkCount ?? base.chunkCount ?? 1),
+    completedChunks
+  };
+}
+
+function pickString(row: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function mapCompanyImportRow(row: Record<string, unknown>): {
+  name: string;
+  industry: string | null;
+  properties: Record<string, unknown>;
+} | { error: string } {
+  const name = pickString(row, ["Company name", "company_name", "company", "name"]);
+  if (!name) return { error: "missing company name" };
+  const industry = pickString(row, ["Industry", "industry"]);
+  const propertyMap: Record<string, string[]> = {
+    company_owner: ["Company owner", "company_owner"],
+    create_date: ["Create Date", "create_date"],
+    phone_number: ["Phone Number", "phone_number", "phone"],
+    last_activity_date: ["Last Activity Date", "last_activity_date"],
+    city: ["City", "city"],
+    country_region: ["Country/Region", "country_region", "country"]
+  };
+  const properties: Record<string, unknown> = {};
+  for (const [key, aliases] of Object.entries(propertyMap)) {
+    const value = pickString(row, aliases);
+    if (value) properties[key] = value;
+  }
+  return { name, industry, properties };
 }
 
 async function processCampaignSend(payload: { campaignId: string }) {
@@ -432,6 +495,111 @@ async function processHubspotImport(payload: {
   }).where(eq(importJobs.id, job.id));
 }
 
+async function processCompanyImport(payload: {
+  importJobId: string;
+  companies?: Array<Record<string, unknown>>;
+  cursor?: number;
+  total?: number;
+  chunkCount?: number;
+}) {
+  const [job] = await db.select().from(importJobs).where(eq(importJobs.id, payload.importJobId)).limit(1);
+  if (!job) throw new Error("Import job not found");
+  const companiesPayload = payload.companies ?? [];
+  const start = Math.max(0, Number(payload.cursor ?? 0));
+  const existingStats = (job.stats ?? {}) as CompanyImportStats;
+  const total = Number(payload.total ?? existingStats.total ?? companiesPayload.length);
+  const chunkCount = Number(payload.chunkCount ?? existingStats.chunkCount ?? 1);
+
+  await db.update(importJobs).set({ status: "running" }).where(eq(importJobs.id, job.id));
+
+  let imported = 0;
+  let updated = 0;
+  let failed = 0;
+  let cursor = start;
+
+  for (let i = start; i < companiesPayload.length; i += 1) {
+    const row = companiesPayload[i] ?? {};
+    try {
+      const mapped = mapCompanyImportRow(row);
+      if ("error" in mapped) {
+        failed += 1;
+        await db.insert(importRows).values({
+          organizationId: job.organizationId,
+          importJobId: job.id,
+          objectType: "company",
+          externalId: String(row["Company name"] ?? row.name ?? `row-${i}`),
+          status: "failed",
+          payload: row,
+          error: mapped.error
+        });
+      } else {
+        const result = await upsertCompanyByName(db, {
+          organizationId: job.organizationId,
+          name: mapped.name,
+          industry: mapped.industry,
+          properties: mapped.properties
+        });
+        if (result.created) imported += 1;
+        else updated += 1;
+        await db.insert(importRows).values({
+          organizationId: job.organizationId,
+          importJobId: job.id,
+          objectType: "company",
+          externalId: mapped.name,
+          status: result.created ? "imported" : "updated",
+          payload: { ...row, internalId: result.row.id }
+        });
+      }
+    } catch (error) {
+      failed += 1;
+      await db.insert(importRows).values({
+        organizationId: job.organizationId,
+        importJobId: job.id,
+        objectType: "company",
+        externalId: String(row["Company name"] ?? row.name ?? `row-${i}`),
+        status: "failed",
+        payload: row,
+        error: error instanceof Error ? error.message : "import failed"
+      });
+    }
+
+    cursor = i + 1;
+    if (cursor % CHECKPOINT_EVERY === 0 || cursor === companiesPayload.length) {
+      const merged = mergeCompanyImportStats(existingStats, {
+        imported,
+        updated,
+        failed,
+        total,
+        chunkCount
+      });
+      await db.update(importJobs).set({
+        stats: {
+          ...existingStats,
+          ...merged
+        }
+      }).where(eq(importJobs.id, job.id));
+    }
+  }
+
+  const merged = mergeCompanyImportStats(existingStats, {
+    imported,
+    updated,
+    failed,
+    total,
+    chunkCount,
+    completedChunks: 1
+  });
+  const isComplete = merged.completedChunks >= merged.chunkCount;
+  await db.update(importJobs).set({
+    status: isComplete ? "completed" : "running",
+    stats: {
+      ...existingStats,
+      ...merged
+    },
+    completedAt: isComplete ? new Date() : null
+  }).where(eq(importJobs.id, job.id));
+}
+
 async function processResendWebhook(payload: { webhookEventId: string; organizationId?: string | null }) {
   const [event] = await db.select().from(webhookEvents).where(eq(webhookEvents.id, payload.webhookEventId)).limit(1);
   if (!event) return;
@@ -699,6 +867,15 @@ async function handleJob(kind: string, payload: Record<string, unknown>) {
         importJobId: string;
         contacts?: Array<Record<string, unknown>>;
         cursor?: number;
+      });
+      return;
+    case "import.companies.csv":
+      await processCompanyImport(payload as {
+        importJobId: string;
+        companies?: Array<Record<string, unknown>>;
+        cursor?: number;
+        total?: number;
+        chunkCount?: number;
       });
       return;
     case "webhook.resend.process":

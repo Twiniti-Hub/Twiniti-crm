@@ -408,6 +408,12 @@ export const csvContactsImportBodySchema = z.object({
   cursor: z.number().int().nonnegative().optional()
 });
 
+export const csvCompaniesImportBodySchema = z.object({
+  companies: z.array(z.record(z.unknown())).min(1).max(50_000),
+  headers: z.array(z.string().trim().min(1).max(200)).min(1).max(500),
+  cursor: z.number().int().nonnegative().optional()
+});
+
 export const importJobSchema = createImportJobSchema.extend({
   id: z.string().uuid(),
   status: z.enum(["queued", "running", "completed", "failed", "cancelled"]),

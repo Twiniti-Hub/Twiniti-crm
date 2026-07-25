@@ -1,10 +1,11 @@
 import type { FastifyInstance } from "fastify";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { assertScope } from "@twiniti/auth";
 import type { AppEnv } from "@twiniti/config";
 import {
   agentIdentitySchema,
   createCampaignSchema,
+  csvCompaniesImportBodySchema,
   createSegmentSchema,
   createFormSchema,
   createListSchema,
@@ -36,6 +37,7 @@ import {
   forms,
   formSubmissions,
   importJobs,
+  importRows,
   isEmailSuppressed,
   listCampaigns,
   listMemberships,
@@ -72,6 +74,7 @@ const createTemplateSchema = z.object({
 });
 
 const CONTACT_IMPORT_CHUNK_SIZE = 250;
+const COMPANY_IMPORT_CHUNK_SIZE = 250;
 
 async function ensureCsvContactProperties(db: Db, organizationId: string, headers: string[]) {
   const definitions = await listPropertyDefinitions(db, organizationId, { objectType: "contact" });
@@ -119,6 +122,61 @@ async function enqueueContactImportChunks(
         contacts,
         offset,
         total: input.contacts.length,
+        chunkIndex,
+        chunkCount
+      }
+    });
+  }
+  return chunkCount;
+}
+
+async function ensureCsvCompanyProperties(db: Db, organizationId: string, headers: string[]) {
+  const definitions = await listPropertyDefinitions(db, organizationId, { objectType: "company" });
+  const known = new Set(definitions.flatMap((definition) => [
+    normalizeHubspotInternalName(definition.internalName),
+    normalizeHubspotInternalName(definition.label)
+  ]));
+  const reserved = new Set(["company_name", "name", "industry"]);
+  const created: string[] = [];
+  for (const header of headers) {
+    const internalName = normalizeHubspotInternalName(header);
+    if (reserved.has(internalName) || known.has(internalName)) continue;
+    await upsertPropertyDefinition(db, {
+      organizationId,
+      objectType: "company",
+      internalName,
+      label: header.trim(),
+      dataType: "string",
+      fieldGroup: "CSV import",
+      searchable: false,
+      hubspotMetadata: { source: "csv", originalHeader: header }
+    });
+    known.add(internalName);
+    created.push(internalName);
+  }
+  return created;
+}
+
+async function enqueueCompanyImportChunks(
+  db: Db,
+  input: {
+    organizationId: string;
+    importJobId: string;
+    companies: Array<Record<string, unknown>>;
+  }
+) {
+  const chunkCount = Math.max(1, Math.ceil(input.companies.length / COMPANY_IMPORT_CHUNK_SIZE));
+  for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
+    const offset = chunkIndex * COMPANY_IMPORT_CHUNK_SIZE;
+    const companies = input.companies.slice(offset, offset + COMPANY_IMPORT_CHUNK_SIZE);
+    await enqueueJob(db, {
+      organizationId: input.organizationId,
+      kind: "import.companies.csv",
+      payload: {
+        importJobId: input.importJobId,
+        companies,
+        offset,
+        total: input.companies.length,
         chunkIndex,
         chunkCount
       }
@@ -749,6 +807,72 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
     }
   });
 
+  app.post("/api/v1/imports/companies/csv", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireUserRole(actor, "admin");
+      const body = csvCompaniesImportBodySchema.parse(request.body);
+      const organizationId = requireOrgId(actor);
+      const createdProperties = await ensureCsvCompanyProperties(db, organizationId, body.headers);
+      const [job] = await db.insert(importJobs).values({
+        organizationId,
+        provider: "csv",
+        mode: "csv",
+        status: "queued",
+        stats: {
+          queued: body.companies.length,
+          kind: "companies",
+          cursor: 0,
+          total: body.companies.length,
+          chunkSize: COMPANY_IMPORT_CHUNK_SIZE,
+          chunkCount: 0,
+          completedChunks: 0,
+          createdProperties
+        }
+      }).returning();
+      const chunkCount = await enqueueCompanyImportChunks(db, {
+        organizationId,
+        importJobId: job.id,
+        companies: body.companies
+      });
+      await db.update(importJobs).set({
+        stats: {
+          queued: body.companies.length,
+          kind: "companies",
+          cursor: 0,
+          total: body.companies.length,
+          chunkSize: COMPANY_IMPORT_CHUNK_SIZE,
+          chunkCount,
+          completedChunks: 0,
+          createdProperties
+        }
+      }).where(eq(importJobs.id, job.id));
+      await audit(db, actor, "import.companies.csv", "import_job", job.id, {
+        count: body.companies.length,
+        createdProperties,
+        chunkCount
+      });
+      reply.code(202);
+      return {
+        data: {
+          ...job,
+          stats: {
+            queued: body.companies.length,
+            kind: "companies",
+            cursor: 0,
+            total: body.companies.length,
+            chunkSize: COMPANY_IMPORT_CHUNK_SIZE,
+            chunkCount,
+            completedChunks: 0,
+            createdProperties
+          }
+        }
+      };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
   app.post("/api/v1/imports/hubspot", async (request, reply) => {
     try {
       const actor = requireActor(request);
@@ -775,6 +899,40 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       });
       reply.code(202);
       return { data: job };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.get("/api/v1/imports", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireUserRole(actor, "member");
+      const rows = await db.select().from(importJobs).where(
+        eq(importJobs.organizationId, requireOrgId(actor))
+      ).orderBy(desc(importJobs.createdAt)).limit(20);
+      return { data: rows };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.get("/api/v1/imports/:id/failures", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireUserRole(actor, "member");
+      const { id } = request.params as { id: string };
+      const [job] = await db.select({ id: importJobs.id }).from(importJobs).where(and(
+        eq(importJobs.id, id),
+        eq(importJobs.organizationId, requireOrgId(actor))
+      )).limit(1);
+      if (!job) return reply.code(404).send({ error: { code: "not_found", message: "Import job not found" } });
+      const rows = await db.select().from(importRows).where(and(
+        eq(importRows.importJobId, id),
+        eq(importRows.organizationId, requireOrgId(actor)),
+        eq(importRows.status, "failed")
+      )).orderBy(desc(importRows.createdAt)).limit(100);
+      return { data: rows };
     } catch (error) {
       return sendError(reply, error);
     }

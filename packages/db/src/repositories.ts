@@ -794,6 +794,54 @@ export async function listCompanies(db: Db, organizationId: string, query?: stri
   return db.select().from(companies).where(and(...filters)).orderBy(asc(companies.name)).limit(50);
 }
 
+export async function findCompanyByName(db: Db, organizationId: string, name: string) {
+  const normalized = name.trim();
+  if (!normalized) return null;
+  const rows = await db.select().from(companies).where(and(
+    eq(companies.organizationId, organizationId),
+    eq(companies.name, normalized),
+    isNull(companies.archivedAt)
+  )).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function upsertCompanyByName(
+  db: Db,
+  input: {
+    organizationId: string;
+    name: string;
+    domain?: string | null;
+    industry?: string | null;
+    properties?: Record<string, unknown>;
+  }
+) {
+  const existing = await findCompanyByName(db, input.organizationId, input.name);
+  if (!existing) {
+    const [row] = await db.insert(companies).values({
+      organizationId: input.organizationId,
+      name: input.name.trim(),
+      domain: input.domain ?? null,
+      domainNormalized: normalizeDomain(input.domain),
+      industry: input.industry ?? null,
+      properties: input.properties ?? {}
+    }).returning();
+    return { row, created: true as const };
+  }
+
+  const [row] = await db.update(companies).set({
+    domain: input.domain === undefined ? existing.domain : input.domain,
+    domainNormalized: input.domain === undefined ? existing.domainNormalized : normalizeDomain(input.domain),
+    industry: input.industry === undefined ? existing.industry : input.industry,
+    properties: {
+      ...((existing.properties ?? {}) as Record<string, unknown>),
+      ...(input.properties ?? {})
+    },
+    version: existing.version + 1,
+    updatedAt: new Date()
+  }).where(eq(companies.id, existing.id)).returning();
+  return { row, created: false as const };
+}
+
 export async function getContactTimeline(db: Db, organizationId: string, contactId: string) {
   const [events, activities] = await Promise.all([
     db.select().from(customerEvents).where(and(
