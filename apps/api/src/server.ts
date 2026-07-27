@@ -1,6 +1,6 @@
-import "dotenv/config";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { config as loadDotenv } from "dotenv";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
@@ -12,6 +12,9 @@ import { registerMcpRoutes } from "./mcp.js";
 import { registerCrmRoutes } from "./routes/crm.js";
 import { registerMarketingRoutes } from "./routes/marketing.js";
 import { registerOrganizationRoutes } from "./routes/organizations.js";
+
+const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+loadDotenv({ path: path.join(rootDir, ".env") });
 
 const env = loadEnv({
   ...process.env,

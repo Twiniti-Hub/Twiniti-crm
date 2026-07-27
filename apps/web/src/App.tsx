@@ -1,12 +1,11 @@
 import { BrowserRouter } from "react-router-dom";
 import { AuthGate } from "./components/AuthGate";
 import { CrmRoutes } from "./components/CrmRoutes";
-import { authConfigured } from "./hexclave/client";
 
-export default function App() {
+export default function App({ authEnabled }: { authEnabled: boolean }) {
   return (
     <BrowserRouter>
-      {authConfigured ? <AuthGate /> : <CrmRoutes />}
+      {authEnabled ? <AuthGate /> : <CrmRoutes />}
     </BrowserRouter>
   );
 }

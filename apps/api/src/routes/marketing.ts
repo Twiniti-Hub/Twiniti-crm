@@ -9,12 +9,14 @@ import {
   createSegmentSchema,
   createFormSchema,
   createListSchema,
+  createPropertyDefinitionSchema,
   createWorkflowSchema,
   filterAstSchema,
   csvContactsImportBodySchema,
   hubspotContactsImportBodySchema,
   hubspotPropertyDefinitionsImportBodySchema,
-  ingestEventSchema
+  ingestEventSchema,
+  updatePropertyDefinitionSchema
 } from "@twiniti/contracts";
 import {
   agentIdentities,
@@ -214,27 +216,54 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
     try {
       const actor = requireActor(request);
       requireUserRole(actor, "admin");
-      const body = request.body as {
-        objectType: string;
-        internalName: string;
-        label: string;
-        dataType: string;
-        options?: unknown[];
-        searchable?: boolean;
-        required?: boolean;
-      };
-      const [row] = await db.insert(propertyDefinitions).values({
+      const body = createPropertyDefinitionSchema.parse(request.body);
+      const result = await upsertPropertyDefinition(db, {
         organizationId: requireOrgId(actor),
         objectType: body.objectType,
         internalName: body.internalName,
         label: body.label,
         dataType: body.dataType,
+        fieldGroup: body.fieldGroup ?? null,
         options: body.options ?? [],
         searchable: body.searchable ?? false,
         required: body.required ?? false
-      }).returning();
+      });
+      const row = result.row;
       await audit(db, actor, "property.create", "property_definition", row.id);
-      reply.code(201);
+      reply.code(result.created ? 201 : 200);
+      return { data: row };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.patch("/api/v1/properties/:id", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireUserRole(actor, "admin");
+      const { id } = request.params as { id: string };
+      const body = updatePropertyDefinitionSchema.extend({
+        archived: z.boolean().optional()
+      }).parse(request.body);
+      const [existing] = await db.select().from(propertyDefinitions).where(and(
+        eq(propertyDefinitions.id, id),
+        eq(propertyDefinitions.organizationId, requireOrgId(actor))
+      )).limit(1);
+      if (!existing) {
+        return reply.code(404).send({ error: { code: "not_found", message: "Property definition not found" } });
+      }
+      const [row] = await db.update(propertyDefinitions).set({
+        label: body.label ?? existing.label,
+        dataType: body.dataType ?? existing.dataType,
+        fieldGroup: body.fieldGroup === undefined ? existing.fieldGroup : (body.fieldGroup || null),
+        options: body.options ?? existing.options,
+        searchable: body.searchable ?? existing.searchable,
+        required: body.required ?? existing.required,
+        archived: body.archived ?? existing.archived
+      }).where(eq(propertyDefinitions.id, existing.id)).returning();
+      await audit(db, actor, "property.update", "property_definition", row.id, {
+        archived: row.archived
+      });
       return { data: row };
     } catch (error) {
       return sendError(reply, error);

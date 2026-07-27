@@ -1,4 +1,6 @@
-import "dotenv/config";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { config as loadDotenv } from "dotenv";
 import { and, eq } from "drizzle-orm";
 import { loadEnv } from "@twiniti/config";
 import {
@@ -43,6 +45,9 @@ import {
   writeAudit
 } from "@twiniti/db";
 import { getReceivedEmail, personalizeForContact, sendEmail } from "@twiniti/email";
+
+const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+loadDotenv({ path: path.join(rootDir, ".env") });
 
 const env = loadEnv({
   ...process.env,
