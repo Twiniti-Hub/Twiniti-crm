@@ -37,6 +37,8 @@ import {
   getEmailTrackingAddress,
   HUBSPOT_CONTACT_FIELD_ALIASES,
   HUBSPOT_CONTACT_COMPANY_FIELD_ALIASES,
+  getContactPropertyDeletionImpact,
+  deleteContactPropertyDefinition,
   forms,
   formSubmissions,
   importJobs,
@@ -265,6 +267,48 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
         archived: row.archived
       });
       return { data: row };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.get("/api/v1/properties/:id/impact", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireUserRole(actor, "admin");
+      const { id } = request.params as { id: string };
+      const impact = await getContactPropertyDeletionImpact(db, requireOrgId(actor), id);
+      if (!impact) {
+        return reply.code(404).send({ error: { code: "not_found", message: "Property definition not found" } });
+      }
+      return { data: impact };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.delete("/api/v1/properties/:id", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireUserRole(actor, "admin");
+      const { id } = request.params as { id: string };
+      const result = await deleteContactPropertyDefinition(db, requireOrgId(actor), id);
+      if (!result) {
+        return reply.code(404).send({ error: { code: "not_found", message: "Property definition not found" } });
+      }
+      await audit(db, actor, "property.delete", "property_definition", result.deleted.id, {
+        internalName: result.deleted.internalName,
+        contactsWithValue: result.impact.contactsWithValue,
+        references: result.impact.references
+      });
+      return {
+        data: {
+          property: result.impact.property,
+          contactsWithValue: result.impact.contactsWithValue,
+          historyEntries: result.impact.historyEntries,
+          references: result.impact.references
+        }
+      };
     } catch (error) {
       return sendError(reply, error);
     }

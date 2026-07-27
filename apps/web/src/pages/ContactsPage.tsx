@@ -42,6 +42,23 @@ type PropertyEditorState = {
   optionsText: string;
 };
 
+type PropertyDeletionImpact = {
+  property: {
+    id: string;
+    label: string;
+    internalName: string;
+    archived: boolean;
+  };
+  contactsWithValue: number;
+  historyEntries: number;
+  references: {
+    segments: number;
+    forms: number;
+    workflows: number;
+    savedViews: number;
+  };
+};
+
 const CORE_NAMES = new Set(["email", "phone", "firstname", "lastname", "lifecyclestage"]);
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 const PROPERTY_DATA_TYPES = ["string", "number", "boolean", "date", "enum", "multi_enum", "json"] as const;
@@ -171,6 +188,8 @@ export function ContactsPage() {
   const [propertyEditor, setPropertyEditor] = useState<PropertyEditorState | null>(null);
   const [propertyBusy, setPropertyBusy] = useState(false);
   const [propertyMessage, setPropertyMessage] = useState<string | null>(null);
+  const [deleteImpact, setDeleteImpact] = useState<PropertyDeletionImpact | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [newProperty, setNewProperty] = useState({
     label: "",
     internalName: "",
@@ -250,6 +269,7 @@ export function ContactsPage() {
     } else {
       setPropertyEditor(null);
     }
+    setDeleteImpact(null);
   }, [selectedProperty]);
 
   async function onCreate(event: FormEvent) {
@@ -351,6 +371,42 @@ export function ContactsPage() {
       setError(err instanceof Error ? err.message : "Property update failed");
     } finally {
       setPropertyBusy(false);
+    }
+  }
+
+  async function onLoadDeleteImpact() {
+    if (!selectedProperty) return;
+    setDeleteBusy(true);
+    setPropertyMessage(null);
+    setError(null);
+    try {
+      const res = await api(`/api/v1/properties/${selectedProperty.id}/impact`);
+      setDeleteImpact((res.data ?? null) as PropertyDeletionImpact | null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load delete impact");
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
+  async function onDeleteProperty() {
+    if (!selectedProperty || !deleteImpact) return;
+    setDeleteBusy(true);
+    setPropertyMessage(null);
+    setError(null);
+    try {
+      await api(`/api/v1/properties/${selectedProperty.id}`, {
+        method: "DELETE"
+      });
+      setPropertyMessage(
+        `Deleted ${deleteImpact.property.label} and removed values from ${deleteImpact.contactsWithValue} contacts.`
+      );
+      setDeleteImpact(null);
+      await load(page, pageSize, searchQuery);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Property delete failed");
+    } finally {
+      setDeleteBusy(false);
     }
   }
 
@@ -767,9 +823,49 @@ export function ContactsPage() {
                     Archived
                   </label>
                 </div>
+                <div className="banner warning">
+                  Archive is the safe first step. Archived fields stay out of create flows and lists, but existing
+                  contact records keep their data until an admin permanently deletes the field.
+                </div>
                 <button className="primary" type="submit" disabled={propertyBusy}>
                   {propertyBusy ? "Saving…" : "Update field"}
                 </button>
+                <section className="danger-panel">
+                  <div className="panel-heading">
+                    <div>
+                      <p className="eyebrow">Permanent delete</p>
+                      <h3>Remove this field and its contact data</h3>
+                    </div>
+                  </div>
+                  <p className="muted danger-copy">
+                    This is admin-only. It deletes the field definition and removes the stored value from every contact
+                    in this organization. Property history is retained for audit review.
+                  </p>
+                  {deleteImpact ? (
+                    <div className="danger-impact">
+                      <div className="danger-stats">
+                        <span>{deleteImpact.contactsWithValue} contacts with a value</span>
+                        <span>{deleteImpact.historyEntries} history entries retained</span>
+                        <span>{deleteImpact.references.segments} segments reference it</span>
+                        <span>{deleteImpact.references.forms} forms reference it</span>
+                        <span>{deleteImpact.references.workflows} workflows reference it</span>
+                        <span>{deleteImpact.references.savedViews} saved views reference it</span>
+                      </div>
+                      <div className="row-actions">
+                        <button className="secondary" type="button" onClick={() => setDeleteImpact(null)} disabled={deleteBusy}>
+                          Cancel
+                        </button>
+                        <button className="danger-button" type="button" onClick={onDeleteProperty} disabled={deleteBusy}>
+                          {deleteBusy ? "Deleting…" : "Delete permanently"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button className="secondary" type="button" onClick={onLoadDeleteImpact} disabled={deleteBusy}>
+                      {deleteBusy ? "Checking impact…" : "Review delete impact"}
+                    </button>
+                  )}
+                </section>
               </form>
             ) : (
               <div className="banner info">Select a field to edit its label, group, or visibility.</div>

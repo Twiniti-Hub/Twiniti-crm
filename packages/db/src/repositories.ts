@@ -20,13 +20,16 @@ import {
   emailActivities,
   emailTrackingAddresses,
   externalRecordIds,
+  forms,
   jobs,
   organizationInvitations,
   organizations,
   propertyDefinitions,
   propertyHistory,
+  savedViews,
   segments,
   suppressionEntries,
+  workflows,
   webhookEvents
 } from "./schema.js";
 
@@ -1187,6 +1190,130 @@ export async function upsertPropertyDefinition(
     archived: input.archived ?? false
   }).returning();
   return { row, created: true as const };
+}
+
+export type ContactPropertyDeletionImpact = {
+  property: {
+    id: string;
+    label: string;
+    internalName: string;
+    archived: boolean;
+  };
+  contactsWithValue: number;
+  historyEntries: number;
+  references: {
+    segments: number;
+    forms: number;
+    workflows: number;
+    savedViews: number;
+  };
+};
+
+function escapeLikePattern(value: string) {
+  return value.replace(/[%_\\]/g, "\\$&");
+}
+
+export async function getContactPropertyDeletionImpact(
+  db: Db,
+  organizationId: string,
+  propertyDefinitionId: string
+): Promise<ContactPropertyDeletionImpact | null> {
+  const [property] = await db.select().from(propertyDefinitions).where(and(
+    eq(propertyDefinitions.id, propertyDefinitionId),
+    eq(propertyDefinitions.organizationId, organizationId),
+    eq(propertyDefinitions.objectType, "contact")
+  )).limit(1);
+
+  if (!property) return null;
+
+  const internalName = property.internalName;
+  const directReferencePattern = `%${escapeLikePattern(`properties.${internalName}`)}%`;
+  const plainReferencePattern = `%${escapeLikePattern(internalName)}%`;
+
+  const [
+    contactRows,
+    historyRows,
+    segmentRows,
+    formRows,
+    workflowRows,
+    savedViewRows
+  ] = await Promise.all([
+    db.select({ count: count() }).from(contacts).where(and(
+      eq(contacts.organizationId, organizationId),
+      sql`${contacts.properties} ? ${internalName}`
+    )),
+    db.select({ count: count() }).from(propertyHistory).where(and(
+      eq(propertyHistory.organizationId, organizationId),
+      eq(propertyHistory.objectType, "contact"),
+      eq(propertyHistory.propertyName, internalName)
+    )),
+    db.select({ count: count() }).from(segments).where(and(
+      eq(segments.organizationId, organizationId),
+      sql`coalesce(${segments.filterAst}::text, '') ilike ${directReferencePattern} escape '\\'`
+    )),
+    db.select({ count: count() }).from(forms).where(and(
+      eq(forms.organizationId, organizationId),
+      sql`coalesce(${forms.fields}::text, '') ilike ${plainReferencePattern} escape '\\'`
+    )),
+    db.select({ count: count() }).from(workflows).where(and(
+      eq(workflows.organizationId, organizationId),
+      sql`coalesce(${workflows.definition}::text, '') ilike ${plainReferencePattern} escape '\\'`
+    )),
+    db.select({ count: count() }).from(savedViews).where(and(
+      eq(savedViews.organizationId, organizationId),
+      eq(savedViews.objectType, "contact"),
+      sql`(
+        coalesce(${savedViews.filterAst}::text, '') ilike ${directReferencePattern} escape '\\'
+        or coalesce(${savedViews.columns}::text, '') ilike ${plainReferencePattern} escape '\\'
+      )`
+    ))
+  ]);
+
+  return {
+    property: {
+      id: property.id,
+      label: property.label,
+      internalName: property.internalName,
+      archived: property.archived
+    },
+    contactsWithValue: Number(contactRows[0]?.count ?? 0),
+    historyEntries: Number(historyRows[0]?.count ?? 0),
+    references: {
+      segments: Number(segmentRows[0]?.count ?? 0),
+      forms: Number(formRows[0]?.count ?? 0),
+      workflows: Number(workflowRows[0]?.count ?? 0),
+      savedViews: Number(savedViewRows[0]?.count ?? 0)
+    }
+  };
+}
+
+export async function deleteContactPropertyDefinition(
+  db: Db,
+  organizationId: string,
+  propertyDefinitionId: string
+) {
+  const impact = await getContactPropertyDeletionImpact(db, organizationId, propertyDefinitionId);
+  if (!impact) return null;
+
+  await db.update(contacts).set({
+    properties: sql`${contacts.properties} - ${impact.property.internalName}`
+  }).where(and(
+    eq(contacts.organizationId, organizationId),
+    sql`${contacts.properties} ? ${impact.property.internalName}`
+  ));
+
+  const [deleted] = await db.delete(propertyDefinitions).where(and(
+    eq(propertyDefinitions.id, propertyDefinitionId),
+    eq(propertyDefinitions.organizationId, organizationId),
+    eq(propertyDefinitions.objectType, "contact")
+  )).returning();
+
+  if (!deleted) return null;
+
+  return {
+    deleted,
+    impact
+  };
 }
 
 export async function upsertPropertyDefinitionFromHubspot(

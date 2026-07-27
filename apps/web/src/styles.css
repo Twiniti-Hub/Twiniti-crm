@@ -75,6 +75,13 @@ input:focus, textarea:focus, select:focus { outline: 2px solid rgba(28, 133, 109
 .property-list-title { font-weight: 800; line-height: 1.35; }
 .inset-form { margin-bottom: 0; box-shadow: none; }
 .inset-panel { box-shadow: none; background: #fbfdfc; padding: 18px; }
+.danger-panel { display: grid; gap: 12px; padding: 16px; border: 1px solid #f0d1cb; border-radius: 14px; background: #fff6f4; }
+.danger-copy { margin: 0; line-height: 1.5; }
+.danger-impact { display: grid; gap: 12px; }
+.danger-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.danger-stats span { padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,.78); color: #7a3a32; font-size: 12px; font-weight: 700; border: 1px solid #f2d8d2; }
+.danger-button { padding: 11px 16px; border-radius: 9px; font-weight: 700; font-size: 13px; background: #9e3128; color: #fff; }
+.danger-button:disabled { opacity: .7; cursor: wait; }
 .table-wrap { overflow: auto; background: #fff; border: 1px solid #e4ece8; border-radius: 17px; box-shadow: 0 7px 22px rgba(30, 72, 63, .035); }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid #edf3f0; vertical-align: top; }
