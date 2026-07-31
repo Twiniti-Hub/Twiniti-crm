@@ -1,4 +1,5 @@
 import { useUser } from "@hexclave/react";
+import { HexclaveHandler } from "@hexclave/react";
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router";
 import { api } from "../lib/api";
@@ -55,6 +56,7 @@ export function AuthGate() {
         <Route path="sign-in" element={<SignInPage />} />
         <Route path="sign-up" element={<SignUpPage />} />
         <Route path="accept-invite" element={<AcceptInvitePage />} />
+        <Route path="handler/*" element={<HexclaveHandler fullPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
