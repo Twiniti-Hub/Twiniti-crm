@@ -1,6 +1,6 @@
 import { useHexclaveApp } from "@hexclave/react";
 import { FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router";
 import { api } from "../lib/api";
 import { Brand } from "../components/Brand";
 

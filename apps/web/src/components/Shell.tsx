@@ -1,6 +1,6 @@
 import { useHexclaveApp, useUser } from "@hexclave/react";
 import { useEffect, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet } from "react-router";
 import { authConfigured } from "../hexclave/client";
 import { api } from "../lib/api";
 import type { Me } from "../lib/me";

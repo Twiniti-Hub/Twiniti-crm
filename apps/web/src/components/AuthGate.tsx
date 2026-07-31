@@ -1,6 +1,6 @@
 import { useUser } from "@hexclave/react";
 import { useEffect, useState } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router";
 import { api } from "../lib/api";
 import type { Me } from "../lib/me";
 import { AcceptInvitePage } from "../pages/AcceptInvitePage";

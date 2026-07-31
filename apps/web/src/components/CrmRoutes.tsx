@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router";
 import { AgentsPage } from "../pages/AgentsPage";
 import { BillingPage } from "../pages/BillingPage";
 import { CampaignsPage } from "../pages/CampaignsPage";

@@ -1,5 +1,5 @@
 import { useHexclaveApp } from "@hexclave/react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { Brand } from "../components/Brand";
 
 export function LandingPage() {

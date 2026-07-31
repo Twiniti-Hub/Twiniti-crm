@@ -1,4 +1,4 @@
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter } from "react-router";
 import { AuthGate } from "./components/AuthGate";
 import { CrmRoutes } from "./components/CrmRoutes";
 

@@ -1,6 +1,6 @@
 import { useUser } from "@hexclave/react";
 import { FormEvent, useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { api } from "../lib/api";
 import { Brand } from "../components/Brand";
 
