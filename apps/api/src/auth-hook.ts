@@ -18,6 +18,7 @@ export function registerAuthHook(app: FastifyInstance, db: Db, env: AppEnv) {
       || url === "/docs"
       || url.startsWith("/documentation")
       || url === "/api/v1/webhooks/resend"
+      || url === "/api/v1/webhooks/stripe"
       || url.startsWith("/api/v1/public/")
       || url === "/mcp"
       || !url.startsWith("/api/")
@@ -31,6 +32,22 @@ export function registerAuthHook(app: FastifyInstance, db: Db, env: AppEnv) {
       return;
     }
     request.actor = actor;
+    const billingRoute = url === "/api/v1/me" || url.startsWith("/api/v1/billing");
+    if (
+      actor.organizationId
+      && !actor.isSuperAdmin
+      && actor.billingStatus
+      && !["active", "trialing"].includes(actor.billingStatus)
+      && !billingRoute
+    ) {
+      await reply.code(402).send({
+        error: {
+          code: "billing_required",
+          message: "Complete organization billing before accessing the workspace"
+        }
+      });
+      return;
+    }
   });
 }
 

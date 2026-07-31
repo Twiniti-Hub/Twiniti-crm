@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { assertScope } from "@twiniti/auth";
 import type { AppEnv } from "@twiniti/config";
 import {
@@ -23,6 +23,7 @@ import {
   campaignApprovals,
   campaignRecipients,
   campaigns,
+  companies,
   compileFilterAst,
   contacts,
   contentHash,
@@ -204,6 +205,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/properties", async (request, reply) => {
     try {
       const actor = requireActor(request);
+      if (actor.type === "agent") assertScope(actor, "properties:read");
       const query = request.query as { objectType?: string };
       const data = await listPropertyDefinitions(db, requireOrgId(actor), {
         objectType: query.objectType
@@ -362,6 +364,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/lists", async (request, reply) => {
     try {
       const actor = requireActor(request);
+      if (actor.type === "agent") assertScope(actor, "lists:read");
       const data = await db.select().from(lists).where(eq(lists.organizationId, requireOrgId(actor)));
       return { data };
     } catch (error) {
@@ -392,9 +395,19 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       const actor = requireActor(request);
       requireUserRole(actor, "member");
       const { id } = request.params as { id: string };
-      const body = request.body as { contactId: string };
+      const body = z.object({ contactId: z.string().uuid() }).parse(request.body);
+      const organizationId = requireOrgId(actor);
+      const [list] = await db.select({ id: lists.id }).from(lists).where(and(
+        eq(lists.id, id),
+        eq(lists.organizationId, organizationId)
+      )).limit(1);
+      const [contact] = await db.select({ id: contacts.id }).from(contacts).where(and(
+        eq(contacts.id, body.contactId),
+        eq(contacts.organizationId, organizationId)
+      )).limit(1);
+      if (!list || !contact) return reply.code(404).send({ error: { code: "not_found", message: "List or contact not found" } });
       const [row] = await db.insert(listMemberships).values({
-        organizationId: requireOrgId(actor),
+        organizationId,
         listId: id,
         contactId: body.contactId
       }).returning();
@@ -408,6 +421,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/forms", async (request, reply) => {
     try {
       const actor = requireActor(request);
+      if (actor.type === "agent") assertScope(actor, "forms:read");
       const data = await db.select().from(forms).where(eq(forms.organizationId, requireOrgId(actor)));
       return { data };
     } catch (error) {
@@ -438,8 +452,8 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/public/forms/:slug", async (request, reply) => {
     try {
       const { slug } = request.params as { slug: string };
-      const rows = await db.select().from(forms).where(and(eq(forms.slug, slug), eq(forms.published, true))).limit(1);
-      if (!rows[0]) return reply.code(404).send({ error: { code: "not_found", message: "Form not found" } });
+      const rows = await db.select().from(forms).where(and(eq(forms.slug, slug), eq(forms.published, true))).limit(2);
+      if (rows.length !== 1) return reply.code(404).send({ error: { code: "not_found", message: "Form not found" } });
       return { data: rows[0] };
     } catch (error) {
       return sendError(reply, error);
@@ -450,7 +464,8 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
     try {
       const { slug } = request.params as { slug: string };
       const input = publicFormSubmitSchema.parse(request.body);
-      const [form] = await db.select().from(forms).where(and(eq(forms.slug, slug), eq(forms.published, true))).limit(1);
+      const formsForSlug = await db.select().from(forms).where(and(eq(forms.slug, slug), eq(forms.published, true))).limit(2);
+      const form = formsForSlug.length === 1 ? formsForSlug[0] : null;
       if (!form) return reply.code(404).send({ error: { code: "not_found", message: "Form not found" } });
       const email = String(input.payload.email ?? "");
       if (!email) return reply.code(400).send({ error: { code: "bad_request", message: "email is required" } });
@@ -487,6 +502,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/templates", async (request, reply) => {
     try {
       const actor = requireActor(request);
+      if (actor.type === "agent") assertScope(actor, "templates:read");
       const data = await db.select().from(emailTemplates).where(eq(emailTemplates.organizationId, requireOrgId(actor)));
       return { data };
     } catch (error) {
@@ -517,6 +533,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/campaigns", async (request, reply) => {
     try {
       const actor = requireActor(request);
+      if (actor.type === "agent") assertScope(actor, "campaigns:read");
       return { data: await listCampaigns(db, requireOrgId(actor)) };
     } catch (error) {
       return sendError(reply, error);
@@ -529,9 +546,31 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       if (actor.type === "agent") assertScope(actor, "campaigns:create");
       else requireUserRole(actor, "member");
       const input = createCampaignSchema.parse(request.body);
+      const organizationId = requireOrgId(actor);
+      if (input.templateId) {
+        const [template] = await db.select({ id: emailTemplates.id }).from(emailTemplates).where(and(
+          eq(emailTemplates.id, input.templateId),
+          eq(emailTemplates.organizationId, organizationId)
+        )).limit(1);
+        if (!template) return reply.code(400).send({ error: { code: "bad_request", message: "Template does not belong to this organization" } });
+      }
+      if (input.segmentId) {
+        const [segment] = await db.select({ id: segments.id }).from(segments).where(and(
+          eq(segments.id, input.segmentId),
+          eq(segments.organizationId, organizationId)
+        )).limit(1);
+        if (!segment) return reply.code(400).send({ error: { code: "bad_request", message: "Segment does not belong to this organization" } });
+      }
+      if (input.listId) {
+        const [list] = await db.select({ id: lists.id }).from(lists).where(and(
+          eq(lists.id, input.listId),
+          eq(lists.organizationId, organizationId)
+        )).limit(1);
+        if (!list) return reply.code(400).send({ error: { code: "bad_request", message: "List does not belong to this organization" } });
+      }
       const hash = contentHash([input.name, input.subject ?? "", input.htmlBody ?? ""]);
       const [row] = await db.insert(campaigns).values({
-        organizationId: requireOrgId(actor),
+        organizationId,
         name: input.name,
         templateId: input.templateId ?? null,
         segmentId: input.segmentId ?? null,
@@ -556,7 +595,8 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       const actor = requireActor(request);
       if (actor.type === "agent") assertScope(actor, "campaigns:preview");
       const { id } = request.params as { id: string };
-      const [campaign] = await db.select().from(campaigns).where(and(eq(campaigns.id, id), eq(campaigns.organizationId, requireOrgId(actor)))).limit(1);
+      const organizationId = requireOrgId(actor);
+      const [campaign] = await db.select().from(campaigns).where(and(eq(campaigns.id, id), eq(campaigns.organizationId, organizationId))).limit(1);
       if (!campaign) return reply.code(404).send({ error: { code: "not_found", message: "Campaign not found" } });
       const sampleContacts = await searchContacts(db, requireOrgId(actor), { limit: 3 });
       const previews = sampleContacts.map((contact) => ({
@@ -592,26 +632,33 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       if (actor.type === "agent") assertScope(actor, "campaigns:request_approval");
       else requireUserRole(actor, "member");
       const { id } = request.params as { id: string };
-      const [campaign] = await db.select().from(campaigns).where(and(eq(campaigns.id, id), eq(campaigns.organizationId, requireOrgId(actor)))).limit(1);
+      const organizationId = requireOrgId(actor);
+      const [campaign] = await db.select().from(campaigns).where(and(eq(campaigns.id, id), eq(campaigns.organizationId, organizationId))).limit(1);
       if (!campaign) return reply.code(404).send({ error: { code: "not_found", message: "Campaign not found" } });
-      let recipients = await searchContacts(db, requireOrgId(actor), { limit: 100 });
+      let recipients = await searchContacts(db, organizationId, { limit: 100 });
       if (campaign.segmentId) {
-        const [segment] = await db.select().from(segments).where(eq(segments.id, campaign.segmentId)).limit(1);
+        const [segment] = await db.select().from(segments).where(and(
+          eq(segments.id, campaign.segmentId),
+          eq(segments.organizationId, organizationId)
+        )).limit(1);
         if (segment) {
           const filter = compileFilterAst(parseFilterAst(segment.filterAst));
-          recipients = await db.select().from(contacts).where(and(eq(contacts.organizationId, requireOrgId(actor)), filter));
+          recipients = await db.select().from(contacts).where(and(eq(contacts.organizationId, organizationId), filter));
         }
       }
       const allowed = [];
       for (const contact of recipients) {
-        if (!(await isEmailSuppressed(db, requireOrgId(actor), contact.email))) {
+        if (!(await isEmailSuppressed(db, organizationId, contact.email))) {
           allowed.push(contact);
         }
       }
-      await db.delete(campaignRecipients).where(eq(campaignRecipients.campaignId, campaign.id));
+      await db.delete(campaignRecipients).where(and(
+        eq(campaignRecipients.campaignId, campaign.id),
+        eq(campaignRecipients.organizationId, organizationId)
+      ));
       if (allowed.length) {
         await db.insert(campaignRecipients).values(allowed.map((contact) => ({
-          organizationId: requireOrgId(actor),
+          organizationId,
           campaignId: campaign.id,
           contactId: contact.id,
           emailNormalized: normalizeEmail(contact.email),
@@ -619,7 +666,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
         })));
       }
       const [approval] = await db.insert(campaignApprovals).values({
-        organizationId: requireOrgId(actor),
+        organizationId,
         campaignId: campaign.id,
         agentId: actor.type === "agent" ? actor.id : null,
         requestedBy: actor.id,
@@ -628,7 +675,10 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
         contentHash: campaign.contentHash ?? contentHash([campaign.id]),
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
       }).returning();
-      await db.update(campaigns).set({ status: "review", recipientCount: allowed.length, updatedAt: new Date() }).where(eq(campaigns.id, campaign.id));
+      await db.update(campaigns).set({ status: "review", recipientCount: allowed.length, updatedAt: new Date() }).where(and(
+        eq(campaigns.id, campaign.id),
+        eq(campaigns.organizationId, organizationId)
+      ));
       await audit(db, actor, "campaign.request_approval", "campaign", campaign.id, { recipientCount: allowed.length });
       return { data: approval };
     } catch (error) {
@@ -644,7 +694,8 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       const pending = await db.select().from(campaignApprovals).where(and(
         eq(campaignApprovals.campaignId, id),
         eq(campaignApprovals.organizationId, requireOrgId(actor)),
-        eq(campaignApprovals.status, "pending")
+        eq(campaignApprovals.status, "pending"),
+        sql`${campaignApprovals.expiresAt} > NOW()`
       )).limit(1);
       if (!pending[0]) return reply.code(404).send({ error: { code: "not_found", message: "No pending approval" } });
       const [approval] = await db.update(campaignApprovals).set({
@@ -652,7 +703,10 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
         approvedBy: actor.id,
         decidedAt: new Date()
       }).where(eq(campaignApprovals.id, pending[0].id)).returning();
-      await db.update(campaigns).set({ status: "scheduled", updatedAt: new Date() }).where(eq(campaigns.id, id));
+      await db.update(campaigns).set({ status: "scheduled", updatedAt: new Date() }).where(and(
+        eq(campaigns.id, id),
+        eq(campaigns.organizationId, requireOrgId(actor))
+      ));
       await audit(db, actor, "campaign.approve", "campaign", id);
       return { data: approval };
     } catch (error) {
@@ -666,16 +720,31 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       if (actor.type === "agent") assertScope(actor, "campaigns:send");
       else requireUserRole(actor, "admin");
       const { id } = request.params as { id: string };
+      const organizationId = requireOrgId(actor);
       const approvals = await db.select().from(campaignApprovals).where(and(
         eq(campaignApprovals.campaignId, id),
-        eq(campaignApprovals.status, "approved")
+        eq(campaignApprovals.organizationId, organizationId),
+        eq(campaignApprovals.status, "approved"),
+        sql`${campaignApprovals.expiresAt} > NOW()`
       )).limit(1);
       if (!approvals[0]) {
         return reply.code(403).send({ error: { code: "approval_required", message: "Campaign send requires approval" } });
       }
-      await db.update(campaigns).set({ status: "sending", updatedAt: new Date() }).where(eq(campaigns.id, id));
+      const [campaign] = await db.select().from(campaigns).where(and(
+        eq(campaigns.id, id),
+        eq(campaigns.organizationId, organizationId),
+        eq(campaigns.status, "scheduled")
+      )).limit(1);
+      if (!campaign) return reply.code(409).send({ error: { code: "conflict", message: "Campaign is not approved for sending" } });
+      if (approvals[0].contentHash !== campaign.contentHash) {
+        return reply.code(409).send({ error: { code: "conflict", message: "Campaign content changed after approval" } });
+      }
+      await db.update(campaigns).set({ status: "sending", updatedAt: new Date() }).where(and(
+        eq(campaigns.id, id),
+        eq(campaigns.organizationId, organizationId)
+      ));
       const job = await enqueueJob(db, {
-        organizationId: requireOrgId(actor),
+        organizationId,
         kind: "campaign.send",
         payload: { campaignId: id, approvalId: approvals[0].id },
         priority: 10
@@ -755,6 +824,8 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       { name: "upsert_contact", scope: "contacts:update" },
       { name: "update_contact", scope: "contacts:update" },
       { name: "get_contact_timeline", scope: "contacts:read" },
+      { name: "list_segments", scope: "segments:read" },
+      { name: "get_segment", scope: "segments:read" },
       { name: "create_campaign_draft", scope: "campaigns:create" },
       { name: "preview_campaign", scope: "campaigns:preview" },
       { name: "validate_campaign", scope: "campaigns:preview" },
@@ -771,8 +842,23 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       const actor = requireActor(request);
       requireUserRole(actor, "member");
       const input = ingestEventSchema.parse(request.body);
+      const organizationId = requireOrgId(actor);
+      if (input.contactId) {
+        const [contact] = await db.select({ id: contacts.id }).from(contacts).where(and(
+          eq(contacts.id, input.contactId),
+          eq(contacts.organizationId, organizationId)
+        )).limit(1);
+        if (!contact) return reply.code(404).send({ error: { code: "not_found", message: "Contact not found" } });
+      }
+      if (input.companyId) {
+        const [company] = await db.select({ id: companies.id }).from(companies).where(and(
+          eq(companies.id, input.companyId),
+          eq(companies.organizationId, organizationId)
+        )).limit(1);
+        if (!company) return reply.code(404).send({ error: { code: "not_found", message: "Company not found" } });
+      }
       const [row] = await db.insert(customerEvents).values({
-        organizationId: requireOrgId(actor),
+        organizationId,
         contactId: input.contactId ?? null,
         companyId: input.companyId ?? null,
         eventType: input.eventType,
@@ -1037,6 +1123,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/workflows", async (request, reply) => {
     try {
       const actor = requireActor(request);
+      if (actor.type === "agent") assertScope(actor, "workflows:read");
       const data = await db.select().from(workflows).where(eq(workflows.organizationId, requireOrgId(actor)));
       return { data };
     } catch (error) {
@@ -1068,15 +1155,26 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       const actor = requireActor(request);
       requireUserRole(actor, "member");
       const { id } = request.params as { id: string };
-      const body = request.body as { contactId: string };
+      const body = z.object({ contactId: z.string().uuid() }).parse(request.body);
+      const organizationId = requireOrgId(actor);
+      const [workflow] = await db.select({ id: workflows.id }).from(workflows).where(and(
+        eq(workflows.id, id),
+        eq(workflows.organizationId, organizationId),
+        eq(workflows.status, "active")
+      )).limit(1);
+      const [contact] = await db.select({ id: contacts.id }).from(contacts).where(and(
+        eq(contacts.id, body.contactId),
+        eq(contacts.organizationId, organizationId)
+      )).limit(1);
+      if (!workflow || !contact) return reply.code(404).send({ error: { code: "not_found", message: "Workflow or contact not found" } });
       const [row] = await db.insert(workflowEnrollments).values({
-        organizationId: requireOrgId(actor),
+        organizationId,
         workflowId: id,
         contactId: body.contactId,
         status: "active"
       }).returning();
       await enqueueJob(db, {
-        organizationId: requireOrgId(actor),
+        organizationId,
         kind: "workflow.run_step",
         payload: { enrollmentId: row.id, workflowId: id, contactId: body.contactId, stepIndex: 0 }
       });
@@ -1090,6 +1188,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/reports/overview", async (request, reply) => {
     try {
       const actor = requireActor(request);
+      if (actor.type === "agent") assertScope(actor, "reports:read");
       const [contactCount, campaignRows, segmentRows] = await Promise.all([
         countContacts(db, requireOrgId(actor)),
         listCampaigns(db, requireOrgId(actor)),
@@ -1213,6 +1312,13 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       const actor = requireActor(request);
       requireUserRole(actor, "member");
       const body = request.body as { name: string; campaignId?: string; variants?: unknown[]; conversionGoal?: string };
+      if (body.campaignId) {
+        const [campaign] = await db.select({ id: campaigns.id }).from(campaigns).where(and(
+          eq(campaigns.id, body.campaignId),
+          eq(campaigns.organizationId, requireOrgId(actor))
+        )).limit(1);
+        if (!campaign) return reply.code(404).send({ error: { code: "not_found", message: "Campaign not found" } });
+      }
       const [row] = await db.insert(experiments).values({
         organizationId: requireOrgId(actor),
         name: body.name,
@@ -1231,6 +1337,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/reports/definitions", async (request, reply) => {
     try {
       const actor = requireActor(request);
+      if (actor.type === "agent") assertScope(actor, "reports:read");
       const data = await db.select().from(reportDefinitions).where(eq(reportDefinitions.organizationId, requireOrgId(actor)));
       return { data };
     } catch (error) {

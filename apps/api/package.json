@@ -9,7 +9,7 @@
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/tests/agent-harness.test.ts"
+    "test": "tsx --test src/tests/agent-harness.test.ts src/tests/security-contracts.test.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.1",
@@ -23,6 +23,8 @@
     "dotenv": "^16.5.0",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.3.3",
+    "fastify-raw-body": "^5.0.0",
+    "stripe": "^22.4.0",
     "zod": "^3.25.67"
   },
   "devDependencies": {

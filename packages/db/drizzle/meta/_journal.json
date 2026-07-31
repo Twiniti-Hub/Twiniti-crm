@@ -29,6 +29,13 @@
       "when": 1753436400000,
       "tag": "0003_contact_identity_history",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1753963200000,
+      "tag": "0004_organization_billing",
+      "breakpoints": true
     }
   ]
 }

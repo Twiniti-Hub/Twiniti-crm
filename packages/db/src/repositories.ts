@@ -22,12 +22,14 @@ import {
   externalRecordIds,
   forms,
   jobs,
+  organizationBilling,
   organizationInvitations,
   organizations,
   propertyDefinitions,
   propertyHistory,
   savedViews,
   segments,
+  stripeEvents,
   suppressionEntries,
   workflows,
   webhookEvents
@@ -345,6 +347,85 @@ export async function createOrganization(
   return { organization: org, admin };
 }
 
+export async function getOrganizationBilling(db: Db, organizationId: string) {
+  const rows = await db.select().from(organizationBilling)
+    .where(eq(organizationBilling.organizationId, organizationId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function ensureOrganizationBilling(db: Db, organizationId: string) {
+  const existing = await getOrganizationBilling(db, organizationId);
+  if (existing) return existing;
+  const [created] = await db.insert(organizationBilling).values({
+    organizationId,
+    status: "pending"
+  }).returning();
+  return created;
+}
+
+export async function updateOrganizationBilling(
+  db: Db,
+  organizationId: string,
+  input: Partial<{
+    status: string;
+    stripeCustomerId: string | null;
+    stripeSubscriptionId: string | null;
+    stripeCheckoutSessionId: string | null;
+    stripePriceId: string | null;
+    currentPeriodEnd: Date | null;
+    cancelAtPeriodEnd: boolean;
+    lastStripeEventCreatedAt: Date | null;
+  }>
+) {
+  const [updated] = await db.update(organizationBilling).set({
+    ...input,
+    updatedAt: new Date()
+  }).where(eq(organizationBilling.organizationId, organizationId)).returning();
+  return updated ?? null;
+}
+
+export async function findOrganizationBillingByStripeId(
+  db: Db,
+  input: { customerId?: string | null; subscriptionId?: string | null; checkoutSessionId?: string | null }
+) {
+  const conditions = [];
+  if (input.customerId) conditions.push(eq(organizationBilling.stripeCustomerId, input.customerId));
+  if (input.subscriptionId) conditions.push(eq(organizationBilling.stripeSubscriptionId, input.subscriptionId));
+  if (input.checkoutSessionId) conditions.push(eq(organizationBilling.stripeCheckoutSessionId, input.checkoutSessionId));
+  if (!conditions.length) return null;
+  const rows = await db.select().from(organizationBilling).where(or(...conditions)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function recordStripeEvent(
+  db: Db,
+  input: { stripeEventId: string; eventType: string; organizationId?: string | null; payload: unknown }
+) {
+  const existing = await db.select({ id: stripeEvents.id, processedAt: stripeEvents.processedAt }).from(stripeEvents)
+    .where(eq(stripeEvents.stripeEventId, input.stripeEventId)).limit(1);
+  if (existing[0]) return existing[0].processedAt === null;
+  try {
+    await db.insert(stripeEvents).values({
+      stripeEventId: input.stripeEventId,
+      eventType: input.eventType,
+      organizationId: input.organizationId ?? null,
+      payload: input.payload
+    });
+  } catch (error) {
+    if (typeof error === "object" && error && "code" in error && (error as { code?: string }).code === "23505") {
+      return false;
+    }
+    throw error;
+  }
+  return true;
+}
+
+export async function markStripeEventProcessed(db: Db, stripeEventId: string) {
+  await db.update(stripeEvents).set({ processedAt: new Date() })
+    .where(eq(stripeEvents.stripeEventId, stripeEventId));
+}
+
 export async function findCrmUserBySubject(db: Db, subject: string) {
   const rows = await db.select().from(crmUsers).where(eq(crmUsers.hexclaveSubject, subject)).limit(1);
   return rows[0] ?? null;
@@ -656,6 +737,8 @@ export async function updateContact(
   const nextEmail = input.email?.trim() ?? current.email;
   const nextPhone = input.phone === undefined ? current.phone : input.phone?.trim() || null;
   const nextProperties = input.properties ?? current.properties;
+  const updateFilters = [eq(contacts.id, id), eq(contacts.organizationId, organizationId)];
+  if (input.version !== undefined) updateFilters.push(eq(contacts.version, current.version));
   const [row] = await db.update(contacts).set({
     email: nextEmail,
     emailNormalized: input.email ? normalizeEmail(input.email) : current.emailNormalized,
@@ -667,7 +750,14 @@ export async function updateContact(
     properties: nextProperties,
     version: current.version + 1,
     updatedAt: new Date()
-  }).where(eq(contacts.id, id)).returning();
+  }).where(and(...updateFilters)).returning();
+  if (!row) {
+    const [latest] = await db.select().from(contacts).where(and(
+      eq(contacts.id, id),
+      eq(contacts.organizationId, organizationId)
+    )).limit(1);
+    return { conflict: true as const, current: latest ?? current };
+  }
   await recordContactChanges(db, {
     organizationId,
     contactId: row.id,
@@ -1120,8 +1210,25 @@ export async function listCampaigns(db: Db, organizationId: string) {
   return db.select().from(campaigns).where(eq(campaigns.organizationId, organizationId)).orderBy(desc(campaigns.updatedAt));
 }
 
-export async function listSegments(db: Db, organizationId: string) {
-  return db.select().from(segments).where(eq(segments.organizationId, organizationId)).orderBy(asc(segments.name));
+export async function listSegments(db: Db, organizationId: string, options: { query?: string; limit?: number } = {}) {
+  const filters = [eq(segments.organizationId, organizationId)];
+  if (options.query?.trim()) {
+    filters.push(ilike(segments.name, `%${options.query.trim()}%`));
+  }
+  const query = db.select().from(segments)
+    .where(and(...filters))
+    .orderBy(asc(segments.name));
+  return options.limit === undefined
+    ? query
+    : query.limit(Math.min(Math.max(options.limit, 1), 100));
+}
+
+export async function getSegmentById(db: Db, organizationId: string, id: string) {
+  const rows = await db.select().from(segments).where(and(
+    eq(segments.organizationId, organizationId),
+    eq(segments.id, id)
+  )).limit(1);
+  return rows[0] ?? null;
 }
 
 export async function listPropertyDefinitions(

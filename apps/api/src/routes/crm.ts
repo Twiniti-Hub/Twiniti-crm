@@ -30,6 +30,7 @@ import {
   type Db
 } from "@twiniti/db";
 import { and as andOp, eq as eqOp, isNull } from "drizzle-orm";
+import { z } from "zod";
 import { audit, requireActor, requireOrgId, requireUserRole, sendError } from "../auth-hook.js";
 
 function mapContact(row: {
@@ -329,9 +330,19 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
       const actor = requireActor(request);
       requireUserRole(actor, "member");
       const { id } = request.params as { id: string };
-      const body = request.body as { companyId: string; label?: string };
+      const body = z.object({ companyId: z.string().uuid(), label: z.string().trim().max(80).optional() }).parse(request.body);
+      const organizationId = requireOrgId(actor);
+      const [contact] = await db.select({ id: contactsTable.id }).from(contactsTable).where(andOp(
+        eqOp(contactsTable.id, id),
+        eqOp(contactsTable.organizationId, organizationId)
+      )).limit(1);
+      const [company] = await db.select({ id: companies.id }).from(companies).where(andOp(
+        eqOp(companies.id, body.companyId),
+        eqOp(companies.organizationId, organizationId)
+      )).limit(1);
+      if (!contact || !company) return reply.code(404).send({ error: { code: "not_found", message: "Contact or company not found" } });
       const [row] = await db.insert(contactCompanyAssociations).values({
-        organizationId: requireOrgId(actor),
+        organizationId,
         contactId: id,
         companyId: body.companyId,
         label: body.label ?? "primary"

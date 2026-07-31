@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AgentsPage } from "../pages/AgentsPage";
+import { BillingPage } from "../pages/BillingPage";
 import { CampaignsPage } from "../pages/CampaignsPage";
 import { CompanyDetailPage } from "../pages/CompanyDetailPage";
 import { CompaniesPage } from "../pages/CompaniesPage";
@@ -32,6 +33,7 @@ export function CrmRoutes() {
         <Route path="agents" element={<AgentsPage />} />
         <Route path="deliverability" element={<DeliverabilityPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="billing" element={<BillingPage />} />
         <Route path="super-admin" element={<SuperAdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

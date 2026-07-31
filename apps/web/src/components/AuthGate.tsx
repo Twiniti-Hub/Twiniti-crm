@@ -4,6 +4,7 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { api } from "../lib/api";
 import type { Me } from "../lib/me";
 import { AcceptInvitePage } from "../pages/AcceptInvitePage";
+import { BillingPage } from "../pages/BillingPage";
 import { LandingPage } from "../pages/LandingPage";
 import { OnboardingPage } from "../pages/OnboardingPage";
 import { SignInPage } from "../pages/SignInPage";
@@ -92,6 +93,15 @@ export function AuthGate() {
           path="*"
           element={<Navigate to={me.isSuperAdmin ? "/super-admin" : "/onboarding"} replace />}
         />
+      </Routes>
+    );
+  }
+
+  if (me?.billingStatus && !["active", "trialing"].includes(me.billingStatus)) {
+    return (
+      <Routes>
+        <Route path="billing" element={<BillingPage />} />
+        <Route path="*" element={<Navigate to="/billing" replace />} />
       </Routes>
     );
   }

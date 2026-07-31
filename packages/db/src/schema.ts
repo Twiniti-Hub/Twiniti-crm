@@ -19,6 +19,38 @@ export const organizations = pgTable("organizations", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 });
 
+export const organizationBilling = pgTable("organization_billing", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  status: varchar("status", { length: 32 }).notNull().default("pending"),
+  stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
+  stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
+  stripeCheckoutSessionId: varchar("stripe_checkout_session_id", { length: 255 }),
+  stripePriceId: varchar("stripe_price_id", { length: 255 }),
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  lastStripeEventCreatedAt: timestamp("last_stripe_event_created_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  organizationIndex: uniqueIndex("organization_billing_org_idx").on(table.organizationId),
+  customerIndex: uniqueIndex("organization_billing_customer_idx").on(table.stripeCustomerId),
+  subscriptionIndex: uniqueIndex("organization_billing_subscription_idx").on(table.stripeSubscriptionId),
+  checkoutIndex: uniqueIndex("organization_billing_checkout_idx").on(table.stripeCheckoutSessionId)
+}));
+
+export const stripeEvents = pgTable("stripe_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  stripeEventId: varchar("stripe_event_id", { length: 255 }).notNull(),
+  eventType: varchar("event_type", { length: 120 }).notNull(),
+  organizationId: uuid("organization_id").references(() => organizations.id),
+  payload: jsonb("payload").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  processedAt: timestamp("processed_at", { withTimezone: true })
+}, (table) => ({
+  stripeEventIndex: uniqueIndex("stripe_events_event_idx").on(table.stripeEventId)
+}));
+
 export const crmUsers = pgTable("crm_users", {
   id: uuid("id").defaultRandom().primaryKey(),
   organizationId: uuid("organization_id").notNull().references(() => organizations.id),
@@ -570,6 +602,8 @@ export const reportDefinitions = pgTable("report_definitions", {
 
 export const schema = {
   organizations,
+  organizationBilling,
+  stripeEvents,
   crmUsers,
   contacts,
   companies,

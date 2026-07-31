@@ -30,6 +30,14 @@ services:
         sync: false
       - key: RESEND_FROM_EMAIL
         sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_ID
+        sync: false
+      - key: STRIPE_BILLING_PORTAL_CONFIGURATION_ID
+        sync: false
       - key: AUTH_DISABLED
         sync: false
       - key: BOOTSTRAP_ORG_NAME

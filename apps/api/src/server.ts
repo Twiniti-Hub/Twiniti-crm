@@ -4,11 +4,13 @@ import { config as loadDotenv } from "dotenv";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
+import rawBody from "fastify-raw-body";
 import swagger from "@fastify/swagger";
-import { loadEnv } from "@twiniti/config";
+import { assertProductionApiConfiguration, loadEnv } from "@twiniti/config";
 import { ensureBootstrapOrg, getDb } from "@twiniti/db";
-import { registerAuthHook } from "./auth-hook.js";
+import { registerAuthHook, requireActor, requireSuperAdmin } from "./auth-hook.js";
 import { registerMcpRoutes } from "./mcp.js";
+import { registerBillingRoutes } from "./routes/billing.js";
 import { registerCrmRoutes } from "./routes/crm.js";
 import { registerMarketingRoutes } from "./routes/marketing.js";
 import { registerOrganizationRoutes } from "./routes/organizations.js";
@@ -36,6 +38,14 @@ await app.register(swagger, {
     servers: [{ url: `http://localhost:${env.PORT}` }]
   }
 });
+assertProductionApiConfiguration(env);
+
+await app.register(rawBody, {
+  field: "rawBody",
+  global: false,
+  encoding: false,
+  runFirst: true
+});
 
 registerAuthHook(app, db, env);
 
@@ -45,7 +55,10 @@ app.get("/health", async () => ({
   authMode: env.AUTH_DISABLED || !env.HEXCLAVE_SECRET_SERVER_KEY ? "bootstrap" : "hexclave"
 }));
 
-app.get("/api/v1/bootstrap", async () => {
+app.get("/api/v1/bootstrap", async (request, reply) => {
+  if (env.NODE_ENV === "production") return reply.code(404).send({ error: { code: "not_found", message: "Not found" } });
+  const actor = requireActor(request);
+  requireSuperAdmin(actor);
   const org = await ensureBootstrapOrg(db, {
     orgName: env.BOOTSTRAP_ORG_NAME,
     ownerSubject: env.BOOTSTRAP_OWNER_SUBJECT || "dev-owner"
@@ -54,9 +67,10 @@ app.get("/api/v1/bootstrap", async () => {
 });
 
 await registerOrganizationRoutes(app, db, env);
+await registerBillingRoutes(app, db, env);
 await registerCrmRoutes(app, db);
 await registerMarketingRoutes(app, db, env);
-await registerMcpRoutes(app, db);
+await registerMcpRoutes(app, db, env);
 
 app.get("/docs", async (_, reply) => reply.redirect("/documentation"));
 

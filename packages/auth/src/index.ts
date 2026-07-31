@@ -5,6 +5,7 @@ import {
   findAgentByCredentialHash,
   findCrmUserBySubject,
   findOrCreateCrmUser,
+  getOrganizationBilling,
   getOrganizationById,
   hashCredential,
   touchAgent,
@@ -23,6 +24,7 @@ export type AuthActor = {
   isSuperAdmin?: boolean;
   hexclaveSubject?: string;
   organizationName?: string | null;
+  billingStatus?: string;
 };
 
 export type CrmRole = "admin" | "member";
@@ -172,7 +174,8 @@ async function resolveBootstrapActor(db: Db, env: AppEnv): Promise<AuthActor> {
     needsSetup: false,
     isSuperAdmin: true,
     hexclaveSubject: user.hexclaveSubject,
-    organizationName: org.name
+    organizationName: org.name,
+    billingStatus: "active"
   };
 }
 
@@ -188,6 +191,7 @@ export async function resolveRequestActor(
     const agent = await findAgentByCredentialHash(db, hashCredential(bearer));
     if (!agent) return null;
     await touchAgent(db, agent.id);
+    const billing = await getOrganizationBilling(db, agent.organizationId);
     return {
       type: "agent",
       id: agent.id,
@@ -195,7 +199,8 @@ export async function resolveRequestActor(
       scopes: parseScopes(agent.scopes),
       displayName: agent.name,
       needsSetup: false,
-      isSuperAdmin: false
+      isSuperAdmin: false,
+      billingStatus: billing?.status ?? "active"
     };
   }
 
@@ -236,6 +241,7 @@ export async function resolveRequestActor(
   }
 
   const organization = await getOrganizationById(db, crmUser.organizationId);
+  const billing = await getOrganizationBilling(db, crmUser.organizationId);
 
   return {
     type: "user",
@@ -247,6 +253,7 @@ export async function resolveRequestActor(
     needsSetup: false,
     isSuperAdmin: superAdmin,
     hexclaveSubject: subject,
-    organizationName: organization?.name ?? null
+    organizationName: organization?.name ?? null,
+    billingStatus: billing?.status ?? "active"
   };
 }

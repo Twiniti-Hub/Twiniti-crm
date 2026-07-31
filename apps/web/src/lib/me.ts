@@ -8,4 +8,5 @@ export type Me = {
   displayName?: string | null;
   needsSetup: boolean;
   isSuperAdmin: boolean;
+  billingStatus?: string;
 };

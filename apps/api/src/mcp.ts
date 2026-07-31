@@ -1,10 +1,13 @@
 import type { FastifyInstance } from "fastify";
+import { and, count, eq } from "drizzle-orm";
 import { resolveRequestActor, assertScope, assertOrganization } from "@twiniti/auth";
-import { loadEnv } from "@twiniti/config";
+import type { AppEnv } from "@twiniti/config";
 import {
   contactSearchSchema,
   createCampaignSchema,
   createContactSchema,
+  segmentIdSchema,
+  segmentSearchSchema,
   updateContactSchema,
   upsertContactSchema
 } from "@twiniti/contracts";
@@ -13,9 +16,14 @@ import {
   findContactByEmail,
   getContactById,
   getContactTimeline,
+  getSegmentById,
+  listSegments,
   listCampaigns,
   searchContacts,
   updateContact,
+  contacts,
+  compileFilterAst,
+  parseFilterAst,
   type Db
 } from "@twiniti/db";
 import { sendError } from "./auth-hook.js";
@@ -28,33 +36,39 @@ type McpRequest = {
 };
 
 const toolDefs = [
-  { name: "search_contacts", description: "Search contacts", scope: "contacts:read" },
-  { name: "get_contact", description: "Get a contact by id", scope: "contacts:read" },
-  { name: "create_contact", description: "Create a contact", scope: "contacts:create" },
-  { name: "upsert_contact", description: "Create or update a contact by email", scope: "contacts:update" },
-  { name: "update_contact", description: "Update a contact", scope: "contacts:update" },
-  { name: "get_contact_timeline", description: "Get contact timeline events", scope: "contacts:read" },
-  { name: "create_campaign_draft", description: "Create a campaign draft", scope: "campaigns:create" },
-  { name: "get_campaign_status", description: "List campaigns / status", scope: "campaigns:preview" }
+  { name: "search_contacts", description: "Search contacts in the authenticated organization", scope: "contacts:read", inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "integer", maximum: 100 }, page: { type: "integer", minimum: 1 } } } },
+  { name: "get_contact", description: "Get a contact by id in the authenticated organization", scope: "contacts:read", inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
+  { name: "list_segments", description: "List saved segments in the authenticated organization", scope: "segments:read", inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "integer", maximum: 100 } } } },
+  { name: "get_segment", description: "Get a saved segment in the authenticated organization", scope: "segments:read", inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
+  { name: "estimate_segment_size", description: "Count contacts matching a saved segment in the authenticated organization", scope: "segments:read", inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
+  { name: "create_contact", description: "Create a contact", scope: "contacts:create", inputSchema: { type: "object" } },
+  { name: "upsert_contact", description: "Create or update a contact by email", scope: "contacts:update", inputSchema: { type: "object" } },
+  { name: "update_contact", description: "Update a contact", scope: "contacts:update", inputSchema: { type: "object" } },
+  { name: "get_contact_timeline", description: "Get contact timeline events", scope: "contacts:read", inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
+  { name: "create_campaign_draft", description: "Create a campaign draft", scope: "campaigns:create", inputSchema: { type: "object" } },
+  { name: "get_campaign_status", description: "List campaigns / status", scope: "campaigns:preview", inputSchema: { type: "object" } }
 ] as const;
 
-export async function registerMcpRoutes(app: FastifyInstance, db: Db) {
+export async function registerMcpRoutes(app: FastifyInstance, db: Db, env: AppEnv) {
   app.post("/mcp", async (request, reply) => {
     try {
-      const env = loadEnv({
-        ...process.env,
-        AUTH_DISABLED: process.env.AUTH_DISABLED ?? (process.env.HEXCLAVE_SECRET_SERVER_KEY ? "false" : "true"),
-        DATABASE_URL: process.env.DATABASE_URL ?? "postgresql://user:password@localhost:5432/twiniti_crm"
-      });
+      const body = request.body as McpRequest;
+      const id = body.id ?? null;
       const actor = await resolveRequestActor(db, request, env);
       if (!actor) {
         reply.code(401);
         return { jsonrpc: "2.0", id: null, error: { code: -32001, message: "Unauthorized" } };
       }
+      if (
+        actor.organizationId
+        && !actor.isSuperAdmin
+        && actor.billingStatus
+        && !["active", "trialing"].includes(actor.billingStatus)
+      ) {
+        reply.code(402);
+        return { jsonrpc: "2.0", id, error: { code: -32002, message: "Organization billing is required" } };
+      }
       request.actor = actor;
-
-      const body = request.body as McpRequest;
-      const id = body.id ?? null;
 
       if (body.method === "initialize") {
         return {
@@ -76,7 +90,7 @@ export async function registerMcpRoutes(app: FastifyInstance, db: Db) {
             tools: toolDefs.map((tool) => ({
               name: tool.name,
               description: tool.description,
-              inputSchema: { type: "object", properties: {}, additionalProperties: true }
+              inputSchema: tool.inputSchema
             }))
           }
         };
@@ -98,6 +112,9 @@ export async function registerMcpRoutes(app: FastifyInstance, db: Db) {
 
       if (body.method === "resources/read") {
         const uri = String((body.params as { uri?: string } | undefined)?.uri ?? "");
+        if (!["crm://schema", "crm://consent-rules", "crm://error-codes"].includes(uri)) {
+          return { jsonrpc: "2.0", id, error: { code: -32004, message: "Resource not found" } };
+        }
         const content =
           uri === "crm://consent-rules"
             ? "Suppressed and unsubscribed contacts must never receive campaign email. Consent is authoritative in CRM."
@@ -107,7 +124,7 @@ export async function registerMcpRoutes(app: FastifyInstance, db: Db) {
         return {
           jsonrpc: "2.0",
           id,
-          result: { contents: [{ uri, mimeType: "application/json", text: content }] }
+            result: { contents: [{ uri, mimeType: uri === "crm://consent-rules" ? "text/plain" : "application/json", text: content }] }
         };
       }
 
@@ -144,6 +161,32 @@ export async function registerMcpRoutes(app: FastifyInstance, db: Db) {
           }
           case "get_contact": {
             result = await getContactById(db, assertOrganization(actor), String(args.id ?? ""));
+            break;
+          }
+          case "list_segments": {
+            const query = segmentSearchSchema.parse(args);
+            result = await listSegments(db, assertOrganization(actor), query);
+            break;
+          }
+          case "get_segment": {
+            const input = segmentIdSchema.parse(args);
+            result = await getSegmentById(db, assertOrganization(actor), input.id);
+            break;
+          }
+          case "estimate_segment_size": {
+            const input = segmentIdSchema.parse(args);
+            const organizationId = assertOrganization(actor);
+            const segment = await getSegmentById(db, organizationId, input.id);
+            if (!segment) {
+              result = null;
+              break;
+            }
+            const filter = compileFilterAst(parseFilterAst(segment.filterAst));
+            const rows = await db.select({ value: count() }).from(contacts).where(and(
+              eq(contacts.organizationId, organizationId),
+              filter
+            ));
+            result = { segmentId: segment.id, count: Number(rows[0]?.value ?? 0) };
             break;
           }
           case "create_contact": {

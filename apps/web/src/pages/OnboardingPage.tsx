@@ -19,11 +19,15 @@ export function OnboardingPage() {
     setBusy(true);
     setError(null);
     try {
-      await api("/api/v1/organizations", {
+      const organization = await api("/api/v1/organizations", {
         method: "POST",
         body: JSON.stringify({ name, joinAsAdmin: true })
       });
-      navigate("/", { replace: true });
+      if (organization.data.checkoutUrl) {
+        window.location.assign(organization.data.checkoutUrl);
+      } else {
+        navigate("/billing", { replace: true });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create company.");
     } finally {

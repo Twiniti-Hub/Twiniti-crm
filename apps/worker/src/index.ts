@@ -152,17 +152,25 @@ function mapCompanyImportRow(row: Record<string, unknown>): {
   return { name, industry, properties };
 }
 
-async function processCampaignSend(payload: { campaignId: string }) {
-  const [campaign] = await db.select().from(campaigns).where(eq(campaigns.id, payload.campaignId)).limit(1);
+async function processCampaignSend(payload: { campaignId: string; organizationId: string }) {
+  const [campaign] = await db.select().from(campaigns).where(and(
+    eq(campaigns.id, payload.campaignId),
+    eq(campaigns.organizationId, payload.organizationId)
+  )).limit(1);
   if (!campaign) throw new Error("Campaign not found");
   const recipients = await db.select().from(campaignRecipients).where(and(
     eq(campaignRecipients.campaignId, campaign.id),
+    eq(campaignRecipients.organizationId, campaign.organizationId),
     eq(campaignRecipients.status, "pending")
   ));
+  let failedCount = 0;
 
   for (const recipient of recipients) {
     if (await isEmailSuppressed(db, campaign.organizationId, recipient.emailNormalized)) {
-      await db.update(campaignRecipients).set({ status: "suppressed" }).where(eq(campaignRecipients.id, recipient.id));
+      await db.update(campaignRecipients).set({ status: "suppressed" }).where(and(
+        eq(campaignRecipients.id, recipient.id),
+        eq(campaignRecipients.organizationId, campaign.organizationId)
+      ));
       continue;
     }
 
@@ -178,7 +186,10 @@ async function processCampaignSend(payload: { campaignId: string }) {
     });
 
     if (!env.RESEND_API_KEY) {
-      await db.update(campaignRecipients).set({ status: "simulated" }).where(eq(campaignRecipients.id, recipient.id));
+      await db.update(campaignRecipients).set({ status: "simulated" }).where(and(
+        eq(campaignRecipients.id, recipient.id),
+        eq(campaignRecipients.organizationId, campaign.organizationId)
+      ));
       await db.insert(emailSends).values({
         organizationId: campaign.organizationId,
         campaignId: campaign.id,
@@ -216,7 +227,10 @@ async function processCampaignSend(payload: { campaignId: string }) {
       status: result.error ? "failed" : "sent",
       resendId,
       error: result.error ? JSON.stringify(result.error) : null
-    }).where(eq(campaignRecipients.id, recipient.id));
+    }).where(and(
+      eq(campaignRecipients.id, recipient.id),
+      eq(campaignRecipients.organizationId, campaign.organizationId)
+    ));
 
     await db.insert(emailSends).values({
       organizationId: campaign.organizationId,
@@ -227,6 +241,7 @@ async function processCampaignSend(payload: { campaignId: string }) {
       resendId,
       idempotencyKey: recipient.idempotencyKey
     });
+    if (result.error) failedCount += 1;
     await db.insert(emailActivities).values({
       organizationId: campaign.organizationId,
       contactId: recipient.contactId,
@@ -242,7 +257,14 @@ async function processCampaignSend(payload: { campaignId: string }) {
     }).onConflictDoNothing();
   }
 
-  await db.update(campaigns).set({ status: "sent", sentAt: new Date(), updatedAt: new Date() }).where(eq(campaigns.id, campaign.id));
+  await db.update(campaigns).set({
+    status: failedCount ? "partial" : "sent",
+    sentAt: new Date(),
+    updatedAt: new Date()
+  }).where(and(
+    eq(campaigns.id, campaign.id),
+    eq(campaigns.organizationId, campaign.organizationId)
+  ));
   await writeAudit(db, {
     organizationId: campaign.organizationId,
     actorType: "system",
@@ -772,6 +794,7 @@ async function processReceivedEmail(
 }
 
 async function processWorkflowStep(payload: {
+  organizationId: string;
   enrollmentId?: string;
   workflowId?: string;
   contactId?: string;
@@ -780,8 +803,16 @@ async function processWorkflowStep(payload: {
 }) {
   if (!payload.workflowId || !payload.enrollmentId) {
     if (payload.formId && payload.contactId) {
-      const matches = await db.select().from(workflows).where(eq(workflows.triggerType, "form_submission"));
+      const contact = await getContactById(db, payload.organizationId, payload.contactId);
+      if (!contact) return;
+      const matches = await db.select().from(workflows).where(and(
+        eq(workflows.organizationId, payload.organizationId),
+        eq(workflows.triggerType, "form_submission"),
+        eq(workflows.status, "active")
+      ));
       for (const workflow of matches) {
+        const definition = workflow.definition as { formId?: string };
+        if (definition.formId && definition.formId !== payload.formId) continue;
         const [enrollment] = await db.insert(workflowEnrollments).values({
           organizationId: workflow.organizationId,
           workflowId: workflow.id,
@@ -803,7 +834,10 @@ async function processWorkflowStep(payload: {
     return;
   }
 
-  const [workflow] = await db.select().from(workflows).where(eq(workflows.id, payload.workflowId)).limit(1);
+  const [workflow] = await db.select().from(workflows).where(and(
+    eq(workflows.id, payload.workflowId),
+    eq(workflows.organizationId, payload.organizationId)
+  )).limit(1);
   if (!workflow) return;
   const definition = workflow.definition as {
     steps?: Array<{ type: string; campaignId?: string; field?: string; value?: unknown }>;
@@ -832,7 +866,10 @@ async function processWorkflowStep(payload: {
       await db.update(workflowEnrollments).set({
         status: "completed",
         updatedAt: new Date()
-      }).where(eq(workflowEnrollments.id, payload.enrollmentId));
+      }).where(and(
+        eq(workflowEnrollments.id, payload.enrollmentId),
+        eq(workflowEnrollments.organizationId, workflow.organizationId)
+      ));
       return;
     }
   } else {
@@ -849,7 +886,10 @@ async function processWorkflowStep(payload: {
     currentStep: stepIndex + 1,
     status: step ? "active" : "completed",
     updatedAt: new Date()
-  }).where(eq(workflowEnrollments.id, payload.enrollmentId));
+  }).where(and(
+    eq(workflowEnrollments.id, payload.enrollmentId),
+    eq(workflowEnrollments.organizationId, workflow.organizationId)
+  ));
 
   if (step?.type === "send_campaign" && step.campaignId) {
     await enqueueJob(db, {
@@ -866,10 +906,11 @@ async function processContactCompanyReconciliation(payload: { organizationId: st
   });
 }
 
-async function handleJob(kind: string, payload: Record<string, unknown>) {
+async function handleJob(kind: string, payload: Record<string, unknown>, organizationId: string | null) {
   switch (kind) {
     case "campaign.send":
-      await processCampaignSend(payload as { campaignId: string });
+      if (!organizationId) throw new Error("Campaign jobs require an organization");
+      await processCampaignSend({ ...(payload as { campaignId: string }), organizationId });
       return;
     case "import.hubspot.properties":
       await processHubspotPropertiesImport(payload as {
@@ -907,7 +948,12 @@ async function handleJob(kind: string, payload: Record<string, unknown>) {
       return;
     case "workflow.trigger.form_submit":
     case "workflow.run_step":
-      await processWorkflowStep(payload as {
+      if (!organizationId) throw new Error("Workflow jobs require an organization");
+      await processWorkflowStep({
+        ...payload,
+        organizationId
+      } as {
+        organizationId: string;
         enrollmentId?: string;
         workflowId?: string;
         contactId?: string;
@@ -929,7 +975,7 @@ async function tick() {
   const claimed = await claimJobs(db, 5);
   for (const job of claimed) {
     try {
-      await handleJob(job.kind, job.payload as Record<string, unknown>);
+      await handleJob(job.kind, job.payload as Record<string, unknown>, job.organizationId);
       await completeJob(db, job.id);
     } catch (error) {
       await completeJob(db, job.id, error instanceof Error ? error.message : "job failed");

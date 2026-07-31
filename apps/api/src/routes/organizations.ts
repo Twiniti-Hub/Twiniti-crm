@@ -10,6 +10,7 @@ import {
   acceptInvitation,
   createInvitation,
   createOrganization,
+  ensureOrganizationBilling,
   findInvitationByToken,
   getOrganizationById,
   listOrganizations,
@@ -28,6 +29,7 @@ import {
   requireUserRole,
   sendError
 } from "../auth-hook.js";
+import { createOrganizationCheckoutSession } from "./billing.js";
 
 async function sendInviteEmail(
   env: AppEnv,
@@ -100,7 +102,8 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         email: actor.email ?? null,
         displayName: actor.displayName ?? null,
         needsSetup: Boolean(actor.needsSetup),
-        isSuperAdmin: Boolean(actor.isSuperAdmin)
+        isSuperAdmin: Boolean(actor.isSuperAdmin),
+        billingStatus: actor.billingStatus ?? "active"
       }
     };
   });
@@ -136,8 +139,20 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
               email: actor.email,
               displayName: actor.displayName
             }
-          : {})
+        : {})
       });
+      await ensureOrganizationBilling(db, created.organization.id);
+
+      let checkoutUrl: string | null = null;
+      let checkoutSessionId: string | null = null;
+      if (joinAsAdmin) {
+        const checkout = await createOrganizationCheckoutSession(db, env, {
+          organizationId: created.organization.id,
+          customerEmail: actor.email
+        });
+        checkoutUrl = checkout?.url ?? null;
+        checkoutSessionId = checkout?.id ?? null;
+      }
 
       let invitation = null;
       if (input.inviteAdminEmail) {
@@ -172,6 +187,9 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
           name: created.organization.name,
           createdAt: created.organization.createdAt.toISOString(),
           joinedAsAdmin: joinAsAdmin,
+          billingStatus: "pending",
+          checkoutUrl,
+          checkoutSessionId,
           invitation
         }
       };

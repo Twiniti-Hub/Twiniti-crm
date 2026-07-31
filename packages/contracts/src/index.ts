@@ -95,6 +95,15 @@ export const contactSearchSchema = z.object({
   cursor: z.string().optional()
 });
 
+export const segmentSearchSchema = z.object({
+  query: z.string().trim().max(160).optional(),
+  limit: z.number().int().positive().max(100).default(100)
+});
+
+export const segmentIdSchema = z.object({
+  id: z.string().uuid()
+});
+
 export const companySchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
@@ -163,14 +172,46 @@ export const updatePropertyDefinitionSchema = createPropertyDefinitionSchema.par
 export const agentIdentitySchema = z.object({
   name: z.string().trim().min(1).max(100),
   purpose: z.string().trim().min(1).max(500),
-  scopes: z.array(z.string()).min(1),
+  scopes: z.array(z.enum([
+    "contacts:read",
+    "contacts:create",
+    "contacts:update",
+    "segments:read",
+    "lists:read",
+    "forms:read",
+    "templates:read",
+    "campaigns:read",
+    "campaigns:create",
+    "campaigns:preview",
+    "campaigns:request_approval",
+    "campaigns:send",
+    "workflows:read",
+    "reports:read",
+    "email_events:read"
+  ])).min(1).max(30),
   expiresAt: z.string().datetime().nullable()
 });
 
 export const createAgentIdentitySchema = z.object({
   name: z.string().trim().min(1).max(100),
   purpose: z.string().trim().min(1).max(500),
-  scopes: z.array(z.string().min(1)).min(1),
+  scopes: z.array(z.enum([
+    "contacts:read",
+    "contacts:create",
+    "contacts:update",
+    "segments:read",
+    "lists:read",
+    "forms:read",
+    "templates:read",
+    "campaigns:read",
+    "campaigns:create",
+    "campaigns:preview",
+    "campaigns:request_approval",
+    "campaigns:send",
+    "workflows:read",
+    "reports:read",
+    "email_events:read"
+  ])).min(1).max(30),
   expiresAt: z.string().datetime().nullable().optional(),
   rateLimitPerMinute: z.number().int().positive().max(10_000).optional()
 });
@@ -432,6 +473,8 @@ export const agentToolNameSchema = z.enum([
   "upsert_contact",
   "update_contact",
   "get_contact_timeline",
+  "list_segments",
+  "get_segment",
   "search_companies",
   "get_company",
   "create_company",
@@ -457,6 +500,7 @@ export type CreateContact = z.infer<typeof createContactSchema>;
 export type UpdateContact = z.infer<typeof updateContactSchema>;
 export type UpsertContact = z.infer<typeof upsertContactSchema>;
 export type ContactSearch = z.infer<typeof contactSearchSchema>;
+export type SegmentSearch = z.infer<typeof segmentSearchSchema>;
 export type Company = z.infer<typeof companySchema>;
 export type CreateCompany = z.infer<typeof createCompanySchema>;
 export type UpdateCompany = z.infer<typeof updateCompanySchema>;
