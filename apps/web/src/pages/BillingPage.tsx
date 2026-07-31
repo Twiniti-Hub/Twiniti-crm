@@ -34,7 +34,7 @@ export function BillingPage() {
     setBusy(true);
     setError(null);
     try {
-      const result = await api("/api/v1/billing/checkout-session", { method: "POST" });
+      const result = await api("/api/v1/billing/checkout-session", { method: "POST", body: "{}" });
       if (result.data.checkoutUrl) {
         window.location.assign(result.data.checkoutUrl);
       } else {
@@ -51,7 +51,7 @@ export function BillingPage() {
     setBusy(true);
     setError(null);
     try {
-      const result = await api("/api/v1/billing/portal", { method: "POST" });
+      const result = await api("/api/v1/billing/portal", { method: "POST", body: "{}" });
       window.location.assign(result.data.url);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not open billing portal.");
