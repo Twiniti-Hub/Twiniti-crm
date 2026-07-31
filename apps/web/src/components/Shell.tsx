@@ -26,6 +26,10 @@ function AccountFooter({ me }: { me: Me | null }) {
   const user = useUser();
   const label = user?.displayName ?? user?.primaryEmail ?? me?.email ?? "Signed in";
 
+  const signOut = async () => {
+    await app.signOut({ redirectUrl: "/" });
+  };
+
   return (
     <div className="account-block">
       <div className="account-label">
@@ -34,7 +38,7 @@ function AccountFooter({ me }: { me: Me | null }) {
           {label}
         </span>
       </div>
-      <button className="sign-out" type="button" onClick={() => app.redirectToSignOut()}>
+      <button className="sign-out" type="button" onClick={() => void signOut()}>
         Sign out
       </button>
     </div>
