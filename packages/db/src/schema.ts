@@ -16,8 +16,11 @@ import {
 export const organizations = pgTable("organizations", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: varchar("name", { length: 200 }).notNull(),
+  provisioningKey: varchar("provisioning_key", { length: 255 }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
-});
+}, (table) => ({
+  provisioningKeyIndex: uniqueIndex("organizations_provisioning_key_idx").on(table.provisioningKey)
+}));
 
 export const organizationBilling = pgTable("organization_billing", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -30,6 +33,17 @@ export const organizationBilling = pgTable("organization_billing", {
   currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
   cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
   lastStripeEventCreatedAt: timestamp("last_stripe_event_created_at", { withTimezone: true }),
+  licenseProvisioningStatus: varchar("license_provisioning_status", { length: 32 }).notNull().default("pending"),
+  licenseOrganizationId: varchar("license_organization_id", { length: 255 }),
+  licenseId: varchar("license_id", { length: 255 }),
+  licenseUserId: varchar("license_user_id", { length: 255 }),
+  licenseDecision: varchar("license_decision", { length: 32 }),
+  licenseStatus: varchar("license_status", { length: 32 }),
+  licenseReasonCode: varchar("license_reason_code", { length: 80 }),
+  licenseExpiresAt: timestamp("license_expires_at", { withTimezone: true }),
+  licenseGraceCutoff: timestamp("license_grace_cutoff", { withTimezone: true }),
+  lastLicenseCheckedAt: timestamp("last_license_checked_at", { withTimezone: true }),
+  lastLicenseSyncAt: timestamp("last_license_sync_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => ({
@@ -572,6 +586,7 @@ export const jobs = pgTable("jobs", {
   payload: jsonb("payload").notNull(),
   status: varchar("status", { length: 20 }).notNull().default("queued"),
   attempts: integer("attempts").notNull().default(0),
+  dedupeKey: varchar("dedupe_key", { length: 255 }),
   priority: integer("priority").notNull().default(100),
   availableAt: timestamp("available_at", { withTimezone: true }).defaultNow().notNull(),
   lockedAt: timestamp("locked_at", { withTimezone: true }),
@@ -579,7 +594,8 @@ export const jobs = pgTable("jobs", {
   lastError: text("last_error"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => ({
-  queueIndex: index("jobs_queue_idx").on(table.status, table.availableAt, table.priority)
+  queueIndex: index("jobs_queue_idx").on(table.status, table.availableAt, table.priority),
+  dedupeIndex: uniqueIndex("jobs_dedupe_idx").on(table.dedupeKey)
 }));
 
 export const outboxEvents = pgTable("outbox_events", {

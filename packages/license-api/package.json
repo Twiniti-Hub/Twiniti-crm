@@ -1,5 +1,5 @@
 {
-  "name": "@twiniti/auth",
+  "name": "@twiniti/license-api",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -7,18 +7,16 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "test": "tsx --test src/index.test.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@hexclave/js": "^1.0.55",
-    "@twiniti/config": "workspace:*",
-    "@twiniti/license-api": "workspace:*",
-    "@twiniti/db": "workspace:*",
-    "zod": "^3.25.67"
+    "@twiniti/config": "workspace:*"
   },
   "devDependencies": {
+    "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   }
 }

@@ -6,6 +6,9 @@ type Billing = {
   status: string;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+  licenseDecision?: string | null;
+  licenseReasonCode?: string | null;
+  licenseGraceCutoff?: string | null;
 };
 
 export function BillingPage() {
@@ -60,7 +63,8 @@ export function BillingPage() {
     }
   }
 
-  const active = billing?.status === "active" || billing?.status === "trialing";
+  const active = (billing?.status === "active" || billing?.status === "trialing")
+    && (!billing?.licenseDecision || billing.licenseDecision === "allow");
 
   return (
     <div className="auth-page">
@@ -80,6 +84,7 @@ export function BillingPage() {
           <div className="panel">
             <strong>Status: {billing?.status ?? "loading"}</strong>
             {billing?.currentPeriodEnd ? <p className="muted">Current period ends {new Date(billing.currentPeriodEnd).toLocaleDateString()}.</p> : null}
+            {billing?.licenseReasonCode ? <p className="muted">License status: {billing.licenseReasonCode}</p> : null}
           </div>
           {active ? (
             <button className="secondary" type="button" onClick={() => void openPortal()} disabled={busy}>Manage billing</button>

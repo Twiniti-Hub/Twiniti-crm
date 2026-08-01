@@ -11,6 +11,7 @@ import {
   type Db
 } from "@twiniti/db";
 import { audit, requireActor, requireOrgId, requireUserRole, sendError } from "../auth-hook.js";
+import { buildSubscriptionState, enqueueLicenseSubscriptionSync } from "../license-jobs.js";
 
 type RawBodyRequest = FastifyRequest & { rawBody?: string | Buffer };
 
@@ -26,7 +27,8 @@ function stripeObjectId(value: unknown): string | null {
 }
 
 function subscriptionStatus(status: string): string {
-  if (status === "active" || status === "trialing") return "active";
+  if (status === "active") return "active";
+  if (status === "trialing") return "trialing";
   if (status === "past_due" || status === "unpaid" || status === "incomplete" || status === "paused") return "past_due";
   if (status === "canceled" || status === "incomplete_expired") return "canceled";
   return "pending";
@@ -70,7 +72,7 @@ export async function createOrganizationCheckoutSession(
     },
     success_url: `${env.WEB_ORIGIN.replace(/\/$/, "")}/billing?success=1`,
     cancel_url: `${env.WEB_ORIGIN.replace(/\/$/, "")}/billing?canceled=1`
-  });
+  }, { idempotencyKey: `organization-checkout:${input.organizationId}` });
 
   await updateOrganizationBilling(db, input.organizationId, {
     status: "pending",
@@ -93,9 +95,9 @@ async function applySubscriptionEvent(db: Db, event: Stripe.Event, subscription:
     await ensureOrganizationBilling(db, organizationId);
     billing = await getOrganizationBilling(db, organizationId);
   }
-  if (!billing) return;
+  if (!billing) return null;
 
-  if (billing.lastStripeEventCreatedAt && billing.lastStripeEventCreatedAt.getTime() > event.created * 1000) return;
+  if (billing.lastStripeEventCreatedAt && billing.lastStripeEventCreatedAt.getTime() > event.created * 1000) return billing.organizationId;
   const items = subscription.items && typeof subscription.items === "object"
     ? subscription.items as { data?: Array<{ price?: { id?: string } }> }
     : {};
@@ -105,10 +107,11 @@ async function applySubscriptionEvent(db: Db, event: Stripe.Event, subscription:
     stripeCustomerId: customerId,
     stripeSubscriptionId: subscriptionId,
     ...(priceId ? { stripePriceId: priceId } : {}),
-    currentPeriodEnd: subscriptionPeriodEnd(subscription.current_period_end),
+    ...(subscriptionPeriodEnd(subscription.current_period_end) ? { currentPeriodEnd: subscriptionPeriodEnd(subscription.current_period_end) } : {}),
     cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
     lastStripeEventCreatedAt: new Date(event.created * 1000)
   });
+  return billing.organizationId;
 }
 
 async function applyCheckoutCompleted(db: Db, event: Stripe.Event, session: Record<string, unknown>) {
@@ -118,9 +121,9 @@ async function applyCheckoutCompleted(db: Db, event: Stripe.Event, session: Reco
   const organizationId = typeof metadata.organizationId === "string"
     ? metadata.organizationId
     : typeof session.client_reference_id === "string" ? session.client_reference_id : null;
-  if (!organizationId) return;
+  if (!organizationId) return null;
   const billing = await ensureOrganizationBilling(db, organizationId);
-  if (billing.lastStripeEventCreatedAt && billing.lastStripeEventCreatedAt.getTime() > event.created * 1000) return;
+  if (billing.lastStripeEventCreatedAt && billing.lastStripeEventCreatedAt.getTime() > event.created * 1000) return organizationId;
   const paymentStatus = String(session.payment_status ?? "");
   await updateOrganizationBilling(db, organizationId, {
     status: paymentStatus === "paid" || paymentStatus === "no_payment_required" ? "active" : "pending",
@@ -129,6 +132,7 @@ async function applyCheckoutCompleted(db: Db, event: Stripe.Event, session: Reco
     stripeCheckoutSessionId: stripeObjectId(session.id),
     lastStripeEventCreatedAt: new Date(event.created * 1000)
   });
+  return organizationId;
 }
 
 export async function registerBillingRoutes(app: FastifyInstance, db: Db, env: AppEnv) {
@@ -144,7 +148,12 @@ export async function registerBillingRoutes(app: FastifyInstance, db: Db, env: A
           customerId: billing?.stripeCustomerId ?? null,
           subscriptionId: billing?.stripeSubscriptionId ?? null,
           currentPeriodEnd: billing?.currentPeriodEnd?.toISOString() ?? null,
-          cancelAtPeriodEnd: billing?.cancelAtPeriodEnd ?? false
+          cancelAtPeriodEnd: billing?.cancelAtPeriodEnd ?? false,
+          licenseProvisioningStatus: billing?.licenseProvisioningStatus ?? "pending",
+          licenseDecision: billing?.licenseDecision ?? null,
+          licenseStatus: billing?.licenseStatus ?? null,
+          licenseReasonCode: billing?.licenseReasonCode ?? null,
+          licenseGraceCutoff: billing?.licenseGraceCutoff?.toISOString() ?? null
         }
       };
     } catch (error) {
@@ -214,18 +223,19 @@ export async function registerBillingRoutes(app: FastifyInstance, db: Db, env: A
     });
     if (!firstDelivery) return { received: true, duplicate: true };
 
+    let syncOrganizationId: string | null = organizationId;
     switch (event.type) {
       case "checkout.session.completed":
-        await applyCheckoutCompleted(db, event, object);
+        syncOrganizationId = await applyCheckoutCompleted(db, event, object);
         break;
       case "customer.subscription.created":
       case "customer.subscription.updated":
       case "customer.subscription.deleted":
-        await applySubscriptionEvent(db, event, object);
+        syncOrganizationId = await applySubscriptionEvent(db, event, object);
         break;
       case "invoice.paid":
         if (stripeObjectId(object.subscription)) {
-          await applySubscriptionEvent(db, event, {
+          syncOrganizationId = await applySubscriptionEvent(db, event, {
             id: object.subscription,
             customer: object.customer,
             status: "active",
@@ -236,7 +246,7 @@ export async function registerBillingRoutes(app: FastifyInstance, db: Db, env: A
         break;
       case "invoice.payment_failed":
         if (stripeObjectId(object.subscription)) {
-          await applySubscriptionEvent(db, event, {
+          syncOrganizationId = await applySubscriptionEvent(db, event, {
             id: object.subscription,
             customer: object.customer,
             status: "past_due",
@@ -246,6 +256,16 @@ export async function registerBillingRoutes(app: FastifyInstance, db: Db, env: A
         break;
       default:
         break;
+    }
+    if (syncOrganizationId) {
+      const billing = await getOrganizationBilling(db, syncOrganizationId);
+      if (billing) {
+        await enqueueLicenseSubscriptionSync(db, env, buildSubscriptionState(billing, {
+          eventId: event.id,
+          eventCreatedAt: new Date(event.created * 1000),
+          gracePeriodDays: env.LICENSE_API_GRACE_PERIOD_DAYS
+        }));
+      }
     }
     await markStripeEventProcessed(db, event.id);
     return { received: true };

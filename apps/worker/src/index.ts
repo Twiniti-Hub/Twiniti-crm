@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
 import { and, eq } from "drizzle-orm";
 import { loadEnv } from "@twiniti/config";
+import { createLicenseApiClient, type ProvisionOrganizationInput, type SubscriptionStateInput } from "@twiniti/license-api";
 import {
   campaignRecipients,
   campaigns,
@@ -14,6 +15,7 @@ import {
   emailSends,
   enqueueJob,
   getContactById,
+  getOrganizationBilling,
   findContactsByEmails,
   findContactByExternalRecordId,
   getDb,
@@ -36,6 +38,7 @@ import {
   upsertContactByEmail,
   upsertContactIdentity,
   updateContact,
+  updateOrganizationLicense,
   upsertExternalRecordId,
   upsertPropertyDefinitionFromHubspot,
   webhookEvents,
@@ -55,6 +58,7 @@ const env = loadEnv({
 });
 
 const db = getDb(env.DATABASE_URL);
+const licenseApi = createLicenseApiClient(env);
 const CHECKPOINT_EVERY = 25;
 
 type ContactImportStats = {
@@ -906,8 +910,50 @@ async function processContactCompanyReconciliation(payload: { organizationId: st
   });
 }
 
+async function processLicenseProvision(payload: ProvisionOrganizationInput & { idempotencyKey: string }) {
+  const result = await licenseApi.provisionOrganization(payload, payload.idempotencyKey);
+  const data = result && typeof result === "object" ? result as Record<string, unknown> : {};
+  const read = (keys: string[]) => keys.map((key) => data[key]).find((value): value is string => typeof value === "string") ?? null;
+  await updateOrganizationLicense(db, payload.externalOrganizationId, {
+    licenseProvisioningStatus: "provisioned",
+    licenseOrganizationId: read(["organizationId", "organization_id", "id"]),
+    licenseId: read(["licenseId", "license_id"]),
+    licenseUserId: read(["userId", "user_id"])
+  });
+}
+
+async function processLicenseSubscriptionSync(payload: SubscriptionStateInput & { idempotencyKey: string }) {
+  await licenseApi.synchronizeSubscriptionState(payload, payload.idempotencyKey);
+  await updateOrganizationLicense(db, payload.externalOrganizationId, {
+    licenseProvisioningStatus: "provisioned",
+    lastLicenseSyncAt: new Date()
+  });
+}
+
+async function assertWorkerLicense(organizationId: string) {
+  const billing = await getOrganizationBilling(db, organizationId);
+  if (!billing || !["active", "trialing"].includes(billing.status)) {
+    throw new Error("Organization billing is not active");
+  }
+  if (!licenseApi.configured) return;
+  const check = await licenseApi.checkUserLicense({
+    externalOrganizationId: organizationId,
+    productCode: env.LICENSE_API_PRODUCT_CODE,
+    source: "twiniti-crm"
+  });
+  if (check.decision !== "allow") {
+    throw new Error(`License_API denied worker action: ${check.reasonCode}`);
+  }
+}
+
 async function handleJob(kind: string, payload: Record<string, unknown>, organizationId: string | null) {
   switch (kind) {
+    case "license.provision":
+      await processLicenseProvision(payload as ProvisionOrganizationInput & { idempotencyKey: string });
+      return;
+    case "license.subscription.sync":
+      await processLicenseSubscriptionSync(payload as SubscriptionStateInput & { idempotencyKey: string });
+      return;
     case "campaign.send":
       if (!organizationId) throw new Error("Campaign jobs require an organization");
       await processCampaignSend({ ...(payload as { campaignId: string }), organizationId });
@@ -975,6 +1021,9 @@ async function tick() {
   const claimed = await claimJobs(db, 5);
   for (const job of claimed) {
     try {
+      if (job.organizationId && !job.kind.startsWith("license.")) {
+        await assertWorkerLicense(job.organizationId);
+      }
       await handleJob(job.kind, job.payload as Record<string, unknown>, job.organizationId);
       await completeJob(db, job.id);
     } catch (error) {

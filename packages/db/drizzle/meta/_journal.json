@@ -36,6 +36,20 @@
       "when": 1753963200000,
       "tag": "0004_organization_billing",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1754053200000,
+      "tag": "0005_license_integration",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1754056800000,
+      "tag": "0006_organization_provisioning_key",
+      "breakpoints": true
     }
   ]
 }

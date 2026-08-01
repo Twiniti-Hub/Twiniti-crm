@@ -30,6 +30,7 @@ import {
   sendError
 } from "../auth-hook.js";
 import { createOrganizationCheckoutSession } from "./billing.js";
+import { enqueueLicenseProvisioning } from "../license-jobs.js";
 
 async function sendInviteEmail(
   env: AppEnv,
@@ -103,7 +104,10 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         displayName: actor.displayName ?? null,
         needsSetup: Boolean(actor.needsSetup),
         isSuperAdmin: Boolean(actor.isSuperAdmin),
-        billingStatus: actor.billingStatus ?? "active"
+        billingStatus: actor.billingStatus ?? "active",
+        licenseDecision: actor.licenseDecision ?? null,
+        licenseReasonCode: actor.licenseReasonCode ?? null,
+        licenseStatus: actor.licenseStatus ?? null
       }
     };
   });
@@ -117,9 +121,11 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       const input = createOrganizationSchema.parse(request.body);
 
       if (!actor.needsSetup && !actor.isSuperAdmin) {
-        return reply.code(409).send({
-          error: { code: "conflict", message: "You already belong to a company" }
-        });
+        if (!actor.organizationId || actor.role !== "admin") {
+          return reply.code(409).send({
+            error: { code: "conflict", message: "You already belong to a company" }
+          });
+        }
       }
 
       const joinAsAdmin = actor.isSuperAdmin
@@ -141,7 +147,22 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
             }
         : {})
       });
-      await ensureOrganizationBilling(db, created.organization.id);
+      const billing = await ensureOrganizationBilling(db, created.organization.id);
+
+      if (actor.organizationId === created.organization.id || joinAsAdmin) {
+        await enqueueLicenseProvisioning(db, env, {
+          externalOrganizationId: created.organization.id,
+          organizationName: created.organization.name,
+          billingEmail: actor.email,
+          externalUserId: created.admin?.id ?? actor.id,
+          userSubject: created.admin?.hexclaveSubject ?? subject,
+          userEmail: created.admin?.email ?? actor.email,
+          userDisplayName: created.admin?.displayName ?? actor.displayName,
+          productCode: env.LICENSE_API_PRODUCT_CODE,
+          planCode: env.LICENSE_API_PLAN_CODE,
+          source: "twiniti-crm"
+        });
+      }
 
       let checkoutUrl: string | null = null;
       let checkoutSessionId: string | null = null;
@@ -188,6 +209,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
           createdAt: created.organization.createdAt.toISOString(),
           joinedAsAdmin: joinAsAdmin,
           billingStatus: "pending",
+          licenseProvisioningStatus: billing.licenseProvisioningStatus,
           checkoutUrl,
           checkoutSessionId,
           invitation

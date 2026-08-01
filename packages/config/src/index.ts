@@ -19,6 +19,17 @@ export const envSchema = z.object({
   STRIPE_PRICE_ID: z.string().optional().default(""),
   STRIPE_TRIAL_PERIOD_DAYS: z.coerce.number().int().min(0).max(730).default(7),
   STRIPE_BILLING_PORTAL_CONFIGURATION_ID: z.string().optional().default(""),
+  LICENSE_API_URL: optionalUrl,
+  LICENSE_API_API_KEY: z.string().optional().default(""),
+  LICENSE_API_PRODUCT_CODE: z.string().trim().min(1).default("twiniti-loop"),
+  LICENSE_API_PLAN_CODE: z.string().trim().min(1).default("standard"),
+  LICENSE_API_GRACE_PERIOD_DAYS: z.coerce.number().int().min(0).max(90).default(7),
+  LICENSE_API_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(250).max(30_000).default(5_000),
+  LICENSE_API_CACHE_TTL_MS: z.coerce.number().int().min(0).max(60_000).default(15_000),
+  LICENSE_API_PROVISION_PATH: z.string().default("/api/v1/integrations/twiniti-crm/provision"),
+  LICENSE_API_SYNC_PATH: z.string().default("/api/v1/integrations/twiniti-crm/subscription"),
+  LICENSE_API_CHECK_PATH: z.string().default("/api/v1/integrations/twiniti-crm/license/check"),
+  LICENSE_API_REQUIRED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   BOOTSTRAP_ORG_NAME: z.string().default("Twiniti"),
   BOOTSTRAP_OWNER_SUBJECT: z.string().optional().default(""),
   SUPER_ADMIN_EMAILS: z.string().default("george.broadbent@twiniti.ai"),
@@ -58,5 +69,8 @@ export function assertProductionApiConfiguration(env: AppEnv) {
   }
   for (const key of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_ID"] as const) {
     if (!env[key]) throw new Error(`Production API requires ${key}`);
+  }
+  if (!env.LICENSE_API_URL || !env.LICENSE_API_API_KEY) {
+    throw new Error("Production API requires License_API URL and API key");
   }
 }

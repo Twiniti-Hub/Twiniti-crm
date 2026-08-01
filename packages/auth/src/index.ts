@@ -1,5 +1,6 @@
 import { HexclaveServerApp } from "@hexclave/js";
 import { isSuperAdminEmail, type AppEnv } from "@twiniti/config";
+import { createLicenseApiClient, type LicenseCheck } from "@twiniti/license-api";
 import {
   ensureBootstrapOrg,
   findAgentByCredentialHash,
@@ -9,6 +10,7 @@ import {
   getOrganizationById,
   hashCredential,
   touchAgent,
+  updateOrganizationLicense,
   type Db
 } from "@twiniti/db";
 
@@ -25,6 +27,9 @@ export type AuthActor = {
   hexclaveSubject?: string;
   organizationName?: string | null;
   billingStatus?: string;
+  licenseDecision?: string;
+  licenseReasonCode?: string;
+  licenseStatus?: string | null;
 };
 
 export type CrmRole = "admin" | "member";
@@ -179,6 +184,54 @@ async function resolveBootstrapActor(db: Db, env: AppEnv): Promise<AuthActor> {
   };
 }
 
+function parseLicenseDate(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+async function checkOrganizationLicense(
+  db: Db,
+  env: AppEnv,
+  input: { organizationId: string; userId?: string | null; subject?: string | null; email?: string | null },
+  localStatus: string
+) {
+  const client = createLicenseApiClient(env);
+  if (!client.configured) {
+    return {
+      billingStatus: client.required ? "license_unavailable" : localStatus,
+      check: null as LicenseCheck | null
+    };
+  }
+  const check = await client.checkUserLicense({
+    externalOrganizationId: input.organizationId,
+    externalUserId: input.userId ?? null,
+    userSubject: input.subject ?? null,
+    email: input.email ?? null,
+    productCode: env.LICENSE_API_PRODUCT_CODE,
+    source: "twiniti-crm"
+  });
+  await updateOrganizationLicense(db, input.organizationId, {
+    licenseDecision: check.decision,
+    licenseStatus: check.licenseStatus ?? null,
+    licenseId: check.licenseId ?? null,
+    licenseReasonCode: check.reasonCode,
+    licenseOrganizationId: check.organizationId,
+    licenseExpiresAt: parseLicenseDate(check.expiresAt),
+    licenseGraceCutoff: parseLicenseDate(check.graceCutoff),
+    lastLicenseCheckedAt: new Date()
+  });
+  const billingActive = localStatus === "active" || localStatus === "trialing";
+  return {
+    billingStatus: check.decision === "allow" && billingActive
+      ? localStatus
+      : check.decision === "restricted"
+        ? "restricted"
+        : check.decision === "deny" ? "license_denied" : "license_unavailable",
+    check
+  };
+}
+
 export async function resolveRequestActor(
   db: Db,
   requestLike: RequestLike,
@@ -192,6 +245,11 @@ export async function resolveRequestActor(
     if (!agent) return null;
     await touchAgent(db, agent.id);
     const billing = await getOrganizationBilling(db, agent.organizationId);
+    const license = await checkOrganizationLicense(db, env, {
+      organizationId: agent.organizationId,
+      userId: agent.id,
+      subject: agent.id
+    }, billing?.status ?? "active");
     return {
       type: "agent",
       id: agent.id,
@@ -200,7 +258,10 @@ export async function resolveRequestActor(
       displayName: agent.name,
       needsSetup: false,
       isSuperAdmin: false,
-      billingStatus: billing?.status ?? "active"
+      billingStatus: license.billingStatus,
+      licenseDecision: license.check?.decision,
+      licenseReasonCode: license.check?.reasonCode,
+      licenseStatus: license.check?.licenseStatus
     };
   }
 
@@ -242,6 +303,14 @@ export async function resolveRequestActor(
 
   const organization = await getOrganizationById(db, crmUser.organizationId);
   const billing = await getOrganizationBilling(db, crmUser.organizationId);
+  const license = superAdmin
+    ? { billingStatus: billing?.status ?? "active", check: null as LicenseCheck | null }
+    : await checkOrganizationLicense(db, env, {
+        organizationId: crmUser.organizationId,
+        userId: crmUser.id,
+        subject,
+        email: crmUser.email ?? email
+      }, billing?.status ?? "active");
 
   return {
     type: "user",
@@ -254,6 +323,9 @@ export async function resolveRequestActor(
     isSuperAdmin: superAdmin,
     hexclaveSubject: subject,
     organizationName: organization?.name ?? null,
-    billingStatus: billing?.status ?? "active"
+    billingStatus: license.billingStatus,
+    licenseDecision: license.check?.decision,
+    licenseReasonCode: license.check?.reasonCode,
+    licenseStatus: license.check?.licenseStatus
   };
 }

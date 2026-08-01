@@ -331,7 +331,32 @@ export async function createOrganization(
     displayName?: string | null;
   }
 ) {
-  const [org] = await db.insert(organizations).values({ name: input.name.trim() }).returning();
+  const provisioningKey = input.adminSubject ? `twiniti-crm:user:${input.adminSubject}` : null;
+  if (input.adminSubject) {
+    const existing = await db.select({ organization: organizations, admin: crmUsers })
+      .from(crmUsers)
+      .innerJoin(organizations, eq(organizations.id, crmUsers.organizationId))
+      .where(eq(crmUsers.hexclaveSubject, input.adminSubject))
+      .limit(1);
+    if (existing[0]) return { organization: existing[0].organization, admin: existing[0].admin, created: false };
+  }
+  const [org] = await db.insert(organizations).values({
+    name: input.name.trim(),
+    provisioningKey
+  }).onConflictDoNothing({ target: organizations.provisioningKey }).returning();
+  if (!org && provisioningKey) {
+    const existing = await db.select().from(organizations)
+      .where(eq(organizations.provisioningKey, provisioningKey))
+      .limit(1);
+    if (existing[0]) {
+      const [admin] = await db.select().from(crmUsers)
+        .where(eq(crmUsers.hexclaveSubject, input.adminSubject!))
+        .limit(1);
+      return { organization: existing[0], admin: admin ?? null, created: false };
+    }
+    throw new Error("Unable to create organization");
+  }
+  if (!org) throw new Error("Unable to create organization");
   await seedDefaultPropertyDefinitions(db, org.id);
   let admin = null;
   if (input.adminSubject) {
@@ -341,10 +366,10 @@ export async function createOrganization(
       email: input.email ?? null,
       displayName: input.displayName ?? null,
       role: "admin"
-    }).returning();
-    admin = created;
+    }).onConflictDoNothing({ target: crmUsers.hexclaveSubject }).returning();
+    admin = created ?? await findCrmUserBySubject(db, input.adminSubject);
   }
-  return { organization: org, admin };
+  return { organization: org, admin, created: true };
 }
 
 export async function getOrganizationBilling(db: Db, organizationId: string) {
@@ -360,8 +385,11 @@ export async function ensureOrganizationBilling(db: Db, organizationId: string) 
   const [created] = await db.insert(organizationBilling).values({
     organizationId,
     status: "pending"
-  }).returning();
-  return created;
+  }).onConflictDoNothing({ target: organizationBilling.organizationId }).returning();
+  if (created) return created;
+  const concurrent = await getOrganizationBilling(db, organizationId);
+  if (!concurrent) throw new Error("Unable to create organization billing state");
+  return concurrent;
 }
 
 export async function updateOrganizationBilling(
@@ -376,6 +404,30 @@ export async function updateOrganizationBilling(
     currentPeriodEnd: Date | null;
     cancelAtPeriodEnd: boolean;
     lastStripeEventCreatedAt: Date | null;
+  }>
+) {
+  const [updated] = await db.update(organizationBilling).set({
+    ...input,
+    updatedAt: new Date()
+  }).where(eq(organizationBilling.organizationId, organizationId)).returning();
+  return updated ?? null;
+}
+
+export async function updateOrganizationLicense(
+  db: Db,
+  organizationId: string,
+  input: Partial<{
+    licenseProvisioningStatus: string;
+    licenseOrganizationId: string | null;
+    licenseId: string | null;
+    licenseUserId: string | null;
+    licenseDecision: string | null;
+    licenseStatus: string | null;
+    licenseReasonCode: string | null;
+    licenseExpiresAt: Date | null;
+    licenseGraceCutoff: Date | null;
+    lastLicenseCheckedAt: Date | null;
+    lastLicenseSyncAt: Date | null;
   }>
 ) {
   const [updated] = await db.update(organizationBilling).set({
@@ -960,16 +1012,22 @@ export async function isEmailSuppressed(db: Db, organizationId: string, email: s
 
 export async function enqueueJob(
   db: Db,
-  input: { organizationId?: string | null; kind: string; payload: Record<string, unknown>; priority?: number; availableAt?: Date }
+  input: { organizationId?: string | null; kind: string; payload: Record<string, unknown>; dedupeKey?: string; priority?: number; availableAt?: Date }
 ) {
   const [job] = await db.insert(jobs).values({
     organizationId: input.organizationId ?? null,
     kind: input.kind,
     payload: input.payload,
+    dedupeKey: input.dedupeKey ?? null,
     priority: input.priority ?? 100,
     availableAt: input.availableAt ?? new Date()
-  }).returning();
-  return job;
+  }).onConflictDoNothing({ target: jobs.dedupeKey }).returning();
+  if (job) return job;
+  if (input.dedupeKey) {
+    const existing = await db.select().from(jobs).where(eq(jobs.dedupeKey, input.dedupeKey)).limit(1);
+    if (existing[0]) return existing[0];
+  }
+  throw new Error("Unable to enqueue job");
 }
 
 export async function claimJobs(db: Db, limit = 10) {

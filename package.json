@@ -11,7 +11,7 @@
     "build": "pnpm -r build",
     "check": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
-    "test": "pnpm --filter @twiniti/db test && pnpm --filter @twiniti/email test && pnpm --filter @twiniti/api test && pnpm --filter @twiniti/web test",
+    "test": "pnpm --filter @twiniti/db test && pnpm --filter @twiniti/email test && pnpm --filter @twiniti/license-api test && pnpm --filter @twiniti/api test && pnpm --filter @twiniti/web test",
     "db:generate": "pnpm --filter @twiniti/db db:generate",
     "db:migrate": "pnpm --filter @twiniti/db db:migrate"
   },

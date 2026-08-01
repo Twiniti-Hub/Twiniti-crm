@@ -9,4 +9,7 @@ export type Me = {
   needsSetup: boolean;
   isSuperAdmin: boolean;
   billingStatus?: string;
+  licenseDecision?: string | null;
+  licenseReasonCode?: string | null;
+  licenseStatus?: string | null;
 };
