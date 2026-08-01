@@ -36,6 +36,8 @@ services:
         sync: false
       - key: STRIPE_PRICE_ID
         sync: false
+      - key: STRIPE_TRIAL_PERIOD_DAYS
+        value: "7"
       - key: STRIPE_BILLING_PORTAL_CONFIGURATION_ID
         sync: false
       - key: AUTH_DISABLED

@@ -17,6 +17,7 @@ export const envSchema = z.object({
   STRIPE_SECRET_KEY: z.string().optional().default(""),
   STRIPE_WEBHOOK_SECRET: z.string().optional().default(""),
   STRIPE_PRICE_ID: z.string().optional().default(""),
+  STRIPE_TRIAL_PERIOD_DAYS: z.coerce.number().int().min(0).max(730).default(7),
   STRIPE_BILLING_PORTAL_CONFIGURATION_ID: z.string().optional().default(""),
   BOOTSTRAP_ORG_NAME: z.string().default("Twiniti"),
   BOOTSTRAP_OWNER_SUBJECT: z.string().optional().default(""),

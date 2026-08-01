@@ -57,8 +57,17 @@ export async function createOrganizationCheckoutSession(
     customer: billing.stripeCustomerId ?? undefined,
     customer_email: billing.stripeCustomerId ? undefined : input.customerEmail ?? undefined,
     client_reference_id: input.organizationId,
+    allow_promotion_codes: true,
     metadata: { organizationId: input.organizationId },
-    subscription_data: { metadata: { organizationId: input.organizationId } },
+    subscription_data: {
+      metadata: { organizationId: input.organizationId },
+      ...(env.STRIPE_TRIAL_PERIOD_DAYS > 0
+        ? {
+            trial_period_days: env.STRIPE_TRIAL_PERIOD_DAYS,
+            trial_settings: { end_behavior: { missing_payment_method: "cancel" as const } }
+          }
+        : {})
+    },
     success_url: `${env.WEB_ORIGIN.replace(/\/$/, "")}/billing?success=1`,
     cancel_url: `${env.WEB_ORIGIN.replace(/\/$/, "")}/billing?canceled=1`
   });
@@ -112,8 +121,9 @@ async function applyCheckoutCompleted(db: Db, event: Stripe.Event, session: Reco
   if (!organizationId) return;
   const billing = await ensureOrganizationBilling(db, organizationId);
   if (billing.lastStripeEventCreatedAt && billing.lastStripeEventCreatedAt.getTime() > event.created * 1000) return;
+  const paymentStatus = String(session.payment_status ?? "");
   await updateOrganizationBilling(db, organizationId, {
-    status: session.payment_status === "paid" ? "active" : "pending",
+    status: paymentStatus === "paid" || paymentStatus === "no_payment_required" ? "active" : "pending",
     stripeCustomerId: stripeObjectId(session.customer),
     stripeSubscriptionId: stripeObjectId(session.subscription),
     stripeCheckoutSessionId: stripeObjectId(session.id),
