@@ -1,5 +1,6 @@
 import type { AppEnv } from "@twiniti/config";
 import {
+  completeJob,
   enqueueJob,
   updateOrganizationLicense,
   type Db

@@ -7,6 +7,7 @@ type Billing = {
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
   licenseDecision?: string | null;
+  licenseStatus?: string | null;
   licenseReasonCode?: string | null;
   licenseGraceCutoff?: string | null;
 };
@@ -65,6 +66,8 @@ export function BillingPage() {
 
   const active = (billing?.status === "active" || billing?.status === "trialing")
     && (!billing?.licenseDecision || billing.licenseDecision === "allow");
+  const licenseExpired = billing?.licenseStatus === "expired"
+    || billing?.licenseReasonCode === "LICENSE_EXPIRED";
 
   return (
     <div className="auth-page">
@@ -73,10 +76,16 @@ export function BillingPage() {
         <div className="stack-form">
           <div>
             <p className="eyebrow">Client billing</p>
-            <h1>{active ? "Billing is active" : "Activate your client workspace"}</h1>
-            <p className="muted">
-              Your subscription is billed once per client organization. Users are unlimited and are not billed individually.
-            </p>
+            <h1>{active ? "Billing is active" : licenseExpired ? "Your subscription has expired" : "Activate your client workspace"}</h1>
+            {licenseExpired ? (
+              <p className="muted">
+                Restart your subscription to pick up where you left off. Your client workspace and CRM data are still here.
+              </p>
+            ) : (
+              <p className="muted">
+                Your subscription is billed once per client organization. Users are unlimited and are not billed individually.
+              </p>
+            )}
           </div>
           {canceled ? <div className="banner warning">Checkout was canceled. Your workspace remains locked until billing is completed.</div> : null}
           {success && !active ? <div className="banner info">Payment was received. We are waiting for Stripe to confirm the subscription.</div> : null}
@@ -90,7 +99,7 @@ export function BillingPage() {
             <button className="secondary" type="button" onClick={() => void openPortal()} disabled={busy}>Manage billing</button>
           ) : (
             <button className="primary" type="button" onClick={() => void startCheckout()} disabled={busy}>
-              {busy ? "Opening checkout…" : "Continue to secure checkout"}
+              {busy ? "Opening checkout…" : licenseExpired ? "Restart subscription" : "Continue to secure checkout"}
             </button>
           )}
         </div>
