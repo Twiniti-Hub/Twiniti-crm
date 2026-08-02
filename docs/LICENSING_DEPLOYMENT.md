@@ -19,7 +19,7 @@ LICENSE_API_REQUIRED=true
 
 `LICENSE_API_API_KEY` must be added as a secret in both the `twiniti-crm-api` and `twiniti-crm-worker` Render services. Do not put it in `VITE_*` variables, commit it, or reuse the Praxis key.
 
-On License_API, register the same key as a separate application credential. The current License_API middleware accepts application key variables such as `OTHERAPP_API_KEY`; use the License_API administrator surface to select the application identity and scope it to the CRM integration. The key name and value must match the CRM secret, but the CRM key must remain distinct from `PRAXIS_API_KEY`.
+On License_API, set the same key as `TWINITI_CRM_API_KEY`. The License_API public and admin authentication helpers recognize this variable as the `Twiniti CRM` application identity. The key value must match the CRM secret, but the CRM key must remain distinct from `PRAXIS_API_KEY`.
 
 ## Render setup
 
