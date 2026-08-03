@@ -57,11 +57,14 @@ the Dev versus Prod database contract and for readiness validation.
 
 `render.yaml` is the development Blueprint and `render.production.yaml` is the
 production Blueprint. Each environment contains three API services, one static
-web service, and one worker service:
+landing service, and one worker service:
 
 - API US: `REGION_CODE=us`
 - API EU: `REGION_CODE=eu`
 - API UK: `REGION_CODE=uk` in Render Frankfurt
+- Landing: separate static service with environment-specific links to the CRM
+  app's `/sign-up` and `/sign-in` routes; assign the public DNS name to this
+  service in Render
 - Worker: all three database URLs for that environment
 
 The Blueprint files contain secret placeholders only. Populate the
