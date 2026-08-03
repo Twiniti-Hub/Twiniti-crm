@@ -57,6 +57,7 @@ With `AUTH_DISABLED=true` (default when `HEXCLAVE_SECRET_SERVER_KEY` is unset), 
 - Prefer Hexclave hosted auth in production (`hexclave.config.ts`).
 - Render Blueprint secrets use `sync: false` — set them in the Render dashboard only.
 - The landing package is `apps/landing`; keep its `VITE_APP_URL` environment-specific so its sign-up and sign-in links never cross development and production.
+- Keep the supplied Twiniti dark/light logo assets in `apps/landing/public/branding` when updating the landing page identity.
 - Agent API tokens are shown once at creation; store hashes only in `agent_identities`.
 
 ## Pull requests
