@@ -1,0 +1,132 @@
+name: Weekly Security Scan
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+  pull_request:
+  push:
+
+concurrency:
+  group: security-scan-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run Semgrep
+        id: semgrep
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          semgrep scan --config auto --sarif --sarif-output semgrep.sarif .
+          scanner_status=$?
+          set -e
+
+          if [ -s semgrep.sarif ] && jq -e '.runs | type == "array"' semgrep.sarif >/dev/null; then
+            echo "scan_complete=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "scan_complete=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ "$scanner_status" -ne 0 ]; then
+            echo "::warning::Semgrep exited with status $scanner_status"
+          fi
+
+      - name: Install Gitleaks
+        run: |
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz" | tar -xz
+          sudo mv gitleaks /usr/local/bin/gitleaks
+
+      - name: Run Gitleaks
+        id: gitleaks
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          gitleaks detect --source . --report-format sarif --report-path gitleaks.sarif
+          scanner_status=$?
+          set -e
+
+          if [ -s gitleaks.sarif ] && jq -e '.runs | type == "array"' gitleaks.sarif >/dev/null; then
+            echo "scan_complete=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "scan_complete=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ "$scanner_status" -ne 0 ]; then
+            echo "::warning::Gitleaks exited with status $scanner_status"
+          fi
+
+      - name: Upload Semgrep SARIF to Twiniti Security
+        if: >-
+          always() && hashFiles('semgrep.sarif') != '' &&
+          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          SECURITY_INGEST_URL: ${{ secrets.SECURITY_INGEST_URL }}
+          SECURITY_INGEST_TOKEN: ${{ secrets.SECURITY_INGEST_TOKEN }}
+          SCAN_COMPLETE: ${{ steps.semgrep.outputs.scan_complete }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SECURITY_INGEST_URL:-}" ] || [ -z "${SECURITY_INGEST_TOKEN:-}" ]; then
+            echo "::error::SECURITY_INGEST_URL and SECURITY_INGEST_TOKEN must be configured as GitHub Actions secrets"
+            exit 1
+          fi
+          case "$SECURITY_INGEST_URL" in
+            http://*|https://*) ;;
+            *) echo "::error::SECURITY_INGEST_URL must be an http(s) URL"; exit 1 ;;
+          esac
+
+          jq -n --arg repo "${{ github.repository }}" \
+            --argjson scanComplete "${SCAN_COMPLETE:-false}" \
+            --slurpfile sarif semgrep.sarif \
+            '{repository: $repo, source: "semgrep", scanComplete: $scanComplete, sarif: $sarif[0]}' > semgrep-payload.json
+          curl --fail-with-body --show-error --connect-timeout 10 --max-time 120 \
+            -X POST "$SECURITY_INGEST_URL/api/ingest" \
+            -H "Authorization: Bearer $SECURITY_INGEST_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d @semgrep-payload.json
+
+      - name: Upload Gitleaks SARIF to Twiniti Security
+        if: >-
+          always() && hashFiles('gitleaks.sarif') != '' &&
+          (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          SECURITY_INGEST_URL: ${{ secrets.SECURITY_INGEST_URL }}
+          SECURITY_INGEST_TOKEN: ${{ secrets.SECURITY_INGEST_TOKEN }}
+          SCAN_COMPLETE: ${{ steps.gitleaks.outputs.scan_complete }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SECURITY_INGEST_URL:-}" ] || [ -z "${SECURITY_INGEST_TOKEN:-}" ]; then
+            echo "::error::SECURITY_INGEST_URL and SECURITY_INGEST_TOKEN must be configured as GitHub Actions secrets"
+            exit 1
+          fi
+          case "$SECURITY_INGEST_URL" in
+            http://*|https://*) ;;
+            *) echo "::error::SECURITY_INGEST_URL must be an http(s) URL"; exit 1 ;;
+          esac
+
+          jq -n --arg repo "${{ github.repository }}" \
+            --argjson scanComplete "${SCAN_COMPLETE:-false}" \
+            --slurpfile sarif gitleaks.sarif \
+            '{repository: $repo, source: "gitleaks", scanComplete: $scanComplete, sarif: $sarif[0]}' > gitleaks-payload.json
+          curl --fail-with-body --show-error --connect-timeout 10 --max-time 120 \
+            -X POST "$SECURITY_INGEST_URL/api/ingest" \
+            -H "Authorization: Bearer $SECURITY_INGEST_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d @gitleaks-payload.json
