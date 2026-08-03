@@ -9,3 +9,4 @@
 - Added explicit Development/Production database URL selection.
 - Added three regional API services and one multi-region worker per Render environment.
 - Fixed production-readiness checks to use `DEPLOYMENT_ENV`, allowing development services to run with `NODE_ENV=production` while selecting `Dev_*` databases.
+- Added a separate environment-specific static landing service with product messaging and CRM sign-up/sign-in links.

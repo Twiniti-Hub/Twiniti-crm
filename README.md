@@ -55,12 +55,14 @@ With `AUTH_DISABLED=true` (default when Hexclave secret is unset), the API boots
 
 ## Render
 
-`render.yaml` deploys API, static web, and worker from `development`. Secrets use `sync: false`.
+`render.yaml` deploys regional APIs, a dedicated static landing site, and the
+regional worker from `development`. Secrets use `sync: false`.
 
 The production Blueprint is [render.production.yaml](render.production.yaml).
-Both Blueprints define US, EU, and UK API services, one static web service,
-and one worker that processes all three regional queues. UK runs as a logical
-cell in the Frankfurt Render region.
+Both Blueprints define US, EU, and UK API services, one static landing service,
+and one worker that processes all three regional queues. The landing service
+links visitors to the environment's CRM app for Hexclave sign-up and sign-in.
+UK runs as a logical cell in the Frankfurt Render region.
 
 ## Import behavior
 

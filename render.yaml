@@ -210,23 +210,21 @@ services:
         sync: false
 
   - type: web
-    name: twiniti-crm-dev-web
+    name: twiniti-crm-dev-landing
     runtime: static
     branch: development
     autoDeployTrigger: checksPass
-    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/web build
-    staticPublishPath: apps/web/dist
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/landing build
+    staticPublishPath: apps/landing/dist
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
     envVars:
-      - key: VITE_API_URL
-        sync: false
-      - key: VITE_HEXCLAVE_PROJECT_ID
-        sync: false
-      - key: VITE_HEXCLAVE_PUBLISHABLE_CLIENT_KEY
-        sync: false
+      - key: VITE_APP_URL
+        value: https://twiniti-crm.onrender.com
+      - key: VITE_ENVIRONMENT_LABEL
+        value: Development preview
 
   - type: worker
     name: twiniti-crm-dev-worker
