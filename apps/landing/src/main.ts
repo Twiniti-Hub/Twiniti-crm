@@ -51,7 +51,7 @@ document.querySelector<HTMLDivElement>("#root")!.innerHTML = `
         </div>
       </section>
 
-      <section class="proof-strip"><div class="container proof-inner"><span>Everything your growth team needs to keep the loop tight</span><span class="proof-line"></span><span class="proof-item">Contacts</span><span class="proof-item">Companies</span><span class="proof-item">Campaigns</span><span class="proof-item">Workflows</span></div></section>
+      <section class="proof-strip"><div class="container proof-inner"><span>Everything your team needs to keep you in the loop</span><span class="proof-line"></span><span class="proof-item">Contacts</span><span class="proof-item">Companies</span><span class="proof-item">Campaigns</span><span class="proof-item">Workflows</span></div></section>
 
       <section id="product" class="feature-section container">
         <div class="section-intro"><p class="eyebrow">One connected workspace</p><h2>Less tab-switching.<br /><em>More forward motion.</em></h2><p>Loop brings the daily work of customer-led growth into a calm, shared system your team can actually keep up with.</p></div>
