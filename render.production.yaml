@@ -1,10 +1,10 @@
 services:
   - type: web
-    name: twiniti-crm-dev-api-us
+    name: twiniti-crm-prod-api-us
     runtime: node
-    plan: free
+    plan: starter
     region: virginia
-    branch: development
+    branch: production
     autoDeployTrigger: checksPass
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/web build && pnpm --filter @twiniti/api build
     startCommand: pnpm --filter @twiniti/api start
@@ -13,12 +13,12 @@ services:
       - key: NODE_ENV
         value: production
       - key: DEPLOYMENT_ENV
-        value: development
+        value: production
       - key: REGION_CODE
         value: us
       - key: WEB_ORIGIN
         sync: false
-      - key: DATABASE_URL_Dev_US
+      - key: DATABASE_URL_Prod_US
         sync: false
       - key: REGIONAL_APP_URL
         sync: false
@@ -70,11 +70,11 @@ services:
         sync: false
 
   - type: web
-    name: twiniti-crm-dev-api-eu
+    name: twiniti-crm-prod-api-eu
     runtime: node
-    plan: free
+    plan: starter
     region: frankfurt
-    branch: development
+    branch: production
     autoDeployTrigger: checksPass
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/web build && pnpm --filter @twiniti/api build
     startCommand: pnpm --filter @twiniti/api start
@@ -83,12 +83,12 @@ services:
       - key: NODE_ENV
         value: production
       - key: DEPLOYMENT_ENV
-        value: development
+        value: production
       - key: REGION_CODE
         value: eu
       - key: WEB_ORIGIN
         sync: false
-      - key: DATABASE_URL_Dev_EU
+      - key: DATABASE_URL_Prod_EU
         sync: false
       - key: REGIONAL_APP_URL
         sync: false
@@ -140,11 +140,11 @@ services:
         sync: false
 
   - type: web
-    name: twiniti-crm-dev-api-uk
+    name: twiniti-crm-prod-api-uk
     runtime: node
-    plan: free
+    plan: starter
     region: frankfurt
-    branch: development
+    branch: production
     autoDeployTrigger: checksPass
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/web build && pnpm --filter @twiniti/api build
     startCommand: pnpm --filter @twiniti/api start
@@ -153,12 +153,12 @@ services:
       - key: NODE_ENV
         value: production
       - key: DEPLOYMENT_ENV
-        value: development
+        value: production
       - key: REGION_CODE
         value: uk
       - key: WEB_ORIGIN
         sync: false
-      - key: DATABASE_URL_Dev_UK
+      - key: DATABASE_URL_Prod_UK
         sync: false
       - key: REGIONAL_APP_URL
         sync: false
@@ -210,9 +210,9 @@ services:
         sync: false
 
   - type: web
-    name: twiniti-crm-dev-web
+    name: twiniti-crm-prod-web
     runtime: static
-    branch: development
+    branch: production
     autoDeployTrigger: checksPass
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/web build
     staticPublishPath: apps/web/dist
@@ -229,11 +229,11 @@ services:
         sync: false
 
   - type: worker
-    name: twiniti-crm-dev-worker
+    name: twiniti-crm-prod-worker
     runtime: node
     plan: starter
     region: frankfurt
-    branch: development
+    branch: production
     autoDeployTrigger: checksPass
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/worker build
     startCommand: pnpm --filter @twiniti/worker start
@@ -241,12 +241,12 @@ services:
       - key: NODE_ENV
         value: production
       - key: DEPLOYMENT_ENV
-        value: development
-      - key: DATABASE_URL_Dev_US
+        value: production
+      - key: DATABASE_URL_Prod_US
         sync: false
-      - key: DATABASE_URL_Dev_EU
+      - key: DATABASE_URL_Prod_EU
         sync: false
-      - key: DATABASE_URL_Dev_UK
+      - key: DATABASE_URL_Prod_UK
         sync: false
       - key: RESEND_API_KEY
         sync: false

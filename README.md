@@ -18,16 +18,17 @@ Twiniti Loop is an agent-friendly marketing CRM built with React, Fastify, Neon 
 
 ```powershell
 Copy-Item .env.example .env
-# Set DATABASE_URL to your development Neon connection string
+# Set DATABASE_URL_Dev_US, DATABASE_URL_Dev_EU, and DATABASE_URL_Dev_UK
+# to your development Neon branch connection strings
 pnpm install
-pnpm db:migrate
+pnpm db:migrate:regional
 pnpm check
 pnpm dev
 ```
 
-For regional development, also set `DATABASE_URL_EU` and `DATABASE_URL_UK`,
-then run `pnpm db:migrate:regional`. The command applies the same checked-in
-Drizzle migration chain to US, EU, and UK databases in order. See
+The command applies the same checked-in Drizzle migration chain to US, EU, and
+UK databases in order. Set `DEPLOYMENT_ENV=production` only in a protected
+production migration job. See
 [docs/REGIONAL_DATA.md](docs/REGIONAL_DATA.md).
 
 - Web: `http://localhost:5173`
@@ -55,6 +56,11 @@ With `AUTH_DISABLED=true` (default when Hexclave secret is unset), the API boots
 ## Render
 
 `render.yaml` deploys API, static web, and worker from `development`. Secrets use `sync: false`.
+
+The production Blueprint is [render.production.yaml](render.production.yaml).
+Both Blueprints define US, EU, and UK API services, one static web service,
+and one worker that processes all three regional queues. UK runs as a logical
+cell in the Frankfurt Render region.
 
 ## Import behavior
 

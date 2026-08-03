@@ -2,12 +2,22 @@ import { z } from "zod";
 import { regionCodeSchema, type RegionCode } from "@twiniti/contracts";
 
 const optionalUrl = z.string().url().optional().or(z.literal(""));
+export const deploymentEnvironmentSchema = z.enum(["development", "production"]);
+export type DeploymentEnvironment = z.infer<typeof deploymentEnvironmentSchema>;
 
 export const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  DEPLOYMENT_ENV: deploymentEnvironmentSchema.default("development"),
   PORT: z.coerce.number().int().positive().default(4000),
   WEB_ORIGIN: z.string().default("http://localhost:5173"),
-  DATABASE_URL: z.string().min(1),
+  DATABASE_URL: z.string().optional().default(""),
+  DATABASE_URL_Dev_US: z.string().optional().default(""),
+  DATABASE_URL_Dev_EU: z.string().optional().default(""),
+  DATABASE_URL_Dev_UK: z.string().optional().default(""),
+  DATABASE_URL_Prod_US: z.string().optional().default(""),
+  DATABASE_URL_Prod_EU: z.string().optional().default(""),
+  DATABASE_URL_Prod_UK: z.string().optional().default(""),
+  // Deprecated aliases retained for one transition cycle.
   DATABASE_URL_EU: z.string().optional().default(""),
   DATABASE_URL_UK: z.string().optional().default(""),
   REGION_CODE: regionCodeSchema.default("us"),
@@ -46,10 +56,37 @@ export const envSchema = z.object({
 
 export type AppEnv = z.infer<typeof envSchema>;
 
-export function regionalDatabaseUrl(env: Pick<AppEnv, "DATABASE_URL" | "DATABASE_URL_EU" | "DATABASE_URL_UK">, region: RegionCode) {
-  if (region === "eu") return env.DATABASE_URL_EU || env.DATABASE_URL;
-  if (region === "uk") return env.DATABASE_URL_UK || env.DATABASE_URL;
-  return env.DATABASE_URL;
+type RegionalDatabaseEnvironment = Pick<
+  AppEnv,
+  | "DEPLOYMENT_ENV"
+  | "DATABASE_URL"
+  | "DATABASE_URL_Dev_US"
+  | "DATABASE_URL_Dev_EU"
+  | "DATABASE_URL_Dev_UK"
+  | "DATABASE_URL_Prod_US"
+  | "DATABASE_URL_Prod_EU"
+  | "DATABASE_URL_Prod_UK"
+  | "DATABASE_URL_EU"
+  | "DATABASE_URL_UK"
+>;
+
+export function regionalDatabaseUrl(env: RegionalDatabaseEnvironment, region: RegionCode) {
+  if (env.DEPLOYMENT_ENV === "production") {
+    if (region === "eu") return env.DATABASE_URL_Prod_EU || env.DATABASE_URL;
+    if (region === "uk") return env.DATABASE_URL_Prod_UK || env.DATABASE_URL;
+    return env.DATABASE_URL_Prod_US || env.DATABASE_URL;
+  }
+  if (region === "eu") return env.DATABASE_URL_Dev_EU || env.DATABASE_URL_EU || env.DATABASE_URL;
+  if (region === "uk") return env.DATABASE_URL_Dev_UK || env.DATABASE_URL_UK || env.DATABASE_URL;
+  return env.DATABASE_URL_Dev_US || env.DATABASE_URL;
+}
+
+export function regionalDatabaseUrls(env: RegionalDatabaseEnvironment): Record<RegionCode, string> {
+  return {
+    us: regionalDatabaseUrl(env, "us"),
+    eu: regionalDatabaseUrl(env, "eu"),
+    uk: regionalDatabaseUrl(env, "uk")
+  };
 }
 
 export function parseSuperAdminEmails(value: string): string[] {
@@ -65,7 +102,11 @@ export function isSuperAdminEmail(email: string | null | undefined, env: Pick<Ap
 }
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
-  const parsed = envSchema.safeParse(source);
+  const parsed = envSchema.safeParse({
+    ...source,
+    DEPLOYMENT_ENV: source.DEPLOYMENT_ENV
+      ?? (source.NODE_ENV === "production" ? "production" : "development")
+  });
   if (!parsed.success) {
     const details = parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ");
     throw new Error(`Invalid environment: ${details}`);
@@ -80,6 +121,13 @@ export function assertProductionApiConfiguration(env: AppEnv) {
   }
   for (const key of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_ID"] as const) {
     if (!env[key]) throw new Error(`Production API requires ${key}`);
+  }
+  const productionDatabaseKey = `DATABASE_URL_Prod_${env.REGION_CODE.toUpperCase()}` as
+    | "DATABASE_URL_Prod_US"
+    | "DATABASE_URL_Prod_EU"
+    | "DATABASE_URL_Prod_UK";
+  if (!env[productionDatabaseKey] && !env.DATABASE_URL) {
+    throw new Error(`Production API requires ${productionDatabaseKey}`);
   }
   if (!env.LICENSE_API_URL || !env.LICENSE_API_API_KEY) {
     throw new Error("Production API requires License_API URL and API key");

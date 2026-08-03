@@ -1,14 +1,17 @@
 import { spawnSync } from "node:child_process";
 
+const deploymentEnvironment = process.env.DEPLOYMENT_ENV
+  ?? (process.env.NODE_ENV === "production" ? "production" : "development");
+const suffix = deploymentEnvironment === "production" ? "Prod" : "Dev";
 const targets = [
-  ["us", process.env.DATABASE_URL],
-  ["eu", process.env.DATABASE_URL_EU],
-  ["uk", process.env.DATABASE_URL_UK]
+  ["us", process.env[`DATABASE_URL_${suffix}_US`]],
+  ["eu", process.env[`DATABASE_URL_${suffix}_EU`]],
+  ["uk", process.env[`DATABASE_URL_${suffix}_UK`]]
 ];
 
 const missing = targets.filter(([, url]) => !url?.trim()).map(([region]) => region);
 if (missing.length) {
-  console.error(`[db:migrate:regional] Missing configured database URL for: ${missing.join(", ")}`);
+  console.error(`[db:migrate:regional] Missing ${deploymentEnvironment} database URL for: ${missing.join(", ")}`);
   process.exit(1);
 }
 

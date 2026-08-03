@@ -15,7 +15,9 @@ Thanks for helping build Twiniti CRM.
    pnpm dev
    ```
    For the three development databases, use `pnpm db:migrate:regional` after
-   configuring `DATABASE_URL`, `DATABASE_URL_EU`, and `DATABASE_URL_UK`.
+   configuring `DATABASE_URL_Dev_US`, `DATABASE_URL_Dev_EU`, and
+   `DATABASE_URL_Dev_UK`. Use the `Prod` variants only from a protected
+   production migration job.
 5. Run `pnpm check` before opening a pull request.
 6. Run `pnpm build` before submitting changes that affect the web or API packages.
 

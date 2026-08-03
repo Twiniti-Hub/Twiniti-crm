@@ -4,7 +4,7 @@ import * as schema from "./schema.js";
 
 export type Db = NeonHttpDatabase<typeof schema>;
 
-let cached: Db | null = null;
+const cached = new Map<string, Db>();
 
 export function createDb(connectionString: string): Db {
   const sql = neon(connectionString);
@@ -15,8 +15,9 @@ export function getDb(connectionString = process.env.DATABASE_URL): Db {
   if (!connectionString) {
     throw new Error("DATABASE_URL is required");
   }
-  if (!cached) {
-    cached = createDb(connectionString);
-  }
-  return cached;
+  const existing = cached.get(connectionString);
+  if (existing) return existing;
+  const db = createDb(connectionString);
+  cached.set(connectionString, db);
+  return db;
 }

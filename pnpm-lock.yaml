@@ -115,6 +115,9 @@ importers:
       '@twiniti/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@twiniti/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@twiniti/db':
         specifier: workspace:*
         version: link:../../packages/db

@@ -11,6 +11,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@twiniti/contracts": "workspace:*",
     "@twiniti/config": "workspace:*",
     "@twiniti/db": "workspace:*",
     "@twiniti/email": "workspace:*",

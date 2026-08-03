@@ -19,9 +19,10 @@ move the organization or create a second regional account.
 Configure these variables in the local `.env` file:
 
 ```text
-DATABASE_URL=<US database>
-DATABASE_URL_EU=<EU database>
-DATABASE_URL_UK=<UK database>
+DEPLOYMENT_ENV=development
+DATABASE_URL_Dev_US=<US development branch>
+DATABASE_URL_Dev_EU=<EU development branch>
+DATABASE_URL_Dev_UK=<UK development branch>
 ```
 
 Run:
@@ -31,19 +32,38 @@ pnpm db:migrate:regional
 ```
 
 The command applies the checked-in Drizzle migration chain sequentially to all
-three databases. It does not print connection strings. Do not edit regional
-schemas manually or run a migration against only one cell.
+three databases. For production, set `DEPLOYMENT_ENV=production` in a
+protected migration job; it will use `DATABASE_URL_Prod_US`,
+`DATABASE_URL_Prod_EU`, and `DATABASE_URL_Prod_UK`. It does not print
+connection strings. Do not edit regional schemas manually or run a migration
+against only one cell.
 
 Production deployments should run the same migration artifact independently
 against each regional Neon project before that cell is deployed. A migration
 must be backward-compatible with the currently deployed application so cells
 can be upgraded one at a time.
 
-Each API and worker instance uses `REGION_CODE` to select its cell database.
-`eu` and `uk` may both run in Render Frankfurt while using different database
-URLs; `uk` is a logical residency cell, not a claim that Render provides a UK
-region. When a cell-specific URL is absent, the service falls back to
-`DATABASE_URL`, which keeps a single-cell deployment compatible.
+Each API instance uses `REGION_CODE` and `DEPLOYMENT_ENV` to select its cell
+database. The single worker service receives all three URLs for its
+environment and processes each regional queue in sequence. `eu` and `uk` may
+both run in Render Frankfurt while using different database URLs; `uk` is a
+logical residency cell, not a claim that Render provides a UK region.
+
+## Render service layout
+
+`render.yaml` is the development Blueprint and `render.production.yaml` is the
+production Blueprint. Each environment contains three API services, one static
+web service, and one worker service:
+
+- API US: `REGION_CODE=us`
+- API EU: `REGION_CODE=eu`
+- API UK: `REGION_CODE=uk` in Render Frankfurt
+- Worker: all three database URLs for that environment
+
+The Blueprint files contain secret placeholders only. Populate the
+`sync: false` values in Render; do not copy local `.env` values into Git.
+Because Render does not re-prompt for existing `sync: false` values during a
+Blueprint update, add newly introduced secrets manually in the Dashboard.
 
 ## Current implementation boundary
 

@@ -21,7 +21,8 @@ loadDotenv({ path: path.join(rootDir, ".env") });
 const env = loadEnv({
   ...process.env,
   AUTH_DISABLED: process.env.AUTH_DISABLED ?? (process.env.HEXCLAVE_SECRET_SERVER_KEY ? "false" : "true"),
-  DATABASE_URL: process.env.DATABASE_URL ?? "postgresql://user:password@localhost:5432/twiniti_crm"
+  DEPLOYMENT_ENV: process.env.DEPLOYMENT_ENV ?? (process.env.NODE_ENV === "production" ? "production" : "development"),
+  DATABASE_URL: process.env.DATABASE_URL ?? ""
 });
 
 const app = Fastify({ logger: true });

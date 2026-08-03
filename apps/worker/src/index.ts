@@ -2,7 +2,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
 import { and, eq } from "drizzle-orm";
-import { loadEnv, regionalDatabaseUrl } from "@twiniti/config";
+import { loadEnv, regionalDatabaseUrls } from "@twiniti/config";
+import type { RegionCode } from "@twiniti/contracts";
 import { createLicenseApiClient, type ProvisionOrganizationInput, type SubscriptionStateInput } from "@twiniti/license-api";
 import {
   campaignRecipients,
@@ -54,10 +55,14 @@ loadDotenv({ path: path.join(rootDir, ".env") });
 
 const env = loadEnv({
   ...process.env,
-  DATABASE_URL: process.env.DATABASE_URL ?? "postgresql://user:password@localhost:5432/twiniti_crm"
+  DEPLOYMENT_ENV: process.env.DEPLOYMENT_ENV ?? (process.env.NODE_ENV === "production" ? "production" : "development"),
+  DATABASE_URL: process.env.DATABASE_URL ?? ""
 });
 
-const db = getDb(regionalDatabaseUrl(env, env.REGION_CODE));
+const regionalDatabaseEntries = Object.entries(regionalDatabaseUrls(env)) as Array<[RegionCode, string]>;
+const regionalDatabases = regionalDatabaseEntries.map(([region, url]) => ({ region, db: getDb(url) }));
+let activeRegion: RegionCode = regionalDatabases[0]?.region ?? "us";
+let db = regionalDatabases[0]?.db ?? getDb();
 const licenseApi = createLicenseApiClient(env);
 const CHECKPOINT_EVERY = 25;
 
@@ -1018,22 +1023,32 @@ async function handleJob(kind: string, payload: Record<string, unknown>, organiz
 }
 
 async function tick() {
-  const claimed = await claimJobs(db, 5);
-  for (const job of claimed) {
-    try {
-      if (job.organizationId && !job.kind.startsWith("license.")) {
-        await assertWorkerLicense(job.organizationId);
+  if (ticking) return;
+  ticking = true;
+  try {
+    for (const target of regionalDatabases) {
+      activeRegion = target.region;
+      db = target.db;
+      const claimed = await claimJobs(db, 5);
+      for (const job of claimed) {
+        try {
+          if (job.organizationId && !job.kind.startsWith("license.")) {
+            await assertWorkerLicense(job.organizationId);
+          }
+          await handleJob(job.kind, job.payload as Record<string, unknown>, job.organizationId);
+          await completeJob(db, job.id);
+        } catch (error) {
+          await completeJob(db, job.id, error instanceof Error ? error.message : "job failed");
+        }
       }
-      await handleJob(job.kind, job.payload as Record<string, unknown>, job.organizationId);
-      await completeJob(db, job.id);
-    } catch (error) {
-      await completeJob(db, job.id, error instanceof Error ? error.message : "job failed");
     }
+  } finally {
+    ticking = false;
   }
 }
 
-console.log("[worker] started");
-await enqueueJob(db, { kind: "noop", payload: { hello: "worker" } });
+let ticking = false;
+console.log(`[worker] started for regions: ${regionalDatabases.map(({ region }) => region).join(", ")}`);
 setInterval(() => {
   void tick();
 }, 2000);
