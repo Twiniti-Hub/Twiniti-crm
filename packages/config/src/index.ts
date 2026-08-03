@@ -115,7 +115,11 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
 }
 
 export function assertProductionApiConfiguration(env: AppEnv) {
-  if (env.NODE_ENV !== "production") return;
+  // Render runs both development and production services with NODE_ENV=production
+  // so the runtime uses production semantics. DEPLOYMENT_ENV is the data and
+  // infrastructure boundary that determines which regional database contract
+  // must be enforced.
+  if (env.DEPLOYMENT_ENV !== "production") return;
   if (env.AUTH_DISABLED || !env.HEXCLAVE_SECRET_SERVER_KEY) {
     throw new Error("Production API requires Hexclave server authentication; AUTH_DISABLED must be false");
   }
