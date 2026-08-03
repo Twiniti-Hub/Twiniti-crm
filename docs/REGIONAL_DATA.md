@@ -49,6 +49,10 @@ environment and processes each regional queue in sequence. `eu` and `uk` may
 both run in Render Frankfurt while using different database URLs; `uk` is a
 logical residency cell, not a claim that Render provides a UK region.
 
+Render runs both environments with `NODE_ENV=production` for production-grade
+runtime behavior. `DEPLOYMENT_ENV` is therefore the authoritative selector for
+the Dev versus Prod database contract and for readiness validation.
+
 ## Render service layout
 
 `render.yaml` is the development Blueprint and `render.production.yaml` is the
@@ -61,9 +65,13 @@ web service, and one worker service:
 - Worker: all three database URLs for that environment
 
 The Blueprint files contain secret placeholders only. Populate the
-`sync: false` values in Render; do not copy local `.env` values into Git.
-Because Render does not re-prompt for existing `sync: false` values during a
-Blueprint update, add newly introduced secrets manually in the Dashboard.
+`sync: false` values in Render; do not copy local `.env` values into Git. The
+Render project uses one common environment group per environment and one
+worker-database group per environment. Link the common group to that
+environment's APIs and worker; link the worker-database group only to the
+worker. Because Render does not re-prompt for existing `sync: false` values
+during a Blueprint update, add newly introduced secrets manually in the
+Dashboard.
 
 ## Current implementation boundary
 
