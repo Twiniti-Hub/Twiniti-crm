@@ -10,7 +10,8 @@ import {
 
 const appUrl = (import.meta.env.VITE_APP_URL || "http://localhost:5173").replace(/\/$/, "");
 const environmentLabel = import.meta.env.VITE_ENVIRONMENT_LABEL || "Preview";
-const googleAnalyticsId = import.meta.env.VITE_GOOGLE_ANALYTICS_ID?.trim() ?? "";
+const googleAnalyticsId =
+  import.meta.env.VITE_GOOGLE_ANALYTICS_ID?.trim() || import.meta.env.Google_Analytics?.trim() || "";
 const darkLogoPath = "/branding/Twiniti_Logo_Square_Dark.png";
 const lightLogoPath = "/branding/Twiniti_Logo_Square_Light.png";
 
