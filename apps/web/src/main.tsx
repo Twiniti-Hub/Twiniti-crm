@@ -4,6 +4,22 @@ import { HexclaveProvider, HexclaveTheme } from "@hexclave/react";
 import App from "./App";
 import { authConfigured, hexclaveApp } from "./hexclave/client";
 import "./styles.css";
+import "./analytics-consent.css";
+import {
+  getAnalyticsConsent,
+  initializeGoogleAnalytics,
+  mountAnalyticsConsentBanner
+} from "@twiniti/analytics";
+
+const googleAnalyticsId = import.meta.env.VITE_GOOGLE_ANALYTICS_ID?.trim() ?? "";
+
+if (googleAnalyticsId) {
+  if (getAnalyticsConsent() === "granted") {
+    initializeGoogleAnalytics(googleAnalyticsId);
+  } else if (getAnalyticsConsent() === null) {
+    mountAnalyticsConsentBanner({ onAccept: () => initializeGoogleAnalytics(googleAnalyticsId) });
+  }
+}
 
 const root = document.getElementById("root");
 if (!root) {
