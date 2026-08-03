@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  envDir: "../.."
+  envDir: "../..",
+  envPrefix: ["VITE_", "Google_"]
 });

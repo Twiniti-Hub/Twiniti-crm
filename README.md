@@ -71,6 +71,7 @@ Set the public `VITE_GOOGLE_ANALYTICS_ID` (for example, a `G-XXXXXXXXXX`
 GA4 Measurement ID) in each environment's common Render group. The landing
 page and CRM application share the same consent-aware integration; analytics
 does not load or send page views until the visitor accepts optional analytics.
+Local `.env` files may use the existing `Google_Analytics` alias.
 
 ## Import behavior
 

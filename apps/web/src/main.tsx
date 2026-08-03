@@ -11,7 +11,8 @@ import {
   mountAnalyticsConsentBanner
 } from "@twiniti/analytics";
 
-const googleAnalyticsId = import.meta.env.VITE_GOOGLE_ANALYTICS_ID?.trim() ?? "";
+const googleAnalyticsId =
+  import.meta.env.VITE_GOOGLE_ANALYTICS_ID?.trim() || import.meta.env.Google_Analytics?.trim() || "";
 
 if (googleAnalyticsId) {
   if (getAnalyticsConsent() === "granted") {
