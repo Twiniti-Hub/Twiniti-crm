@@ -14,3 +14,4 @@
 - Refined the landing page proof-strip messaging to address the whole team.
 - Added shared consent-aware GA4 page-view tracking for the landing page and CRM application.
 - Accepted the existing local `Google_Analytics` variable as an alias for the Vite analytics configuration.
+- Switched the deployed GA4 configuration to the supplied Google tag measurement ID.
