@@ -3,14 +3,8 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "test": "tsx --test src/lib/csv.test.ts",
-    "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit"
-  },
   "dependencies": {
+    "@twiniti/analytics": "workspace:*",
     "@hexclave/react": "^1.0.70",
     "@twiniti/contracts": "workspace:*",
     "@twiniti/ui": "workspace:*",
@@ -19,6 +13,13 @@
     "react-dom": "^19.2.8",
     "react-router": "^8.3.0",
     "vite": "^7.3.6"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "tsx --test src/lib/csv.test.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",

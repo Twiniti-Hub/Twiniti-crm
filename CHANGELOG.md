@@ -12,3 +12,4 @@
 - Added a separate environment-specific static landing service with product messaging and CRM sign-up/sign-in links.
 - Applied the supplied Twiniti dark and light logo assets to the landing page and favicon.
 - Refined the landing page proof-strip messaging to address the whole team.
+- Added shared consent-aware GA4 page-view tracking for the landing page and CRM application.

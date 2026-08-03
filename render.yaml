@@ -22,6 +22,8 @@ services:
         sync: false
       - key: REGIONAL_APP_URL
         sync: false
+      - key: VITE_GOOGLE_ANALYTICS_ID
+        sync: false
       - key: HEXCLAVE_BASE_URL
         sync: false
       - key: HEXCLAVE_PROJECT_ID
@@ -91,6 +93,8 @@ services:
       - key: DATABASE_URL_Prod_EU
         sync: false
       - key: REGIONAL_APP_URL
+        sync: false
+      - key: VITE_GOOGLE_ANALYTICS_ID
         sync: false
       - key: HEXCLAVE_BASE_URL
         sync: false
@@ -162,6 +166,8 @@ services:
         sync: false
       - key: REGIONAL_APP_URL
         sync: false
+      - key: VITE_GOOGLE_ANALYTICS_ID
+        sync: false
       - key: HEXCLAVE_BASE_URL
         sync: false
       - key: HEXCLAVE_PROJECT_ID
@@ -225,6 +231,8 @@ services:
         value: https://twiniti-crm-prod-us.onrender.com
       - key: VITE_ENVIRONMENT_LABEL
         value: Production
+      - key: VITE_GOOGLE_ANALYTICS_ID
+        sync: false
 
   - type: worker
     name: twiniti-crm-prod-worker

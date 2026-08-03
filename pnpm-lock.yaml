@@ -74,6 +74,10 @@ importers:
         version: 5.9.3
 
   apps/landing:
+    dependencies:
+      '@twiniti/analytics':
+        specifier: workspace:*
+        version: link:../../packages/analytics
     devDependencies:
       '@types/node':
         specifier: ^22.15.0
@@ -90,6 +94,9 @@ importers:
       '@hexclave/react':
         specifier: ^1.0.70
         version: 1.0.70(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@3.25.76)
+      '@twiniti/analytics':
+        specifier: workspace:*
+        version: link:../../packages/analytics
       '@twiniti/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -149,6 +156,12 @@ importers:
       tsx:
         specifier: ^4.19.4
         version: 4.23.1
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
+  packages/analytics:
+    devDependencies:
       typescript:
         specifier: ^5.8.3
         version: 5.9.3

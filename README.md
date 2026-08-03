@@ -65,6 +65,13 @@ links visitors to the environment's CRM app for Hexclave sign-up and sign-in.
 The landing page brand assets are stored in `apps/landing/public/branding`.
 UK runs as a logical cell in the Frankfurt Render region.
 
+### Google Analytics
+
+Set the public `VITE_GOOGLE_ANALYTICS_ID` (for example, a `G-XXXXXXXXXX`
+GA4 Measurement ID) in each environment's common Render group. The landing
+page and CRM application share the same consent-aware integration; analytics
+does not load or send page views until the visitor accepts optional analytics.
+
 ## Import behavior
 
 Contact and company CSV imports are queued for worker execution. The API creates any missing tenant property definitions before enqueueing the job, then splits each payload into 250-row worker chunks so smaller imports finish quickly and larger imports continue safely in the background.

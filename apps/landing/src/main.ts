@@ -1,8 +1,16 @@
 import "./styles.css";
 import "./logo-overrides.css";
+import "./analytics-consent.css";
+import {
+  getAnalyticsConsent,
+  initializeGoogleAnalytics,
+  mountAnalyticsConsentBanner,
+  trackPageView
+} from "@twiniti/analytics";
 
 const appUrl = (import.meta.env.VITE_APP_URL || "http://localhost:5173").replace(/\/$/, "");
 const environmentLabel = import.meta.env.VITE_ENVIRONMENT_LABEL || "Preview";
+const googleAnalyticsId = import.meta.env.VITE_GOOGLE_ANALYTICS_ID?.trim() ?? "";
 const darkLogoPath = "/branding/Twiniti_Logo_Square_Dark.png";
 const lightLogoPath = "/branding/Twiniti_Logo_Square_Light.png";
 
@@ -70,3 +78,21 @@ document.querySelector<HTMLDivElement>("#root")!.innerHTML = `
     <footer class="footer container"><a class="brand" href="#top"><img class="brand-logo brand-logo-dark" src="${darkLogoPath}" alt="Twiniti" /><span><strong>Loop</strong></span></a><div><a href="${link("/sign-in")}">Sign in</a><a href="${link("/sign-up")}">Sign up</a><span>© 2026 Twiniti Loop</span></div></footer>
   </div>
 `;
+
+function trackCurrentPage(): void {
+  trackPageView(`${window.location.pathname}${window.location.search}${window.location.hash}`);
+}
+
+if (googleAnalyticsId) {
+  if (getAnalyticsConsent() === "granted") {
+    initializeGoogleAnalytics(googleAnalyticsId);
+    trackCurrentPage();
+  } else if (getAnalyticsConsent() === null) {
+    mountAnalyticsConsentBanner({
+      onAccept: () => {
+        initializeGoogleAnalytics(googleAnalyticsId);
+        trackCurrentPage();
+      }
+    });
+  }
+}
