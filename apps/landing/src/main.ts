@@ -1,7 +1,10 @@
 import "./styles.css";
+import "./logo-overrides.css";
 
 const appUrl = (import.meta.env.VITE_APP_URL || "http://localhost:5173").replace(/\/$/, "");
 const environmentLabel = import.meta.env.VITE_ENVIRONMENT_LABEL || "Preview";
+const darkLogoPath = "/branding/Twiniti_Logo_Square_Dark.png";
+const lightLogoPath = "/branding/Twiniti_Logo_Square_Light.png";
 
 function link(path: string) {
   return `${appUrl}${path}`;
@@ -11,8 +14,8 @@ document.querySelector<HTMLDivElement>("#root")!.innerHTML = `
   <div class="site-shell">
     <nav class="nav container" aria-label="Primary navigation">
       <a class="brand" href="#top" aria-label="Twiniti Loop home">
-        <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
-        <span>Twiniti <strong>Loop</strong></span>
+        <img class="brand-logo brand-logo-dark" src="${darkLogoPath}" alt="Twiniti" />
+        <span><strong>Loop</strong></span>
       </a>
       <div class="nav-links">
         <a href="#product">Product</a>
@@ -59,11 +62,11 @@ document.querySelector<HTMLDivElement>("#root")!.innerHTML = `
         </div>
       </section>
 
-      <section id="why-loop" class="why-section"><div class="container why-inner"><div><p class="eyebrow">Built for trust</p><h2>Your customer data should work <em>with</em> your team.</h2></div><div class="why-points"><div><strong>01</strong><p><b>Clarity by default</b><br />A focused workspace that makes the next useful action easier to see.</p></div><div><strong>02</strong><p><b>Human approval where it matters</b><br />Automate the busywork while keeping important outbound decisions accountable.</p></div><div><strong>03</strong><p><b>Regional by design</b><br />Country-based workspace placement keeps your data boundary explicit from day one.</p></div></div></div></section>
+      <section id="why-loop" class="why-section"><div class="container why-inner"><div><img class="section-logo section-logo-light" src="${lightLogoPath}" alt="Twiniti" /><p class="eyebrow">Built for trust</p><h2>Your customer data should work <em>with</em> your team.</h2></div><div class="why-points"><div><strong>01</strong><p><b>Clarity by default</b><br />A focused workspace that makes the next useful action easier to see.</p></div><div><strong>02</strong><p><b>Human approval where it matters</b><br />Automate the busywork while keeping important outbound decisions accountable.</p></div><div><strong>03</strong><p><b>Regional by design</b><br />Country-based workspace placement keeps your data boundary explicit from day one.</p></div></div></div></section>
 
       <section class="closing-cta container"><div class="cta-panel"><div><p class="eyebrow">Start your next loop</p><h2>Give your team a clearer way forward.</h2><p>Set up your workspace, invite your team, and make the next customer conversation count.</p></div><a class="button button-light" href="${link("/sign-up")}">Create your workspace <span aria-hidden="true">→</span></a></div></section>
     </main>
 
-    <footer class="footer container"><a class="brand" href="#top"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span><span>Twiniti <strong>Loop</strong></span></a><div><a href="${link("/sign-in")}">Sign in</a><a href="${link("/sign-up")}">Sign up</a><span>© 2026 Twiniti Loop</span></div></footer>
+    <footer class="footer container"><a class="brand" href="#top"><img class="brand-logo brand-logo-dark" src="${darkLogoPath}" alt="Twiniti" /><span><strong>Loop</strong></span></a><div><a href="${link("/sign-in")}">Sign in</a><a href="${link("/sign-up")}">Sign up</a><span>© 2026 Twiniti Loop</span></div></footer>
   </div>
 `;
