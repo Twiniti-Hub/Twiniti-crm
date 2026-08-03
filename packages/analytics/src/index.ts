@@ -50,6 +50,7 @@ export function initializeGoogleAnalytics(measurementId: string): boolean {
     `script[data-twiniti-analytics="${id}"]`
   );
   if (!existingScript) {
+    // Mirrors Google's generated gtag.js snippet while keeping script loading behind consent.
     const script = document.createElement("script");
     script.async = true;
     script.dataset.twinitiAnalytics = id;
