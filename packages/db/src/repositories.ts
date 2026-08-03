@@ -34,6 +34,7 @@ import {
   workflows,
   webhookEvents
 } from "./schema.js";
+import { countryCodeSchema, regionForCountry, type RegionCode } from "@twiniti/contracts";
 
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -326,11 +327,14 @@ export async function createOrganization(
   db: Db,
   input: {
     name: string;
+    countryCode: string;
     adminSubject?: string;
     email?: string | null;
     displayName?: string | null;
   }
 ) {
+  const countryCode = countryCodeSchema.parse(input.countryCode);
+  const residencyRegion: RegionCode = regionForCountry(countryCode);
   const provisioningKey = input.adminSubject ? `twiniti-crm:user:${input.adminSubject}` : null;
   if (input.adminSubject) {
     const existing = await db.select({ organization: organizations, admin: crmUsers })
@@ -342,6 +346,7 @@ export async function createOrganization(
   }
   const [org] = await db.insert(organizations).values({
     name: input.name.trim(),
+    residencyRegion,
     provisioningKey
   }).onConflictDoNothing({ target: organizations.provisioningKey }).returning();
   if (!org && provisioningKey) {
@@ -365,6 +370,7 @@ export async function createOrganization(
       hexclaveSubject: input.adminSubject,
       email: input.email ?? null,
       displayName: input.displayName ?? null,
+      countryCode,
       role: "admin"
     }).onConflictDoNothing({ target: crmUsers.hexclaveSubject }).returning();
     admin = created ?? await findCrmUserBySubject(db, input.adminSubject);
@@ -493,6 +499,7 @@ export async function listOrganizations(db: Db) {
     .select({
       id: organizations.id,
       name: organizations.name,
+      residencyRegion: organizations.residencyRegion,
       createdAt: organizations.createdAt,
       memberCount: count(crmUsers.id)
     })
@@ -542,6 +549,7 @@ export async function findOrCreateCrmUser(
     subject: string;
     email?: string | null;
     displayName?: string | null;
+    countryCode?: string | null;
     defaultRole?: string;
   }
 ) {
@@ -552,6 +560,7 @@ export async function findOrCreateCrmUser(
     hexclaveSubject: input.subject,
     email: input.email ?? null,
     displayName: input.displayName ?? null,
+    countryCode: input.countryCode ? countryCodeSchema.parse(input.countryCode) : null,
     role: input.defaultRole ?? "member"
   }).returning();
   return created;

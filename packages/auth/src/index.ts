@@ -1,5 +1,6 @@
 import { HexclaveServerApp } from "@hexclave/js";
 import { isSuperAdminEmail, type AppEnv } from "@twiniti/config";
+import type { RegionCode } from "@twiniti/contracts";
 import { createLicenseApiClient, type LicenseCheck } from "@twiniti/license-api";
 import {
   ensureBootstrapOrg,
@@ -26,6 +27,8 @@ export type AuthActor = {
   isSuperAdmin?: boolean;
   hexclaveSubject?: string;
   organizationName?: string | null;
+  regionCode?: RegionCode | null;
+  countryCode?: string | null;
   billingStatus?: string;
   licenseDecision?: string;
   licenseReasonCode?: string;
@@ -180,6 +183,8 @@ async function resolveBootstrapActor(db: Db, env: AppEnv): Promise<AuthActor> {
     isSuperAdmin: true,
     hexclaveSubject: user.hexclaveSubject,
     organizationName: org.name,
+    regionCode: org.residencyRegion as RegionCode,
+    countryCode: user.countryCode ?? null,
     billingStatus: "active"
   };
 }
@@ -245,6 +250,7 @@ export async function resolveRequestActor(
     if (!agent) return null;
     await touchAgent(db, agent.id);
     const billing = await getOrganizationBilling(db, agent.organizationId);
+    const organization = await getOrganizationById(db, agent.organizationId);
     const license = await checkOrganizationLicense(db, env, {
       organizationId: agent.organizationId,
       userId: agent.id,
@@ -256,6 +262,8 @@ export async function resolveRequestActor(
       organizationId: agent.organizationId,
       scopes: parseScopes(agent.scopes),
       displayName: agent.name,
+      organizationName: organization?.name ?? null,
+      regionCode: (organization?.residencyRegion as RegionCode | undefined) ?? null,
       needsSetup: false,
       isSuperAdmin: false,
       billingStatus: license.billingStatus,
@@ -323,6 +331,8 @@ export async function resolveRequestActor(
     isSuperAdmin: superAdmin,
     hexclaveSubject: subject,
     organizationName: organization?.name ?? null,
+    regionCode: (organization?.residencyRegion as RegionCode | undefined) ?? null,
+    countryCode: crmUser.countryCode ?? null,
     billingStatus: license.billingStatus,
     licenseDecision: license.check?.decision,
     licenseReasonCode: license.check?.reasonCode,

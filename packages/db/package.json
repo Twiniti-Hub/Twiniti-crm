@@ -7,7 +7,7 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/hubspot.test.ts src/email-tracking.test.ts src/contact-identities.test.ts",
+    "test": "tsx --test src/hubspot.test.ts src/email-tracking.test.ts src/contact-identities.test.ts src/regional-policy.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },
@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.1",
+    "@twiniti/contracts": "workspace:*",
     "dotenv": "^16.6.1",
     "drizzle-orm": "^0.45.2",
     "zod": "^3.25.67"

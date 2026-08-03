@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Navigate } from "react-router";
 import { api } from "../lib/api";
 import type { Me } from "../lib/me";
+import { CountrySelect } from "../components/CountrySelect";
 
 type Company = {
   id: string;
@@ -34,6 +35,7 @@ export function SuperAdminPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [companyName, setCompanyName] = useState("");
+  const [countryCode, setCountryCode] = useState("");
   const [inviteAdminEmail, setInviteAdminEmail] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
@@ -98,13 +100,17 @@ export function SuperAdminPage() {
     setError(null);
     setMessage(null);
     try {
-      const body: { name: string; inviteAdminEmail?: string } = { name: companyName.trim() };
+      const body: { name: string; countryCode: string; inviteAdminEmail?: string } = {
+        name: companyName.trim(),
+        countryCode
+      };
       if (inviteAdminEmail.trim()) body.inviteAdminEmail = inviteAdminEmail.trim();
       const res = await api("/api/v1/organizations", {
         method: "POST",
         body: JSON.stringify(body)
       });
       setCompanyName("");
+      setCountryCode("");
       setInviteAdminEmail("");
       const invite = res.data?.invitation as Invitation | null | undefined;
       setMessage(
@@ -174,6 +180,10 @@ export function SuperAdminPage() {
                 required
                 placeholder="Northwind Labs"
               />
+            </label>
+            <label>
+              Country
+              <CountrySelect value={countryCode} onChange={setCountryCode} />
             </label>
             <label>
               First admin email (optional)

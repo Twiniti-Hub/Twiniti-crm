@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { regionCodeSchema, type RegionCode } from "@twiniti/contracts";
 
 const optionalUrl = z.string().url().optional().or(z.literal(""));
 
@@ -7,6 +8,10 @@ export const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   WEB_ORIGIN: z.string().default("http://localhost:5173"),
   DATABASE_URL: z.string().min(1),
+  DATABASE_URL_EU: z.string().optional().default(""),
+  DATABASE_URL_UK: z.string().optional().default(""),
+  REGION_CODE: regionCodeSchema.default("us"),
+  REGIONAL_APP_URL: optionalUrl,
   HEXCLAVE_BASE_URL: optionalUrl,
   HEXCLAVE_PROJECT_ID: z.string().optional().default(""),
   HEXCLAVE_SECRET_SERVER_KEY: z.string().optional().default(""),
@@ -40,6 +45,12 @@ export const envSchema = z.object({
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
+
+export function regionalDatabaseUrl(env: Pick<AppEnv, "DATABASE_URL" | "DATABASE_URL_EU" | "DATABASE_URL_UK">, region: RegionCode) {
+  if (region === "eu") return env.DATABASE_URL_EU || env.DATABASE_URL;
+  if (region === "uk") return env.DATABASE_URL_UK || env.DATABASE_URL;
+  return env.DATABASE_URL;
+}
 
 export function parseSuperAdminEmails(value: string): string[] {
   return value

@@ -2,7 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
 import { and, eq } from "drizzle-orm";
-import { loadEnv } from "@twiniti/config";
+import { loadEnv, regionalDatabaseUrl } from "@twiniti/config";
 import { createLicenseApiClient, type ProvisionOrganizationInput, type SubscriptionStateInput } from "@twiniti/license-api";
 import {
   campaignRecipients,
@@ -57,7 +57,7 @@ const env = loadEnv({
   DATABASE_URL: process.env.DATABASE_URL ?? "postgresql://user:password@localhost:5432/twiniti_crm"
 });
 
-const db = getDb(env.DATABASE_URL);
+const db = getDb(regionalDatabaseUrl(env, env.REGION_CODE));
 const licenseApi = createLicenseApiClient(env);
 const CHECKPOINT_EVERY = 25;
 

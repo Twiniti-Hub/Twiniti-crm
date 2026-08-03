@@ -14,6 +14,8 @@ Thanks for helping build Twiniti CRM.
    ```powershell
    pnpm dev
    ```
+   For the three development databases, use `pnpm db:migrate:regional` after
+   configuring `DATABASE_URL`, `DATABASE_URL_EU`, and `DATABASE_URL_UK`.
 5. Run `pnpm check` before opening a pull request.
 6. Run `pnpm build` before submitting changes that affect the web or API packages.
 

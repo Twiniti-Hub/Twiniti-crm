@@ -18,12 +18,17 @@ Twiniti Loop is an agent-friendly marketing CRM built with React, Fastify, Neon 
 
 ```powershell
 Copy-Item .env.example .env
-# Set DATABASE_URL to your Neon connection string
+# Set DATABASE_URL to your development Neon connection string
 pnpm install
 pnpm db:migrate
 pnpm check
 pnpm dev
 ```
+
+For regional development, also set `DATABASE_URL_EU` and `DATABASE_URL_UK`,
+then run `pnpm db:migrate:regional`. The command applies the same checked-in
+Drizzle migration chain to US, EU, and UK databases in order. See
+[docs/REGIONAL_DATA.md](docs/REGIONAL_DATA.md).
 
 - Web: `http://localhost:5173`
 - API: `http://localhost:4000`

@@ -16,6 +16,8 @@ import {
 export const organizations = pgTable("organizations", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: varchar("name", { length: 200 }).notNull(),
+  residencyRegion: varchar("residency_region", { length: 2 }).notNull().default("us"),
+  routingPolicyVersion: varchar("routing_policy_version", { length: 40 }).notNull().default("country-v1"),
   provisioningKey: varchar("provisioning_key", { length: 255 }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => ({
@@ -71,6 +73,7 @@ export const crmUsers = pgTable("crm_users", {
   hexclaveSubject: varchar("hexclave_subject", { length: 255 }).notNull(),
   email: varchar("email", { length: 320 }),
   displayName: varchar("display_name", { length: 200 }),
+  countryCode: varchar("country_code", { length: 2 }),
   role: varchar("role", { length: 32 }).notNull().default("member"),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()

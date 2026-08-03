@@ -3,11 +3,13 @@ import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { api } from "../lib/api";
 import { Brand } from "../components/Brand";
+import { CountrySelect } from "../components/CountrySelect";
 
 export function SignUpPage() {
   const app = useHexclaveApp();
   const navigate = useNavigate();
   const [companyName, setCompanyName] = useState("");
+  const [countryCode, setCountryCode] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export function SignUpPage() {
 
       const organization = await api("/api/v1/organizations", {
         method: "POST",
-        body: JSON.stringify({ name, joinAsAdmin: true })
+        body: JSON.stringify({ name, countryCode, joinAsAdmin: true })
       });
       if (organization.data.checkoutUrl) {
         window.location.assign(organization.data.checkoutUrl);
@@ -82,6 +84,10 @@ export function SignUpPage() {
               required
               autoComplete="organization"
             />
+          </label>
+          <label>
+            Country
+            <CountrySelect value={countryCode} onChange={setCountryCode} />
           </label>
           <label>
             Work email

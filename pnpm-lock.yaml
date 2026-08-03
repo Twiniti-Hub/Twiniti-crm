@@ -78,6 +78,9 @@ importers:
       '@hexclave/react':
         specifier: ^1.0.70
         version: 1.0.70(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(zod@3.25.76)
+      '@twiniti/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@twiniti/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -143,6 +146,9 @@ importers:
       '@twiniti/config':
         specifier: workspace:*
         version: link:../config
+      '@twiniti/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@twiniti/db':
         specifier: workspace:*
         version: link:../db
@@ -159,6 +165,9 @@ importers:
 
   packages/config:
     dependencies:
+      '@twiniti/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       zod:
         specifier: ^3.25.67
         version: 3.25.76
@@ -182,6 +191,9 @@ importers:
       '@neondatabase/serverless':
         specifier: ^1.0.1
         version: 1.1.0
+      '@twiniti/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       dotenv:
         specifier: ^16.6.1
         version: 16.6.1

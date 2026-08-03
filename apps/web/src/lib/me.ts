@@ -3,6 +3,8 @@ export type Me = {
   id: string;
   organizationId: string | null;
   organizationName?: string | null;
+  regionCode?: "eu" | "uk" | "us" | null;
+  countryCode?: string | null;
   role?: string | null;
   email?: string | null;
   displayName?: string | null;

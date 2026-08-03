@@ -2,10 +2,12 @@ import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { api } from "../lib/api";
 import { Brand } from "../components/Brand";
+import { CountrySelect } from "../components/CountrySelect";
 
 export function OnboardingPage() {
   const navigate = useNavigate();
   const [companyName, setCompanyName] = useState("");
+  const [countryCode, setCountryCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -21,7 +23,7 @@ export function OnboardingPage() {
     try {
       const organization = await api("/api/v1/organizations", {
         method: "POST",
-        body: JSON.stringify({ name, joinAsAdmin: true })
+        body: JSON.stringify({ name, countryCode, joinAsAdmin: true })
       });
       if (organization.data.checkoutUrl) {
         window.location.assign(organization.data.checkoutUrl);
@@ -48,6 +50,10 @@ export function OnboardingPage() {
             <p className="muted">Create your Twiniti Loop workspace to continue.</p>
           </div>
           {error ? <div className="banner error">{error}</div> : null}
+          <label>
+            Country
+            <CountrySelect value={countryCode} onChange={setCountryCode} />
+          </label>
           <label>
             Company name
             <input

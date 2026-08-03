@@ -16,6 +16,8 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
+      - key: REGION_CODE
+        value: us
       - key: HEXCLAVE_BASE_URL
         sync: false
       - key: HEXCLAVE_PROJECT_ID
@@ -98,6 +100,8 @@ services:
         value: production
       - key: DATABASE_URL
         sync: false
+      - key: REGION_CODE
+        value: us
       - key: RESEND_API_KEY
         sync: false
       - key: RESEND_FROM_EMAIL

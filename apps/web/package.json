@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@hexclave/react": "^1.0.70",
+    "@twiniti/contracts": "workspace:*",
     "@twiniti/ui": "workspace:*",
     "@vitejs/plugin-react": "^5.2.0",
     "react": "^19.2.8",

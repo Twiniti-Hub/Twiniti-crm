@@ -6,7 +6,7 @@ import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import rawBody from "fastify-raw-body";
 import swagger from "@fastify/swagger";
-import { assertProductionApiConfiguration, loadEnv } from "@twiniti/config";
+import { assertProductionApiConfiguration, loadEnv, regionalDatabaseUrl } from "@twiniti/config";
 import { ensureBootstrapOrg, getDb } from "@twiniti/db";
 import { registerAuthHook, requireActor, requireSuperAdmin } from "./auth-hook.js";
 import { registerMcpRoutes } from "./mcp.js";
@@ -25,7 +25,7 @@ const env = loadEnv({
 });
 
 const app = Fastify({ logger: true });
-const db = getDb(env.DATABASE_URL);
+const db = getDb(regionalDatabaseUrl(env, env.REGION_CODE));
 
 await app.register(cors, {
   origin: env.WEB_ORIGIN,
@@ -52,6 +52,7 @@ registerAuthHook(app, db, env);
 app.get("/health", async () => ({
   status: "ok",
   service: "twiniti-crm-api",
+  regionCode: env.REGION_CODE,
   authMode: env.AUTH_DISABLED || !env.HEXCLAVE_SECRET_SERVER_KEY ? "bootstrap" : "hexclave"
 }));
 

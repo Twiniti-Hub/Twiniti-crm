@@ -20,6 +20,7 @@ import {
   writeAudit,
   type Db
 } from "@twiniti/db";
+import { regionForCountry } from "@twiniti/contracts";
 import { sendEmail } from "@twiniti/email";
 import {
   audit,
@@ -99,6 +100,8 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         id: actor.id,
         organizationId: actor.organizationId,
         organizationName: actor.organizationName ?? null,
+        regionCode: actor.regionCode ?? null,
+        countryCode: actor.countryCode ?? null,
         role: actor.role ?? null,
         email: actor.email ?? null,
         displayName: actor.displayName ?? null,
@@ -139,6 +142,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       const subject = actor.hexclaveSubject ?? actor.id;
       const created = await createOrganization(db, {
         name: input.name,
+        countryCode: input.countryCode,
         ...(joinAsAdmin
           ? {
               adminSubject: subject,
@@ -147,6 +151,14 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
             }
         : {})
       });
+      if (!created.created && joinAsAdmin && created.organization.residencyRegion !== regionForCountry(input.countryCode)) {
+        return reply.code(409).send({
+          error: {
+            code: "region_locked",
+            message: "This account already has a residency region and it cannot be changed"
+          }
+        });
+      }
       const billing = await ensureOrganizationBilling(db, created.organization.id);
 
       if (actor.organizationId === created.organization.id || joinAsAdmin) {
@@ -206,6 +218,8 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         data: {
           id: created.organization.id,
           name: created.organization.name,
+          regionCode: created.organization.residencyRegion,
+          countryCode: input.countryCode,
           createdAt: created.organization.createdAt.toISOString(),
           joinedAsAdmin: joinAsAdmin,
           billingStatus: "pending",
@@ -230,7 +244,8 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
           id: row.id,
           name: row.name,
           createdAt: row.createdAt.toISOString(),
-          memberCount: Number(row.memberCount ?? 0)
+          memberCount: Number(row.memberCount ?? 0),
+          regionCode: row.residencyRegion
         }))
       };
     } catch (error) {
