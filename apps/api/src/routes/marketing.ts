@@ -16,6 +16,7 @@ import {
   hubspotContactsImportBodySchema,
   hubspotPropertyDefinitionsImportBodySchema,
   ingestEventSchema,
+  updateAgentIdentitySchema,
   updatePropertyDefinitionSchema
 } from "@twiniti/contracts";
 import {
@@ -811,6 +812,32 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       if (!row) return reply.code(404).send({ error: { code: "not_found", message: "Agent not found" } });
       await audit(db, actor, "agent.revoke", "agent", id);
       return { data: { id, revokedAt: row.revokedAt } };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.patch("/api/v1/agents/:id", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireUserRole(actor, "admin");
+      const input = updateAgentIdentitySchema.parse(request.body);
+      const { id } = request.params as { id: string };
+      const [row] = await db.update(agentIdentities).set({ scopes: input.scopes }).where(and(
+        eq(agentIdentities.id, id),
+        eq(agentIdentities.organizationId, requireOrgId(actor))
+      )).returning();
+      if (!row) return reply.code(404).send({ error: { code: "not_found", message: "Agent not found" } });
+      await audit(db, actor, "agent.scopes_updated", "agent", id, { scopes: input.scopes });
+      return {
+        data: {
+          id: row.id,
+          name: row.name,
+          purpose: row.purpose,
+          scopes: row.scopes,
+          revokedAt: row.revokedAt
+        }
+      };
     } catch (error) {
       return sendError(reply, error);
     }

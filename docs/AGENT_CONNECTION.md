@@ -28,6 +28,10 @@ A company admin creates an agent from the workspace's **Agents** page. The
 credential is shown only once. Store it in a secret manager and never put it
 in source code, browser code, tickets, prompts, or documentation.
 
+Admins can update the scopes of an existing active agent later without
+changing its credential. The Agents page uses **Edit access**; access changes
+take effect on the next request made with that credential.
+
 Grant only the scopes required by the integration. Examples include:
 
 - `contacts:read` — search, retrieve, and read contact timelines

@@ -2,6 +2,7 @@
 
 ## Unreleased (target 0.1.1)
 
+- Replaced free-form agent scope text with a controlled multi-select and added organization-scoped access updates for existing agents.
 - Added a copy-ready regional MCP agent connection guide with credential, scope, request, and troubleshooting examples.
 - Super Admin workspace context bypasses the client billing redirect, matching the API's platform-admin billing policy.
 - Added the first end-user help guide under `docs/help/`, covering the current CRM navigation and user workflows.
