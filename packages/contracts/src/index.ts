@@ -207,51 +207,45 @@ export const updatePropertyDefinitionSchema = createPropertyDefinitionSchema.par
   internalName: true
 });
 
+export const agentScopeSchema = z.enum([
+  "contacts:read",
+  "contacts:create",
+  "contacts:update",
+  "segments:read",
+  "lists:read",
+  "forms:read",
+  "templates:read",
+  "campaigns:read",
+  "campaigns:create",
+  "campaigns:preview",
+  "campaigns:request_approval",
+  "campaigns:send",
+  "workflows:read",
+  "reports:read",
+  "email_events:read"
+]);
+
+const agentScopesSchema = z.array(agentScopeSchema).min(1).max(30);
+
+export type AgentScope = z.infer<typeof agentScopeSchema>;
+
 export const agentIdentitySchema = z.object({
   name: z.string().trim().min(1).max(100),
   purpose: z.string().trim().min(1).max(500),
-  scopes: z.array(z.enum([
-    "contacts:read",
-    "contacts:create",
-    "contacts:update",
-    "segments:read",
-    "lists:read",
-    "forms:read",
-    "templates:read",
-    "campaigns:read",
-    "campaigns:create",
-    "campaigns:preview",
-    "campaigns:request_approval",
-    "campaigns:send",
-    "workflows:read",
-    "reports:read",
-    "email_events:read"
-  ])).min(1).max(30),
+  scopes: agentScopesSchema,
   expiresAt: z.string().datetime().nullable()
 });
 
 export const createAgentIdentitySchema = z.object({
   name: z.string().trim().min(1).max(100),
   purpose: z.string().trim().min(1).max(500),
-  scopes: z.array(z.enum([
-    "contacts:read",
-    "contacts:create",
-    "contacts:update",
-    "segments:read",
-    "lists:read",
-    "forms:read",
-    "templates:read",
-    "campaigns:read",
-    "campaigns:create",
-    "campaigns:preview",
-    "campaigns:request_approval",
-    "campaigns:send",
-    "workflows:read",
-    "reports:read",
-    "email_events:read"
-  ])).min(1).max(30),
+  scopes: agentScopesSchema,
   expiresAt: z.string().datetime().nullable().optional(),
   rateLimitPerMinute: z.number().int().positive().max(10_000).optional()
+});
+
+export const updateAgentIdentitySchema = z.object({
+  scopes: agentScopesSchema
 });
 
 export const agentIdentityResponseSchema = z.object({
