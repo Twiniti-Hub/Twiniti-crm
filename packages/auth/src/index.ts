@@ -270,6 +270,18 @@ export async function resolveRequestActor(
           source: "twiniti-crm"
         })
       : null;
+    if (check) {
+      await updateOrganizationLicense(db, agent.organizationId, {
+        licenseDecision: check.decision,
+        licenseStatus: check.licenseStatus ?? null,
+        licenseId: check.licenseId ?? null,
+        licenseReasonCode: check.reasonCode,
+        licenseOrganizationId: check.organizationId,
+        licenseExpiresAt: parseLicenseDate(check.expiresAt),
+        licenseGraceCutoff: parseLicenseDate(check.graceCutoff),
+        lastLicenseCheckedAt: new Date()
+      });
+    }
     const effectiveCheck = check && check.decision === "allow" && check.agentAccess !== true
       ? { ...check, decision: "deny" as const, reasonCode: "AGENT_ACCESS_NOT_ENTITLED" }
       : check;
