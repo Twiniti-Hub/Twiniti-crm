@@ -15,6 +15,7 @@ export type LicenseCheck = {
   expiresAt?: string | null;
   graceCutoff?: string | null;
   entitlements?: unknown[];
+  agentAccess?: boolean;
   limits?: Record<string, unknown>;
   requestId?: string;
 };
@@ -47,11 +48,28 @@ export type SubscriptionStateInput = {
   source: "twiniti-crm";
 };
 
+export type AgentProvisionInput = {
+  externalOrganizationId: string;
+  externalAgentId: string;
+  agentName?: string | null;
+  productCode: string;
+  source: "twiniti-crm";
+};
+
+export type AgentRevokeInput = Omit<AgentProvisionInput, "agentName">;
+
 export type CheckUserLicenseInput = {
   externalOrganizationId: string;
   externalUserId?: string | null;
   userSubject?: string | null;
   email?: string | null;
+  productCode: string;
+  source: "twiniti-crm";
+};
+
+export type CheckAgentLicenseInput = {
+  externalOrganizationId: string;
+  externalAgentId: string;
   productCode: string;
   source: "twiniti-crm";
 };
@@ -73,6 +91,8 @@ type LicenseApiConfig = Pick<
   | "LICENSE_API_REQUEST_TIMEOUT_MS"
   | "LICENSE_API_CACHE_TTL_MS"
   | "LICENSE_API_PROVISION_PATH"
+  | "LICENSE_API_AGENT_PROVISION_PATH"
+  | "LICENSE_API_AGENT_REVOKE_PATH"
   | "LICENSE_API_SYNC_PATH"
   | "LICENSE_API_CHECK_PATH"
   | "LICENSE_API_REQUIRED"
@@ -116,6 +136,7 @@ function normalizeCheck(data: unknown, fallbackOrganizationId: string, requestId
     expiresAt: (value.expiresAt ?? value.expires_at ?? license.expiresAt ?? license.endDate ?? null) as string | null,
     graceCutoff: (value.graceCutoff ?? value.grace_cutoff ?? license.graceCutoff ?? null) as string | null,
     entitlements: Array.isArray(value.entitlements) ? value.entitlements : [],
+    agentAccess: value.agentAccess === true || value.agent_access === true,
     limits: value.limits && typeof value.limits === "object" ? value.limits as Record<string, unknown> : {},
     requestId: String(value.requestId ?? requestId ?? "") || undefined
   };
@@ -192,6 +213,14 @@ export class LicenseApiClient {
     return this.request<Record<string, unknown>>(this.config.LICENSE_API_PROVISION_PATH, input, idempotencyKey);
   }
 
+  async provisionAgent(input: AgentProvisionInput, idempotencyKey: string) {
+    return this.request<Record<string, unknown>>(this.config.LICENSE_API_AGENT_PROVISION_PATH, input, idempotencyKey);
+  }
+
+  async revokeAgent(input: AgentRevokeInput, idempotencyKey: string) {
+    return this.request<Record<string, unknown>>(this.config.LICENSE_API_AGENT_REVOKE_PATH, input, idempotencyKey);
+  }
+
   async synchronizeSubscriptionState(input: SubscriptionStateInput, idempotencyKey: string) {
     return this.request<Record<string, unknown>>(this.config.LICENSE_API_SYNC_PATH, input, idempotencyKey);
   }
@@ -221,12 +250,46 @@ export class LicenseApiClient {
       };
     }
   }
+
+  async checkAgentLicense(input: CheckAgentLicenseInput): Promise<LicenseCheck> {
+    const cacheKey = ["agent", input.externalOrganizationId, input.externalAgentId, input.productCode].join(":");
+    const cached = this.cache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    try {
+      const data = await this.request<unknown>(this.config.LICENSE_API_CHECK_PATH, {
+        ...input,
+        principalType: "agent",
+        externalAgentId: input.externalAgentId
+      }, `license-check:${cacheKey}`);
+      const value = normalizeCheck(data, input.externalOrganizationId);
+      this.cache.set(cacheKey, { expiresAt: Date.now() + this.config.LICENSE_API_CACHE_TTL_MS, value });
+      return value;
+    } catch (error) {
+      if (error instanceof LicenseApiError) {
+        return {
+          decision: "retry",
+          reasonCode: error.retryable ? "LICENSE_API_UNAVAILABLE" : "LICENSE_API_REQUEST_FAILED",
+          organizationId: input.externalOrganizationId,
+          agentAccess: false,
+          requestId: error.requestId
+        };
+      }
+      return {
+        decision: "retry",
+        reasonCode: "LICENSE_API_UNAVAILABLE",
+        organizationId: input.externalOrganizationId,
+        agentAccess: false
+      };
+    }
+  }
 }
 
 export function createLicenseApiClient(env: LicenseApiConfig) {
   const key = [
     env.LICENSE_API_URL ?? "",
     env.LICENSE_API_PROVISION_PATH,
+    env.LICENSE_API_AGENT_PROVISION_PATH,
+    env.LICENSE_API_AGENT_REVOKE_PATH,
     env.LICENSE_API_SYNC_PATH,
     env.LICENSE_API_CHECK_PATH,
     env.LICENSE_API_CACHE_TTL_MS

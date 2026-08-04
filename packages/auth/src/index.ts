@@ -261,7 +261,26 @@ export async function resolveRequestActor(
     await touchAgent(db, agent.id);
     const billing = await getOrganizationBilling(db, agent.organizationId);
     const organization = await getOrganizationById(db, agent.organizationId);
-    const license = await checkOrganizationLicense(db, env, {
+    const client = createLicenseApiClient(env);
+    const check = client.configured
+      ? await client.checkAgentLicense({
+          externalOrganizationId: agent.organizationId,
+          externalAgentId: agent.id,
+          productCode: env.LICENSE_API_PRODUCT_CODE,
+          source: "twiniti-crm"
+        })
+      : null;
+    const effectiveCheck = check && check.decision === "allow" && check.agentAccess !== true
+      ? { ...check, decision: "deny" as const, reasonCode: "AGENT_ACCESS_NOT_ENTITLED" }
+      : check;
+    const license = effectiveCheck
+      ? {
+          billingStatus: effectiveCheck.decision === "allow" && (billing?.status === "active" || billing?.status === "trialing")
+            ? billing.status
+            : effectiveCheck.decision === "restricted" ? "restricted" : effectiveCheck.decision === "deny" ? "license_denied" : "license_unavailable",
+          check: effectiveCheck
+        }
+      : await checkOrganizationLicense(db, env, {
       organizationId: agent.organizationId,
       userId: agent.id,
       subject: agent.id

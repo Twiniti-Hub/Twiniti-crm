@@ -2,6 +2,7 @@
 
 ## Unreleased (target 0.1.1)
 
+- Added License_API-backed `TCRM_AGENT_ACCESS` enforcement and idempotent agent provision/revoke jobs; agent scopes remain controlled by Loop and no concurrency entitlement is used.
 - Replaced free-form agent scope text with a controlled multi-select and added organization-scoped access updates for existing agents.
 - Added a copy-ready regional MCP agent connection guide with credential, scope, request, and troubleshooting examples.
 - Super Admin workspace context bypasses the client billing redirect, matching the API's platform-admin billing policy.

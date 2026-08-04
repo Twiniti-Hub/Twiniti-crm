@@ -5,9 +5,17 @@ import {
   updateOrganizationLicense,
   type Db
 } from "@twiniti/db";
-import { createLicenseApiClient, type ProvisionOrganizationInput, type SubscriptionStateInput } from "@twiniti/license-api";
+import {
+  createLicenseApiClient,
+  type AgentProvisionInput,
+  type AgentRevokeInput,
+  type ProvisionOrganizationInput,
+  type SubscriptionStateInput
+} from "@twiniti/license-api";
 
 export type LicenseProvisionPayload = ProvisionOrganizationInput & { idempotencyKey: string };
+export type LicenseAgentProvisionPayload = AgentProvisionInput & { idempotencyKey: string };
+export type LicenseAgentRevokePayload = AgentRevokeInput & { idempotencyKey: string };
 
 export async function enqueueLicenseProvisioning(
   db: Db,
@@ -36,6 +44,38 @@ export async function enqueueLicenseSubscriptionSync(
   return enqueueJob(db, {
     organizationId: input.externalOrganizationId,
     kind: "license.subscription.sync",
+    dedupeKey: idempotencyKey,
+    payload: { ...input, idempotencyKey }
+  });
+}
+
+export async function enqueueLicenseAgentProvisioning(
+  db: Db,
+  env: AppEnv,
+  input: Omit<LicenseAgentProvisionPayload, "idempotencyKey">
+) {
+  const client = createLicenseApiClient(env);
+  if (!client.configured && !client.required) return null;
+  const idempotencyKey = `agent-provision:${input.externalOrganizationId}:${input.externalAgentId}`;
+  return enqueueJob(db, {
+    organizationId: input.externalOrganizationId,
+    kind: "license.agent.provision",
+    dedupeKey: idempotencyKey,
+    payload: { ...input, idempotencyKey }
+  });
+}
+
+export async function enqueueLicenseAgentRevocation(
+  db: Db,
+  env: AppEnv,
+  input: Omit<LicenseAgentRevokePayload, "idempotencyKey">
+) {
+  const client = createLicenseApiClient(env);
+  if (!client.configured && !client.required) return null;
+  const idempotencyKey = `agent-revoke:${input.externalOrganizationId}:${input.externalAgentId}`;
+  return enqueueJob(db, {
+    organizationId: input.externalOrganizationId,
+    kind: "license.agent.revoke",
     dedupeKey: idempotencyKey,
     payload: { ...input, idempotencyKey }
   });

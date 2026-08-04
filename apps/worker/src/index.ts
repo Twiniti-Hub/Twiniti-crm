@@ -4,7 +4,13 @@ import { config as loadDotenv } from "dotenv";
 import { and, eq } from "drizzle-orm";
 import { loadEnv, regionalDatabaseUrls } from "@twiniti/config";
 import type { RegionCode } from "@twiniti/contracts";
-import { createLicenseApiClient, type ProvisionOrganizationInput, type SubscriptionStateInput } from "@twiniti/license-api";
+import {
+  createLicenseApiClient,
+  type AgentProvisionInput,
+  type AgentRevokeInput,
+  type ProvisionOrganizationInput,
+  type SubscriptionStateInput
+} from "@twiniti/license-api";
 import {
   campaignRecipients,
   campaigns,
@@ -935,6 +941,14 @@ async function processLicenseSubscriptionSync(payload: SubscriptionStateInput & 
   });
 }
 
+async function processLicenseAgentProvision(payload: AgentProvisionInput & { idempotencyKey: string }) {
+  await licenseApi.provisionAgent(payload, payload.idempotencyKey);
+}
+
+async function processLicenseAgentRevoke(payload: AgentRevokeInput & { idempotencyKey: string }) {
+  await licenseApi.revokeAgent(payload, payload.idempotencyKey);
+}
+
 async function assertWorkerLicense(organizationId: string) {
   const billing = await getOrganizationBilling(db, organizationId);
   if (!billing || !["active", "trialing"].includes(billing.status)) {
@@ -958,6 +972,12 @@ async function handleJob(kind: string, payload: Record<string, unknown>, organiz
       return;
     case "license.subscription.sync":
       await processLicenseSubscriptionSync(payload as SubscriptionStateInput & { idempotencyKey: string });
+      return;
+    case "license.agent.provision":
+      await processLicenseAgentProvision(payload as AgentProvisionInput & { idempotencyKey: string });
+      return;
+    case "license.agent.revoke":
+      await processLicenseAgentRevoke(payload as AgentRevokeInput & { idempotencyKey: string });
       return;
     case "campaign.send":
       if (!organizationId) throw new Error("Campaign jobs require an organization");
