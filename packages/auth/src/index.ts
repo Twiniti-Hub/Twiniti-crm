@@ -58,6 +58,10 @@ export type RequestLike = {
     | Record<string, string | string[] | null | undefined>;
 };
 
+export const WORKSPACE_CONTEXT_HEADER = "x-twiniti-workspace-id";
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 type HexclaveTokenStoreRequest = {
   headers: { get: (name: string) => string | null } | Record<string, string | null>;
 };
@@ -127,6 +131,12 @@ function getHeader(headers: RequestLike["headers"], name: string): string | unde
   const raw = record[name] ?? record[lower] ?? record[name.toUpperCase()];
   if (Array.isArray(raw)) return raw[0] ?? undefined;
   return raw ?? undefined;
+}
+
+/** Returns a syntactically valid workspace context requested by a client. */
+export function getRequestedWorkspaceId(headers: RequestLike["headers"]): string | undefined {
+  const value = getHeader(headers, WORKSPACE_CONTEXT_HEADER)?.trim();
+  return value && UUID_PATTERN.test(value) ? value : undefined;
 }
 
 function toHexclaveTokenStore(requestLike: RequestLike): HexclaveTokenStoreRequest {
@@ -293,7 +303,49 @@ export async function resolveRequestActor(
   const displayName = (user as { displayName?: string | null }).displayName ?? null;
   const superAdmin = isSuperAdminEmail(email, env);
 
+  // A platform super admin must explicitly choose a workspace. The database
+  // lookup below is the authorization boundary; an arbitrary client-supplied
+  // ID never becomes an organization context on its own. Missing, stale, or
+  // invalid context deliberately returns the admin-console setup state.
+  if (superAdmin) {
+    const requestedWorkspaceId = getRequestedWorkspaceId(requestLike.headers);
+    if (requestedWorkspaceId) {
+      const workspace = await getOrganizationById(db, requestedWorkspaceId);
+      if (workspace) {
+        const billing = await getOrganizationBilling(db, workspace.id);
+        return {
+          type: "user",
+          id: subject,
+          organizationId: workspace.id,
+          role: "admin",
+          email,
+          displayName,
+          needsSetup: false,
+          isSuperAdmin: true,
+          hexclaveSubject: subject,
+          organizationName: workspace.name,
+          regionCode: workspace.residencyRegion as RegionCode,
+          countryCode: null,
+          billingStatus: billing?.status ?? "active"
+        };
+      }
+    }
+    return {
+      type: "user",
+      id: subject,
+      organizationId: null,
+      role: undefined,
+      email,
+      displayName,
+      needsSetup: true,
+      isSuperAdmin: true,
+      hexclaveSubject: subject,
+      organizationName: null
+    };
+  }
+
   const crmUser = await findCrmUserBySubject(db, subject);
+
   if (!crmUser || !crmUser.active) {
     return {
       type: "user",

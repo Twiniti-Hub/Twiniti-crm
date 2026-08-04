@@ -10,6 +10,7 @@ Release acceptance for the Agent-Native Marketing CRM. An agent (or human) can t
 - [x] MCP: standard stateless Streamable HTTP transport contract tests (`apps/api/src/tests/mcp-transport.test.ts`)
 - [ ] Auth entry: an unauthenticated visitor selecting “I already use Loop” reaches `/sign-in` without the CRM shell or bootstrap warning (requires the public `VITE_HEXCLAVE_*` build variables on the target API service)
 - [ ] Regional auth entry: the landing page exposes US, EU, and UK sign-in choices that resolve to the configured `VITE_APP_URL_US`, `VITE_APP_URL_EU`, and `VITE_APP_URL_UK` hosts
+- [x] Super Admin workspace access: `/super-admin` provides an explicit workspace selector, persists the regional choice, and the API validates the selected workspace context before CRM access
 - [x] Email: Resend adapter contract tests (`packages/email/src/index.test.ts` personalize + signature)
 - [x] Webhooks: signature validation rejects invalid signatures (`POST /api/v1/webhooks/resend`)
 - [ ] Rendering: email HTML/text personalization across clients (spot-check)
@@ -80,4 +81,5 @@ Use [`apps/api/src/tests/agent-harness.test.ts`](../apps/api/src/tests/agent-har
 - [x] Hexclave users are no longer auto-joined to the bootstrap org
 - [x] Company Admin can invite members by email; invitee accepts via token
 - [x] Super Admin can list companies, create companies, and invite to any company
+- [x] Super Admin can explicitly select a workspace before using CRM functions; workspace context is limited to the current regional database
 - [x] `/api/v1/me` returns `organizationName`, `needsSetup`, `isSuperAdmin`

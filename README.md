@@ -45,6 +45,12 @@ endpoints are `https://loop.us.twiniti.ai/mcp`,
 There is no stdio launcher in this phase; agents connect over HTTPS and use
 the MCP `initialize`, `tools/list`, and `tools/call` methods.
 
+Super Admins choose an explicit workspace from `/super-admin` before using CRM
+functions. The selected workspace is kept in that regional browser origin and
+sent as `X-Twiniti-Workspace-Id`; the API validates that the workspace exists
+in the current regional database before granting CRM context. Use the matching
+regional Loop host when switching between US, EU, and UK workspaces.
+
 With `AUTH_DISABLED=true` (default when Hexclave secret is unset), the API boots a single-org owner for local development.
 
 Production and development Render API services build the web application from

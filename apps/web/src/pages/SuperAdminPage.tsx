@@ -1,12 +1,18 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Navigate } from "react-router";
-import { api } from "../lib/api";
+import { Navigate, useNavigate } from "react-router";
+import {
+  api,
+  clearWorkspaceContextId,
+  getWorkspaceContextId,
+  setWorkspaceContextId
+} from "../lib/api";
 import type { Me } from "../lib/me";
 import { CountrySelect } from "../components/CountrySelect";
 
 type Company = {
   id: string;
   name: string;
+  regionCode?: "eu" | "uk" | "us";
   createdAt: string;
   memberCount: number;
 };
@@ -29,9 +35,11 @@ type Invitation = {
 };
 
 export function SuperAdminPage() {
+  const navigate = useNavigate();
   const [me, setMe] = useState<Me | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(getWorkspaceContextId());
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [companyName, setCompanyName] = useState("");
@@ -48,6 +56,13 @@ export function SuperAdminPage() {
     const res = await api("/api/v1/organizations");
     const rows = res.data as Company[];
     setCompanies(rows);
+    const storedWorkspaceId = getWorkspaceContextId();
+    if (storedWorkspaceId && rows.some((row) => row.id === storedWorkspaceId)) {
+      setActiveWorkspaceId(storedWorkspaceId);
+    } else if (storedWorkspaceId) {
+      clearWorkspaceContextId();
+      setActiveWorkspaceId(null);
+    }
     if (selectedId && !rows.some((row) => row.id === selectedId)) {
       setSelectedId(rows[0]?.id ?? null);
     } else if (!selectedId && rows[0]) {
@@ -129,6 +144,19 @@ export function SuperAdminPage() {
     }
   }
 
+  function onOpenWorkspace() {
+    if (!activeWorkspaceId) return;
+    const workspace = companies.find((company) => company.id === activeWorkspaceId);
+    setWorkspaceContextId(activeWorkspaceId);
+    setMessage(`Opening ${workspace?.name ?? "workspace"}…`);
+    navigate("/", { replace: true });
+  }
+
+  function onReturnToAdminConsole() {
+    clearWorkspaceContextId();
+    window.location.assign("/super-admin");
+  }
+
   async function onInvite(event: FormEvent) {
     event.preventDefault();
     if (!selectedId) return;
@@ -166,6 +194,46 @@ export function SuperAdminPage() {
       </header>
       {error ? <div className="banner error">{error}</div> : null}
       {message ? <div className="banner info">{message}</div> : null}
+
+      <section className="panel">
+        <p className="eyebrow">Workspace access</p>
+        <h3>Open a workspace</h3>
+        <p className="muted">
+          Choose the workspace this browser should use for CRM operations. Access is limited to
+          workspaces in this regional server.
+        </p>
+        <div className="form-row" style={{ alignItems: "end", marginTop: 12 }}>
+          <label>
+            Active workspace
+            <select
+              value={activeWorkspaceId ?? ""}
+              onChange={(event) => setActiveWorkspaceId(event.target.value || null)}
+            >
+              <option value="">Choose a workspace…</option>
+              {companies.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.name} ({company.regionCode?.toUpperCase() ?? "regional"})
+                </option>
+              ))}
+            </select>
+          </label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="primary" type="button" disabled={!activeWorkspaceId} onClick={onOpenWorkspace}>
+              Open workspace
+            </button>
+            {me.organizationId ? (
+              <button className="secondary" type="button" onClick={onReturnToAdminConsole}>
+                Return to admin console
+              </button>
+            ) : null}
+          </div>
+        </div>
+        {me.organizationId ? (
+          <p className="muted" style={{ marginTop: 10 }}>
+            Currently operating in <b>{me.organizationName ?? "selected workspace"}</b>.
+          </p>
+        ) : null}
+      </section>
 
       <section className="panel">
         <p className="eyebrow">Create</p>

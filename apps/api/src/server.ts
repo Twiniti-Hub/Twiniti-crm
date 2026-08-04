@@ -30,7 +30,8 @@ const db = getDb(regionalDatabaseUrl(env, env.REGION_CODE));
 
 await app.register(cors, {
   origin: env.WEB_ORIGIN,
-  credentials: true
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization", "X-Twiniti-Workspace-Id"]
 });
 
 await app.register(swagger, {
