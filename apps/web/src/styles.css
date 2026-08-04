@@ -91,5 +91,15 @@ th { color: #6d8480; font-size: 11px; text-transform: uppercase; letter-spacing:
 .muted { color: #7c9290; font-size: 13px; }
 .code-block { margin: 0; padding: 12px; background: #f7fbf9; border-radius: 10px; overflow: auto; font-size: 12px; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+.help-intro { max-width: 760px; margin-bottom: 18px; }
+.help-intro h2 { margin-bottom: 10px; }
+.help-intro p { line-height: 1.55; margin-bottom: 0; }
+.help-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(245px, 1fr)); gap: 15px; }
+.help-card { display: flex; min-height: 174px; flex-direction: column; justify-content: space-between; gap: 20px; padding: 20px; border: 1px solid #e4ece8; border-radius: 17px; background: #fff; box-shadow: 0 7px 22px rgba(30, 72, 63, .035); }
+.help-card h3 { margin-bottom: 9px; }
+.help-card p { color: #6c8580; font-size: 13px; line-height: 1.5; margin-bottom: 0; }
+.help-card .quiet { align-self: flex-start; }
+.help-note { margin-top: 18px; }
+.help-note p:last-child { margin-bottom: 0; line-height: 1.5; }
 @media (max-width: 1100px) { .manager-layout { grid-template-columns: 1fr; } }
 @media (max-width: 850px) { .sidebar { width: 70px; padding: 20px 10px; }.brand { padding: 0 10px 36px; }.brand span:last-child, nav a { font-size: 0; }.brand-logo { flex: 0 0 30px; } nav a { height: 42px; position: relative; } nav a:before { content: "•"; font-size: 20px; position: absolute; left: 26px; top: 7px; }.sidebar-footer { font-size: 0; }.content { padding: 26px 18px 50px; }.hero-orbit { display: none; }.split, .metrics, .property-grid { grid-template-columns: 1fr; }.table-heading-text, .table-cell-text { max-width: 160px; } }

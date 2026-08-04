@@ -8,6 +8,7 @@ import { ContactDetailPage } from "../pages/ContactDetailPage";
 import { ContactsPage } from "../pages/ContactsPage";
 import { DeliverabilityPage } from "../pages/DeliverabilityPage";
 import { FormsPage } from "../pages/FormsPage";
+import { HelpPage } from "../pages/HelpPage";
 import { ImportPage } from "../pages/ImportPage";
 import { OverviewPage } from "../pages/OverviewPage";
 import { SegmentsPage } from "../pages/SegmentsPage";
@@ -34,6 +35,7 @@ export function CrmRoutes() {
         <Route path="deliverability" element={<DeliverabilityPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="billing" element={<BillingPage />} />
+        <Route path="help" element={<HelpPage />} />
         <Route path="super-admin" element={<SuperAdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
