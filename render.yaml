@@ -28,6 +28,10 @@ services:
         sync: false
       - key: HEXCLAVE_PROJECT_ID
         sync: false
+      - key: VITE_HEXCLAVE_PROJECT_ID
+        sync: false
+      - key: VITE_HEXCLAVE_PUBLISHABLE_CLIENT_KEY
+        sync: false
       - key: HEXCLAVE_SECRET_SERVER_KEY
         sync: false
       - key: RESEND_API_KEY
@@ -100,6 +104,10 @@ services:
         sync: false
       - key: HEXCLAVE_PROJECT_ID
         sync: false
+      - key: VITE_HEXCLAVE_PROJECT_ID
+        sync: false
+      - key: VITE_HEXCLAVE_PUBLISHABLE_CLIENT_KEY
+        sync: false
       - key: HEXCLAVE_SECRET_SERVER_KEY
         sync: false
       - key: RESEND_API_KEY
@@ -171,6 +179,10 @@ services:
       - key: HEXCLAVE_BASE_URL
         sync: false
       - key: HEXCLAVE_PROJECT_ID
+        sync: false
+      - key: VITE_HEXCLAVE_PROJECT_ID
+        sync: false
+      - key: VITE_HEXCLAVE_PUBLISHABLE_CLIENT_KEY
         sync: false
       - key: HEXCLAVE_SECRET_SERVER_KEY
         sync: false
