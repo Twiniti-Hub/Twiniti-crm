@@ -34,7 +34,16 @@ production migration job. See
 - Web: `http://localhost:5173`
 - API: `http://localhost:4000`
 - Health: `http://localhost:4000/health`
-- MCP: `POST http://localhost:4000/mcp`
+- MCP: Streamable HTTP `POST http://localhost:4000/mcp`
+
+The hosted MCP endpoint is a stateless, bearer-authenticated Streamable HTTP
+server. Agents should send JSON-RPC requests with `Content-Type:
+application/json`, `Accept: application/json, text/event-stream`, and an
+`Authorization: Bearer twiniti_agent_...` header. The production regional
+endpoints are `https://loop.us.twiniti.ai/mcp`,
+`https://loop.eu.twiniti.ai/mcp`, and `https://loop.uk.twiniti.ai/mcp`.
+There is no stdio launcher in this phase; agents connect over HTTPS and use
+the MCP `initialize`, `tools/list`, and `tools/call` methods.
 
 With `AUTH_DISABLED=true` (default when Hexclave secret is unset), the API boots a single-org owner for local development.
 

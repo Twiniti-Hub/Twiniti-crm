@@ -1,6 +1,15 @@
 import type { FastifyInstance } from "fastify";
 import { and, count, eq } from "drizzle-orm";
-import { resolveRequestActor, assertScope, assertOrganization } from "@twiniti/auth";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import {
+  CallToolRequestSchema,
+  ListPromptsRequestSchema,
+  ListResourcesRequestSchema,
+  ListToolsRequestSchema,
+  ReadResourceRequestSchema
+} from "@modelcontextprotocol/sdk/types.js";
+import { assertOrganization, assertScope, resolveRequestActor, type AuthActor } from "@twiniti/auth";
 import type { AppEnv } from "@twiniti/config";
 import {
   contactSearchSchema,
@@ -12,30 +21,24 @@ import {
   upsertContactSchema
 } from "@twiniti/contracts";
 import {
+  compileFilterAst,
+  contacts,
   createContact,
   findContactByEmail,
   getContactById,
   getContactTimeline,
   getSegmentById,
-  listSegments,
   listCampaigns,
-  searchContacts,
-  updateContact,
-  contacts,
-  compileFilterAst,
+  listSegments,
   parseFilterAst,
-  type Db
+  searchContacts,
+  type Db,
+  updateContact
 } from "@twiniti/db";
-import { sendError } from "./auth-hook.js";
 
-type McpRequest = {
-  jsonrpc?: string;
-  id?: string | number | null;
-  method?: string;
-  params?: Record<string, unknown>;
-};
+const MCP_SERVER_INFO = { name: "twiniti-crm", version: "0.1.0" } as const;
 
-const toolDefs = [
+export const toolDefs = [
   { name: "search_contacts", description: "Search contacts in the authenticated organization", scope: "contacts:read", inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "integer", maximum: 100 }, page: { type: "integer", minimum: 1 } } } },
   { name: "get_contact", description: "Get a contact by id in the authenticated organization", scope: "contacts:read", inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
   { name: "list_segments", description: "List saved segments in the authenticated organization", scope: "segments:read", inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "integer", maximum: 100 } } } },
@@ -49,15 +52,211 @@ const toolDefs = [
   { name: "get_campaign_status", description: "List campaigns / status", scope: "campaigns:preview", inputSchema: { type: "object" } }
 ] as const;
 
+const MCP_RESOURCES = [
+  { uri: "crm://schema", name: "CRM Schema", mimeType: "application/json" },
+  { uri: "crm://consent-rules", name: "Consent Rules", mimeType: "text/plain" },
+  { uri: "crm://error-codes", name: "Error Codes", mimeType: "application/json" }
+] as const;
+
+const MCP_PROMPTS = [
+  { name: "find_inactive_contacts", description: "Find inactive contacts" },
+  { name: "create_reengagement_campaign", description: "Create a re-engagement campaign" },
+  { name: "review_campaign_readiness", description: "Review campaign readiness" }
+] as const;
+
+type ToolArguments = Record<string, unknown>;
+
+function resourceContent(uri: string) {
+  if (uri === "crm://consent-rules") {
+    return {
+      uri,
+      mimeType: "text/plain",
+      text: "Suppressed and unsubscribed contacts must never receive campaign email. Consent is authoritative in CRM."
+    };
+  }
+  if (uri === "crm://error-codes") {
+    return { uri, mimeType: "application/json", text: JSON.stringify({ unauthorized: 401, forbidden: 403, conflict: 409, approval_required: 403 }) };
+  }
+  return { uri, mimeType: "application/json", text: JSON.stringify({ objects: ["contacts", "companies", "campaigns", "segments", "forms"] }) };
+}
+
+export function createMcpServer(db: Db, actor: AuthActor) {
+  const server = new Server(MCP_SERVER_INFO, {
+    capabilities: { tools: {}, resources: {}, prompts: {} }
+  });
+
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    tools: toolDefs.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema
+    }))
+  }));
+
+  server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: [...MCP_RESOURCES] }));
+
+  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    const uri = request.params.uri;
+    if (!MCP_RESOURCES.some((resource) => resource.uri === uri)) {
+      throw new Error("Resource not found");
+    }
+    return { contents: [resourceContent(uri)] };
+  });
+
+  server.setRequestHandler(ListPromptsRequestSchema, async () => ({ prompts: [...MCP_PROMPTS] }));
+
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const name = request.params.name;
+    const args = (request.params.arguments ?? {}) as ToolArguments;
+    const tool = toolDefs.find((item) => item.name === name);
+    if (!tool) throw new Error(`Unknown tool: ${name}`);
+    if (actor.type === "agent") assertScope(actor, tool.scope);
+
+    let result: unknown;
+    switch (tool.name) {
+      case "search_contacts": {
+        result = await searchContacts(db, assertOrganization(actor), contactSearchSchema.parse(args));
+        break;
+      }
+      case "get_contact": {
+        result = await getContactById(db, assertOrganization(actor), String(args.id ?? ""));
+        break;
+      }
+      case "list_segments": {
+        result = await listSegments(db, assertOrganization(actor), segmentSearchSchema.parse(args));
+        break;
+      }
+      case "get_segment": {
+        const input = segmentIdSchema.parse(args);
+        result = await getSegmentById(db, assertOrganization(actor), input.id);
+        break;
+      }
+      case "estimate_segment_size": {
+        const input = segmentIdSchema.parse(args);
+        const organizationId = assertOrganization(actor);
+        const segment = await getSegmentById(db, organizationId, input.id);
+        if (!segment) {
+          result = null;
+          break;
+        }
+        const filter = compileFilterAst(parseFilterAst(segment.filterAst));
+        const rows = await db.select({ value: count() }).from(contacts).where(and(
+          eq(contacts.organizationId, organizationId),
+          filter
+        ));
+        result = { segmentId: segment.id, count: Number(rows[0]?.value ?? 0) };
+        break;
+      }
+      case "create_contact": {
+        const input = createContactSchema.parse(args);
+        const organizationId = assertOrganization(actor);
+        const existing = await findContactByEmail(db, organizationId, input.email);
+        result = existing
+          ? {
+              status: "conflict",
+              reason: "duplicate_email",
+              existing_contact_id: existing.id,
+              next_actions: ["update_existing", "create_anyway"]
+            }
+          : await createContact(db, {
+              organizationId,
+              ...input,
+              change: { actorType: actor.type, actorId: actor.id, source: "mcp.contact.create" }
+            });
+        break;
+      }
+      case "upsert_contact": {
+        const input = upsertContactSchema.parse(args);
+        const organizationId = assertOrganization(actor);
+        const existing = await findContactByEmail(db, organizationId, input.email);
+        if (existing) {
+          const updated = await updateContact(db, organizationId, existing.id, {
+            ...input,
+            change: { actorType: actor.type, actorId: actor.id, source: "mcp.contact.upsert" }
+          });
+          result = updated && !updated.conflict ? updated.row : existing;
+        } else {
+          result = await createContact(db, {
+            organizationId,
+            ...input,
+            change: { actorType: actor.type, actorId: actor.id, source: "mcp.contact.upsert" }
+          });
+        }
+        break;
+      }
+      case "update_contact": {
+        const input = updateContactSchema.parse(args);
+        const updated = await updateContact(db, assertOrganization(actor), String(args.id), {
+          ...input,
+          change: { actorType: actor.type, actorId: actor.id, source: "mcp.contact.update" }
+        });
+        result = updated && !updated.conflict ? updated.row : null;
+        break;
+      }
+      case "get_contact_timeline": {
+        result = await getContactTimeline(db, assertOrganization(actor), String(args.id));
+        break;
+      }
+      case "create_campaign_draft": {
+        result = { draft: createCampaignSchema.parse(args), status: "draft" };
+        break;
+      }
+      case "get_campaign_status": {
+        result = await listCampaigns(db, assertOrganization(actor));
+        break;
+      }
+    }
+
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+  });
+
+  return server;
+}
+
+function normalizedOrigins(env: AppEnv): string[] {
+  return env.WEB_ORIGIN
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/$/, ""))
+    .filter(Boolean);
+}
+
+/**
+ * MCP is a remote, bearer-authenticated surface. Keep browser requests
+ * limited to the configured application origin while allowing non-browser
+ * agent clients that do not send an Origin header.
+ */
+export function isAllowedMcpOrigin(origin: string | undefined, requestOrigin: string, env: AppEnv): boolean {
+  if (!origin) return true;
+  const allowedOrigins = new Set([...normalizedOrigins(env), requestOrigin]);
+  return allowedOrigins.has(origin.replace(/\/$/, ""));
+}
+
+function writeTransportError(reply: { raw: { headersSent: boolean; writeHead: (statusCode: number, headers: Record<string, string>) => void; end: (body: string) => void } }, error: unknown) {
+  if (reply.raw.headersSent) return;
+  reply.raw.writeHead(500, { "content-type": "application/json" });
+  reply.raw.end(JSON.stringify({
+    jsonrpc: "2.0",
+    id: null,
+    error: { code: -32603, message: error instanceof Error ? error.message : "Internal server error" }
+  }));
+}
+
 export async function registerMcpRoutes(app: FastifyInstance, db: Db, env: AppEnv) {
-  app.post("/mcp", async (request, reply) => {
-    try {
-      const body = request.body as McpRequest;
-      const id = body.id ?? null;
+  app.route({
+    method: ["GET", "POST", "DELETE"],
+    url: "/mcp",
+    handler: async (request, reply) => {
+      const protocol = String(request.headers["x-forwarded-proto"] ?? "http").split(",")[0];
+      const host = String(request.headers["x-forwarded-host"] ?? request.headers.host ?? "").split(",")[0];
+      const requestOrigin = `${protocol}://${host}`;
+      const origin = typeof request.headers.origin === "string" ? request.headers.origin : undefined;
+      if (!isAllowedMcpOrigin(origin, requestOrigin, env)) {
+        return reply.code(403).send({ error: { code: "forbidden", message: "Invalid Origin header" } });
+      }
+
       const actor = await resolveRequestActor(db, request, env);
       if (!actor) {
-        reply.code(401);
-        return { jsonrpc: "2.0", id: null, error: { code: -32001, message: "Unauthorized" } };
+        return reply.code(401).send({ jsonrpc: "2.0", id: null, error: { code: -32001, message: "Unauthorized" } });
       }
       if (
         actor.organizationId
@@ -65,201 +264,29 @@ export async function registerMcpRoutes(app: FastifyInstance, db: Db, env: AppEn
         && actor.billingStatus
         && !["active", "trialing"].includes(actor.billingStatus)
       ) {
-        reply.code(402);
-        return { jsonrpc: "2.0", id, error: { code: -32002, message: "Organization billing is required" } };
+        return reply.code(402).send({ jsonrpc: "2.0", id: null, error: { code: -32002, message: "Organization billing is required" } });
       }
       request.actor = actor;
+      reply.hijack();
 
-      if (body.method === "initialize") {
-        return {
-          jsonrpc: "2.0",
-          id,
-          result: {
-            protocolVersion: "2024-11-05",
-            serverInfo: { name: "twiniti-crm", version: "0.1.0" },
-            capabilities: { tools: {}, resources: {}, prompts: {} }
-          }
-        };
+      const server = createMcpServer(db, actor);
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableJsonResponse: true
+      });
+      transport.onerror = (error) => request.log.error(error, "MCP transport error");
+      reply.raw.once("close", () => {
+        void transport.close();
+        void server.close();
+      });
+
+      try {
+        await server.connect(transport);
+        await transport.handleRequest(request.raw, reply.raw, request.body);
+      } catch (error) {
+        request.log.error(error, "MCP request failed");
+        writeTransportError(reply, error);
       }
-
-      if (body.method === "tools/list") {
-        return {
-          jsonrpc: "2.0",
-          id,
-          result: {
-            tools: toolDefs.map((tool) => ({
-              name: tool.name,
-              description: tool.description,
-              inputSchema: tool.inputSchema
-            }))
-          }
-        };
-      }
-
-      if (body.method === "resources/list") {
-        return {
-          jsonrpc: "2.0",
-          id,
-          result: {
-            resources: [
-              { uri: "crm://schema", name: "CRM Schema", mimeType: "application/json" },
-              { uri: "crm://consent-rules", name: "Consent Rules", mimeType: "text/plain" },
-              { uri: "crm://error-codes", name: "Error Codes", mimeType: "application/json" }
-            ]
-          }
-        };
-      }
-
-      if (body.method === "resources/read") {
-        const uri = String((body.params as { uri?: string } | undefined)?.uri ?? "");
-        if (!["crm://schema", "crm://consent-rules", "crm://error-codes"].includes(uri)) {
-          return { jsonrpc: "2.0", id, error: { code: -32004, message: "Resource not found" } };
-        }
-        const content =
-          uri === "crm://consent-rules"
-            ? "Suppressed and unsubscribed contacts must never receive campaign email. Consent is authoritative in CRM."
-            : uri === "crm://error-codes"
-              ? JSON.stringify({ unauthorized: 401, forbidden: 403, conflict: 409, approval_required: 403 })
-              : JSON.stringify({ objects: ["contacts", "companies", "campaigns", "segments", "forms"] });
-        return {
-          jsonrpc: "2.0",
-          id,
-            result: { contents: [{ uri, mimeType: uri === "crm://consent-rules" ? "text/plain" : "application/json", text: content }] }
-        };
-      }
-
-      if (body.method === "prompts/list") {
-        return {
-          jsonrpc: "2.0",
-          id,
-          result: {
-            prompts: [
-              { name: "find_inactive_contacts", description: "Find inactive contacts" },
-              { name: "create_reengagement_campaign", description: "Create a re-engagement campaign" },
-              { name: "review_campaign_readiness", description: "Review campaign readiness" }
-            ]
-          }
-        };
-      }
-
-      if (body.method === "tools/call") {
-        const params = body.params as { name?: string; arguments?: Record<string, unknown> };
-        const name = params?.name ?? "";
-        const args = params?.arguments ?? {};
-        const tool = toolDefs.find((item) => item.name === name);
-        if (!tool) {
-          return { jsonrpc: "2.0", id, error: { code: -32601, message: `Unknown tool: ${name}` } };
-        }
-        if (actor.type === "agent") assertScope(actor, tool.scope);
-
-        let result: unknown;
-        switch (tool.name) {
-          case "search_contacts": {
-            const query = contactSearchSchema.parse(args);
-            result = await searchContacts(db, assertOrganization(actor), query);
-            break;
-          }
-          case "get_contact": {
-            result = await getContactById(db, assertOrganization(actor), String(args.id ?? ""));
-            break;
-          }
-          case "list_segments": {
-            const query = segmentSearchSchema.parse(args);
-            result = await listSegments(db, assertOrganization(actor), query);
-            break;
-          }
-          case "get_segment": {
-            const input = segmentIdSchema.parse(args);
-            result = await getSegmentById(db, assertOrganization(actor), input.id);
-            break;
-          }
-          case "estimate_segment_size": {
-            const input = segmentIdSchema.parse(args);
-            const organizationId = assertOrganization(actor);
-            const segment = await getSegmentById(db, organizationId, input.id);
-            if (!segment) {
-              result = null;
-              break;
-            }
-            const filter = compileFilterAst(parseFilterAst(segment.filterAst));
-            const rows = await db.select({ value: count() }).from(contacts).where(and(
-              eq(contacts.organizationId, organizationId),
-              filter
-            ));
-            result = { segmentId: segment.id, count: Number(rows[0]?.value ?? 0) };
-            break;
-          }
-          case "create_contact": {
-            const input = createContactSchema.parse(args);
-            const existing = await findContactByEmail(db, assertOrganization(actor), input.email);
-            result = existing
-              ? {
-                  status: "conflict",
-                  reason: "duplicate_email",
-                  existing_contact_id: existing.id,
-                  next_actions: ["update_existing", "create_anyway"]
-                }
-              : await createContact(db, {
-                  organizationId: assertOrganization(actor),
-                  ...input,
-                  change: { actorType: actor.type, actorId: actor.id, source: "mcp.contact.create" }
-                });
-            break;
-          }
-          case "upsert_contact": {
-            const input = upsertContactSchema.parse(args);
-            const existing = await findContactByEmail(db, assertOrganization(actor), input.email);
-            if (existing) {
-              const updated = await updateContact(db, assertOrganization(actor), existing.id, {
-                ...input,
-                change: { actorType: actor.type, actorId: actor.id, source: "mcp.contact.upsert" }
-              });
-              result = updated && !updated.conflict ? updated.row : existing;
-            } else {
-              result = await createContact(db, {
-                organizationId: assertOrganization(actor),
-                ...input,
-                change: { actorType: actor.type, actorId: actor.id, source: "mcp.contact.upsert" }
-              });
-            }
-            break;
-          }
-          case "update_contact": {
-            const input = updateContactSchema.parse(args);
-            const updated = await updateContact(db, assertOrganization(actor), String(args.id), {
-              ...input,
-              change: { actorType: actor.type, actorId: actor.id, source: "mcp.contact.update" }
-            });
-            result = updated && !updated.conflict ? updated.row : null;
-            break;
-          }
-          case "get_contact_timeline": {
-            result = await getContactTimeline(db, assertOrganization(actor), String(args.id));
-            break;
-          }
-          case "create_campaign_draft": {
-            result = { draft: createCampaignSchema.parse(args), status: "draft" };
-            break;
-          }
-          case "get_campaign_status": {
-            result = await listCampaigns(db, assertOrganization(actor));
-            break;
-          }
-          default: {
-            return { jsonrpc: "2.0", id, error: { code: -32601, message: "Unhandled tool" } };
-          }
-        }
-
-        return {
-          jsonrpc: "2.0",
-          id,
-          result: { content: [{ type: "text", text: JSON.stringify(result) }] }
-        };
-      }
-
-      return { jsonrpc: "2.0", id, error: { code: -32601, message: `Method not found: ${body.method}` } };
-    } catch (error) {
-      return sendError(reply, error);
     }
   });
 }

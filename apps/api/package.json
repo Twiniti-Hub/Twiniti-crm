@@ -9,12 +9,13 @@
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/tests/agent-harness.test.ts src/tests/security-contracts.test.ts"
+    "test": "tsx --test src/tests/agent-harness.test.ts src/tests/security-contracts.test.ts src/tests/mcp-transport.test.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.1",
     "@fastify/static": "^10.1.2",
     "@fastify/swagger": "^9.4.2",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@twiniti/auth": "workspace:*",
     "@twiniti/config": "workspace:*",
     "@twiniti/contracts": "workspace:*",
