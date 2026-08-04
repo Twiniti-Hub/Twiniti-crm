@@ -42,6 +42,8 @@ export const envSchema = z.object({
   LICENSE_API_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(250).max(30_000).default(5_000),
   LICENSE_API_CACHE_TTL_MS: z.coerce.number().int().min(0).max(60_000).default(15_000),
   LICENSE_API_PROVISION_PATH: z.string().default("/api/v1/integrations/twiniti-crm/provision"),
+  LICENSE_API_AGENT_PROVISION_PATH: z.string().default("/api/v1/integrations/twiniti-crm/agent/provision"),
+  LICENSE_API_AGENT_REVOKE_PATH: z.string().default("/api/v1/integrations/twiniti-crm/agent/revoke"),
   LICENSE_API_SYNC_PATH: z.string().default("/api/v1/integrations/twiniti-crm/subscription"),
   LICENSE_API_CHECK_PATH: z.string().default("/api/v1/integrations/twiniti-crm/license/check"),
   LICENSE_API_REQUIRED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),

@@ -39,6 +39,8 @@ The CRM adapter sends `x-api-key`, `x-client-app: twiniti-crm`, `x-request-id`, 
 /api/v1/integrations/twiniti-crm/provision
 /api/v1/integrations/twiniti-crm/subscription
 /api/v1/integrations/twiniti-crm/license/check
+/api/v1/integrations/twiniti-crm/agent/provision
+/api/v1/integrations/twiniti-crm/agent/revoke
 ```
 
 These routes must exist on the configured License_API base URL. The public legacy `/api/v1/verify` route used by Praxis is not an equivalent substitute: it is email-based and does not implement CRM organization provisioning, Stripe synchronization, or organization-bound license checks.
@@ -52,6 +54,9 @@ These routes must exist on the configured License_API base URL. The public legac
 - [ ] `POST /api/v1/integrations/twiniti-crm/provision` returns a valid envelope for an authorized test request.
 - [ ] `POST /api/v1/integrations/twiniti-crm/subscription` accepts an idempotent test event.
 - [ ] `POST /api/v1/integrations/twiniti-crm/license/check` returns `allow`, `restricted`, `deny`, or `retry` with a stable reason code.
+- [ ] Agent licenses include the enabled `TCRM_AGENT_ACCESS` entitlement.
+- [ ] Agent creation queues `/agent/provision`; agent revocation queues `/agent/revoke`.
+- [ ] Agent license checks require both the entitlement and an active agent assignment.
 - [ ] A CRM production login succeeds with `LICENSE_API_REQUIRED=true`.
 - [ ] A temporary License_API outage produces bounded retry behavior and does not grant indefinite offline access.
 

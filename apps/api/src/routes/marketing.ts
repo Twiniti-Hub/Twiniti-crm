@@ -72,6 +72,7 @@ import {
 import { personalizeForContact, verifyResendWebhookSignature } from "@twiniti/email";
 import { z } from "zod";
 import { audit, requireActor, requireOrgId, requireUserRole, sendError } from "../auth-hook.js";
+import { enqueueLicenseAgentProvisioning, enqueueLicenseAgentRevocation } from "../license-jobs.js";
 
 const createTemplateSchema = z.object({
   name: z.string().trim().min(1).max(160),
@@ -792,6 +793,13 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
         credentialHash: credential.hash,
         expiresAt: input.expiresAt ? new Date(input.expiresAt) : null
       }).returning();
+      await enqueueLicenseAgentProvisioning(db, env, {
+        externalOrganizationId: row.organizationId,
+        externalAgentId: row.id,
+        agentName: row.name,
+        productCode: env.LICENSE_API_PRODUCT_CODE,
+        source: "twiniti-crm"
+      });
       await audit(db, actor, "agent.create", "agent", row.id);
       reply.code(201);
       return { data: { id: row.id, name: row.name, scopes: row.scopes, token: credential.token } };
@@ -810,6 +818,12 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
         eq(agentIdentities.organizationId, requireOrgId(actor))
       )).returning();
       if (!row) return reply.code(404).send({ error: { code: "not_found", message: "Agent not found" } });
+      await enqueueLicenseAgentRevocation(db, env, {
+        externalOrganizationId: row.organizationId,
+        externalAgentId: row.id,
+        productCode: env.LICENSE_API_PRODUCT_CODE,
+        source: "twiniti-crm"
+      });
       await audit(db, actor, "agent.revoke", "agent", id);
       return { data: { id, revokedAt: row.revokedAt } };
     } catch (error) {
@@ -828,6 +842,13 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
         eq(agentIdentities.organizationId, requireOrgId(actor))
       )).returning();
       if (!row) return reply.code(404).send({ error: { code: "not_found", message: "Agent not found" } });
+      await enqueueLicenseAgentProvisioning(db, env, {
+        externalOrganizationId: row.organizationId,
+        externalAgentId: row.id,
+        agentName: row.name,
+        productCode: env.LICENSE_API_PRODUCT_CODE,
+        source: "twiniti-crm"
+      });
       await audit(db, actor, "agent.scopes_updated", "agent", id, { scopes: input.scopes });
       return {
         data: {
@@ -838,6 +859,29 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
           revokedAt: row.revokedAt
         }
       };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.post("/api/v1/agents/:id/license/provision", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireUserRole(actor, "admin");
+      const { id } = request.params as { id: string };
+      const [row] = await db.select().from(agentIdentities).where(and(
+        eq(agentIdentities.id, id),
+        eq(agentIdentities.organizationId, requireOrgId(actor))
+      )).limit(1);
+      if (!row) return reply.code(404).send({ error: { code: "not_found", message: "Agent not found" } });
+      const job = await enqueueLicenseAgentProvisioning(db, env, {
+        externalOrganizationId: row.organizationId,
+        externalAgentId: row.id,
+        agentName: row.name,
+        productCode: env.LICENSE_API_PRODUCT_CODE,
+        source: "twiniti-crm"
+      });
+      return { data: { agentId: row.id, jobId: job?.id ?? null, status: job ? "queued" : "not_configured" } };
     } catch (error) {
       return sendError(reply, error);
     }
