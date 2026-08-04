@@ -4,7 +4,7 @@ Twiniti CRM is currently pre-1.0. Versions use the `0.10.x` series while the pro
 
 ## [0.10.8] - 2026-08-05
 
-- Added Hexclave authorization headers to browser API requests so production custom domains do not depend on cookie delivery alone.
+- Added non-blocking Hexclave authorization headers to browser API requests so production custom domains do not depend on cookie delivery alone.
 - Enforced License_API-backed `TCRM_AGENT_ACCESS` decisions with idempotent agent provision/revoke jobs.
 - Persisted agent license decisions while keeping scopes controlled by Loop and avoiding a concurrency entitlement.
 

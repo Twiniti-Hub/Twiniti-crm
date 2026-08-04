@@ -63,8 +63,9 @@ build environment. These public `VITE_*` values are distinct from the
 server-only `HEXCLAVE_PROJECT_ID` and `HEXCLAVE_SECRET_SERVER_KEY`; because
 Vite embeds them during the build, a redeploy is required after changing them.
 Browser API requests retain cookie credentials and also send Hexclave's
-explicit `Authorization` header. This supports production custom domains and
-avoids relying on browser cookie delivery alone.
+explicit `Authorization` header derived synchronously from the React auth
+session. This supports production custom domains without blocking the initial
+`/api/v1/me` request on a second asynchronous session lookup.
 
 ## Feature surface
 
