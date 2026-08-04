@@ -62,6 +62,9 @@ Hexclave project, `VITE_HEXCLAVE_PUBLISHABLE_CLIENT_KEY` in each API service's
 build environment. These public `VITE_*` values are distinct from the
 server-only `HEXCLAVE_PROJECT_ID` and `HEXCLAVE_SECRET_SERVER_KEY`; because
 Vite embeds them during the build, a redeploy is required after changing them.
+Browser API requests retain cookie credentials and also send Hexclave's
+explicit `Authorization` header. This supports production custom domains and
+avoids relying on browser cookie delivery alone.
 
 ## Feature surface
 
