@@ -3,6 +3,7 @@
 ## Unreleased (target 0.1.1)
 
 - Fixed the public Loop sign-in entry path by declaring the Vite-safe Hexclave project and publishable client-key variables on all regional Render API builds.
+- Added explicit US, EU, and UK choices for landing-page sign-in and sign-up redirects.
 - Documented that the public Hexclave variables must be set before the web bundle is built and redeployed.
 - Added immutable country-to-region assignment for EU, UK, and US workspaces.
 - Added regional residency fields and the development migration synchronizer.

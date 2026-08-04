@@ -57,7 +57,7 @@ With `AUTH_DISABLED=true` (default when `HEXCLAVE_SECRET_SERVER_KEY` is unset), 
 - Prefer Hexclave hosted auth in production (`hexclave.config.ts`).
 - Render Blueprint secrets use `sync: false` — set them in the Render dashboard only.
 - The API services also build `apps/web`; set the public `VITE_HEXCLAVE_PROJECT_ID` and, when required, `VITE_HEXCLAVE_PUBLISHABLE_CLIENT_KEY` values on every regional API service. They must be present at Vite build time or the client intentionally falls back to bootstrap routing and `/sign-in` will not be available.
-- The landing package is `apps/landing`; keep its `VITE_APP_URL` environment-specific so its sign-up and sign-in links never cross development and production.
+- The landing package is `apps/landing`; configure its `VITE_APP_URL_US`, `VITE_APP_URL_EU`, and `VITE_APP_URL_UK` values so every sign-up and sign-in choice stays in the intended data region. The supplied regional domains are the checked-in defaults.
 - Keep the supplied Twiniti dark/light logo assets in `apps/landing/public/branding` when updating the landing page identity.
 - Google Analytics uses the public `VITE_GOOGLE_ANALYTICS_ID` build variable; do not send names, email addresses, or other CRM fields to analytics.
 - The analytics package mirrors the supplied Google `gtag.js` snippet behind consent; do not add a second raw Google tag to either HTML entrypoint.

@@ -241,6 +241,12 @@ services:
     envVars:
       - key: VITE_APP_URL
         value: https://twiniti-crm.onrender.com
+      - key: VITE_APP_URL_US
+        value: https://loop.us.twiniti.ai
+      - key: VITE_APP_URL_EU
+        value: https://loop.eu.twiniti.ai
+      - key: VITE_APP_URL_UK
+        value: https://loop.uk.twiniti.ai
       - key: VITE_ENVIRONMENT_LABEL
         value: Development preview
       - key: VITE_GOOGLE_ANALYTICS_ID

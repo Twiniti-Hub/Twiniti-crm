@@ -62,9 +62,10 @@ landing service, and one worker service:
 - API US: `REGION_CODE=us`
 - API EU: `REGION_CODE=eu`
 - API UK: `REGION_CODE=uk` in Render Frankfurt
-- Landing: separate static service with environment-specific links to the CRM
-  app's `/sign-up` and `/sign-in` routes; assign the public DNS name to this
-  service in Render
+- Landing: separate static service with explicit US, EU, and UK choices for the
+  CRM app's `/sign-up` and `/sign-in` routes; configure the three
+  `VITE_APP_URL_*` values and assign the public DNS name to this service in
+  Render
 - Worker: all three database URLs for that environment
 
 The Blueprint files contain secret placeholders only. Populate the
@@ -78,7 +79,6 @@ Dashboard.
 
 ## Current implementation boundary
 
-This change establishes the immutable country and organization-region data
-contract and regional migration workflow. The next runtime slice will add the
-global routing registry, regional login handoff, wrong-region rejection, and
-per-cell API/worker database selection.
+The landing page now provides the regional login handoff. The remaining
+runtime boundary is wrong-region rejection and per-cell API/worker database
+selection after a user enters a regional application.
