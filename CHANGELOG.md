@@ -2,6 +2,7 @@
 
 ## Unreleased (target 0.1.1)
 
+- Added a copy-ready regional MCP agent connection guide with credential, scope, request, and troubleshooting examples.
 - Super Admin workspace context bypasses the client billing redirect, matching the API's platform-admin billing policy.
 - Added the first end-user help guide under `docs/help/`, covering the current CRM navigation and user workflows.
 - Added an in-app Help menu item and `/help` page linking users to the main CRM workflows.

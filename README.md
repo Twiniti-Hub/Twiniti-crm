@@ -44,6 +44,9 @@ endpoints are `https://loop.us.twiniti.ai/mcp`,
 `https://loop.eu.twiniti.ai/mcp`, and `https://loop.uk.twiniti.ai/mcp`.
 There is no stdio launcher in this phase; agents connect over HTTPS and use
 the MCP `initialize`, `tools/list`, and `tools/call` methods.
+See [docs/AGENT_CONNECTION.md](docs/AGENT_CONNECTION.md) for a copy-ready
+agent connection guide, credential and scope rules, request examples, and
+troubleshooting.
 
 Super Admins choose an explicit workspace from `/super-admin` before using CRM
 functions. The selected workspace is kept in that regional browser origin and
