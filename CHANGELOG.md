@@ -8,6 +8,7 @@
 - Super Admin workspace context bypasses the client billing redirect, matching the API's platform-admin billing policy.
 - Added the first end-user help guide under `docs/help/`, covering the current CRM navigation and user workflows.
 - Added an in-app Help menu item and `/help` page linking users to the main CRM workflows.
+- Added Hexclave authorization headers to browser API requests so production custom domains do not depend on cookie delivery alone.
 
 - Added an explicit Super Admin workspace selector with regional context persistence and server-side workspace validation.
 - Replaced the hand-rolled MCP JSON-RPC POST handler with the official SDK's stateless Streamable HTTP transport; stdio remains deferred.

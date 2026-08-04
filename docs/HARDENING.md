@@ -37,7 +37,7 @@ Secrets for this project are `sync: false` in [`render.yaml`](../render.yaml); r
 
 ## 3. Security
 
-- [x] Review Hexclave auth paths (same-origin SignIn + cookie token store, role gates)
+- [x] Review Hexclave auth paths (same-origin SignIn + cookie token store, explicit browser authorization header, role gates)
 - [ ] Agent abuse cases: over-scoped tokens, revoked credentials, dry-run vs mutate
 - [ ] Prompt-injection / tool-jailbreak attempts against MCP agent tools
 - [x] Webhook signature validation for Resend (reject invalid signatures)

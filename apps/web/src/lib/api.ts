@@ -1,3 +1,5 @@
+import { hexclaveApp } from "../hexclave/client";
+
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 const WORKSPACE_CONTEXT_KEY = "twiniti.activeWorkspaceId";
 const WORKSPACE_CONTEXT_HEADER = "X-Twiniti-Workspace-Id";
@@ -18,6 +20,10 @@ export function clearWorkspaceContextId() {
 export async function api(path: string, init?: RequestInit) {
   const headers = new Headers(init?.headers);
   if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  if (!headers.has("Authorization") && hexclaveApp) {
+    const authorization = await hexclaveApp.getAuthorizationHeader();
+    if (authorization) headers.set("Authorization", authorization);
+  }
   const workspaceId = getWorkspaceContextId();
   if (workspaceId && !headers.has(WORKSPACE_CONTEXT_HEADER)) {
     headers.set(WORKSPACE_CONTEXT_HEADER, workspaceId);
