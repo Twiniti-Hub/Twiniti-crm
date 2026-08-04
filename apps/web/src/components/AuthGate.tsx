@@ -2,8 +2,9 @@ import { useUser } from "@hexclave/react";
 import { HexclaveHandler } from "@hexclave/react";
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router";
-import { api } from "../lib/api";
+import { api, setBrowserAuthorizationHeader } from "../lib/api";
 import type { Me } from "../lib/me";
+import { hexclaveApp } from "../hexclave/client";
 import { AcceptInvitePage } from "../pages/AcceptInvitePage";
 import { BillingPage } from "../pages/BillingPage";
 import { LandingPage } from "../pages/LandingPage";
@@ -15,6 +16,8 @@ import { CrmRoutes } from "./CrmRoutes";
 /** Guests see landing + auth pages; signed-in users get setup gates or CRM shell. */
 export function AuthGate() {
   const user = useUser();
+  const authorizationHeader = hexclaveApp?.useAuthorizationHeader() ?? null;
+  setBrowserAuthorizationHeader(authorizationHeader);
   const location = useLocation();
   const [me, setMe] = useState<Me | null>(null);
   const [loadingMe, setLoadingMe] = useState(false);

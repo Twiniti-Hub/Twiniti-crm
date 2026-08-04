@@ -1,8 +1,13 @@
-import { hexclaveApp } from "../hexclave/client";
-
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 const WORKSPACE_CONTEXT_KEY = "twiniti.activeWorkspaceId";
 const WORKSPACE_CONTEXT_HEADER = "X-Twiniti-Workspace-Id";
+
+let browserAuthorizationHeader: string | null = null;
+
+/** Keep the current React-derived auth header available to non-React API helpers. */
+export function setBrowserAuthorizationHeader(value: string | null) {
+  browserAuthorizationHeader = value;
+}
 
 export function getWorkspaceContextId(): string | null {
   if (typeof window === "undefined") return null;
@@ -20,9 +25,8 @@ export function clearWorkspaceContextId() {
 export async function api(path: string, init?: RequestInit) {
   const headers = new Headers(init?.headers);
   if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  if (!headers.has("Authorization") && hexclaveApp) {
-    const authorization = await hexclaveApp.getAuthorizationHeader();
-    if (authorization) headers.set("Authorization", authorization);
+  if (!headers.has("Authorization") && browserAuthorizationHeader) {
+    headers.set("Authorization", browserAuthorizationHeader);
   }
   const workspaceId = getWorkspaceContextId();
   if (workspaceId && !headers.has(WORKSPACE_CONTEXT_HEADER)) {
