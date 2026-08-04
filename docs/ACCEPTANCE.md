@@ -7,6 +7,7 @@ Release acceptance for the Agent-Native Marketing CRM. An agent (or human) can t
 - [x] Unit: property validation and filter AST compilation (`packages/db/src/hubspot.test.ts`)
 - [ ] Integration: API against Neon preview branches
 - [x] Auth: Hexclave session + bootstrap/`AUTH_DISABLED` modes; role gates (implemented in code; live Hexclave verified on Render)
+- [ ] Auth entry: an unauthenticated visitor selecting “I already use Loop” reaches `/sign-in` without the CRM shell or bootstrap warning (requires the public `VITE_HEXCLAVE_*` build variables on the target API service)
 - [x] Email: Resend adapter contract tests (`packages/email/src/index.test.ts` personalize + signature)
 - [x] Webhooks: signature validation rejects invalid signatures (`POST /api/v1/webhooks/resend`)
 - [ ] Rendering: email HTML/text personalization across clients (spot-check)

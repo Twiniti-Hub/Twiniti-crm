@@ -38,6 +38,13 @@ production migration job. See
 
 With `AUTH_DISABLED=true` (default when Hexclave secret is unset), the API boots a single-org owner for local development.
 
+Production and development Render API services build the web application from
+the same checkout. Set `VITE_HEXCLAVE_PROJECT_ID` and, when required by the
+Hexclave project, `VITE_HEXCLAVE_PUBLISHABLE_CLIENT_KEY` in each API service's
+build environment. These public `VITE_*` values are distinct from the
+server-only `HEXCLAVE_PROJECT_ID` and `HEXCLAVE_SECRET_SERVER_KEY`; because
+Vite embeds them during the build, a redeploy is required after changing them.
+
 ## Feature surface
 
 | Area | Status |
