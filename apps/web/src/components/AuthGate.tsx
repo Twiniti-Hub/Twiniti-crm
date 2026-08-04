@@ -99,7 +99,7 @@ export function AuthGate() {
     );
   }
 
-  if (me?.billingStatus && !["active", "trialing"].includes(me.billingStatus)) {
+  if (me?.billingStatus && !me.isSuperAdmin && !["active", "trialing"].includes(me.billingStatus)) {
     return (
       <Routes>
         <Route path="billing" element={<BillingPage />} />
