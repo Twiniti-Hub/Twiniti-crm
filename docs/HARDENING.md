@@ -30,7 +30,10 @@ Production-ready cutover for Twiniti Loop. Work through each section before go-l
 
 1. Open [Render Dashboard](https://dashboard.render.com) → service `Twiniti-crm` (and worker if separate).
 2. **Events** / deploys → select the last known-good deploy → **Rollback** (or clear-cache redeploy of that commit).
-3. Confirm `/health` returns `authMode: hexclave` (or expected mode) and that `VITE_*` build env vars are still present (Vite vars require a rebuild if missing).
+3. Confirm `/health` returns `authMode: hexclave` (or expected mode), that the
+   server `HEXCLAVE_PROJECT_ID` matches `VITE_HEXCLAVE_PROJECT_ID`, and that
+   the `VITE_*` build env vars are still present (Vite vars require a rebuild
+   if missing). Production startup now fails closed when the IDs differ.
 4. Worker: redeploy the matching commit so job processors stay schema-compatible with the API.
 
 Secrets for this project are `sync: false` in [`render.yaml`](../render.yaml); recover from the team vault / Render env UI — never from git.

@@ -22,6 +22,11 @@ When local `AUTH_DISABLED=true` is enabled, the API supplies its bootstrap
 owner context. Production and hosted development services require a valid
 agent credential.
 
+The hosted API also requires its browser and server Hexclave configuration to
+use the same project ID. If a deployment reports `Authentication required`
+after sign-in, verify that `VITE_HEXCLAVE_PROJECT_ID` and server-side
+`HEXCLAVE_PROJECT_ID` match before investigating the agent credential.
+
 ## 2. Obtain a scoped agent credential
 
 A company admin creates an agent from the workspace's **Agents** page. The

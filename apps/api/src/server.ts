@@ -6,7 +6,7 @@ import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import rawBody from "fastify-raw-body";
 import swagger from "@fastify/swagger";
-import { assertProductionApiConfiguration, loadEnv, regionalDatabaseUrl } from "@twiniti/config";
+import { assertProductionApiConfiguration, hasHexclaveServerConfiguration, loadEnv, regionalDatabaseUrl } from "@twiniti/config";
 import { ensureBootstrapOrg, getDb } from "@twiniti/db";
 import { registerAuthHook, requireActor, requireSuperAdmin } from "./auth-hook.js";
 import { registerMcpRoutes } from "./mcp.js";
@@ -55,7 +55,7 @@ app.get("/health", async () => ({
   status: "ok",
   service: "twiniti-crm-api",
   regionCode: env.REGION_CODE,
-  authMode: env.AUTH_DISABLED || !env.HEXCLAVE_SECRET_SERVER_KEY ? "bootstrap" : "hexclave"
+  authMode: hasHexclaveServerConfiguration(env) ? "hexclave" : "bootstrap"
 }));
 
 app.get("/api/v1/bootstrap", async (request, reply) => {

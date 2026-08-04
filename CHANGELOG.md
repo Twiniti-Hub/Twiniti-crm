@@ -2,6 +2,11 @@
 
 ## Unreleased (target 0.1.1)
 
+## [0.10.9] - 2026-08-05
+
+- Fixed the production Hexclave project mismatch that caused valid browser sessions to receive API 401 responses.
+- Added fail-closed startup validation requiring matching browser/server project IDs and a valid server auth configuration.
+
 - Added License_API-backed `TCRM_AGENT_ACCESS` enforcement and idempotent agent provision/revoke jobs; agent scopes remain controlled by Loop and no concurrency entitlement is used.
 - Replaced free-form agent scope text with a controlled multi-select and added organization-scoped access updates for existing agents.
 - Added a copy-ready regional MCP agent connection guide with credential, scope, request, and troubleshooting examples.
