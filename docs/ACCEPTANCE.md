@@ -7,6 +7,7 @@ Release acceptance for the Agent-Native Marketing CRM. An agent (or human) can t
 - [x] Unit: property validation and filter AST compilation (`packages/db/src/hubspot.test.ts`)
 - [ ] Integration: API against Neon preview branches
 - [x] Auth: Hexclave session + bootstrap/`AUTH_DISABLED` modes; role gates (implemented in code; live Hexclave verified on Render)
+- [x] MCP: standard stateless Streamable HTTP transport contract tests (`apps/api/src/tests/mcp-transport.test.ts`)
 - [ ] Auth entry: an unauthenticated visitor selecting “I already use Loop” reaches `/sign-in` without the CRM shell or bootstrap warning (requires the public `VITE_HEXCLAVE_*` build variables on the target API service)
 - [ ] Regional auth entry: the landing page exposes US, EU, and UK sign-in choices that resolve to the configured `VITE_APP_URL_US`, `VITE_APP_URL_EU`, and `VITE_APP_URL_UK` hosts
 - [x] Email: Resend adapter contract tests (`packages/email/src/index.test.ts` personalize + signature)
@@ -41,6 +42,7 @@ Release acceptance for the Agent-Native Marketing CRM. An agent (or human) can t
 Use [`apps/api/src/tests/agent-harness.test.ts`](../apps/api/src/tests/agent-harness.test.ts) as the case catalog:
 
 - [x] Catalog self-check under `node:test` (`pnpm --filter @twiniti/api test`)
+- [x] Hosted MCP endpoint uses standard Streamable HTTP JSON-RPC; stdio is intentionally deferred
 - [ ] Agent can search and get contacts with `contacts:read` (live)
 - [ ] Agent can create/upsert contacts within scope; duplicate email returns conflict guidance (live)
 - [ ] Agent can draft + preview campaigns; cannot send without approval (live)

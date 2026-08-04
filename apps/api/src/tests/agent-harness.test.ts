@@ -98,10 +98,10 @@ export const agentHarnessCases: HarnessCase[] = [
   },
   {
     id: "mcp.tools.parity",
-    title: "MCP tool list matches scoped REST capabilities",
+    title: "MCP tool list exposes scoped CRM capabilities",
     scopes: [],
-    steps: ["GET /api/v1/agents/tools", "Compare with MCP tool descriptors"],
-    expect: ["each MCP tool maps to a documented REST scope"]
+    steps: ["POST /mcp with initialize", "POST /mcp with tools/list", "Compare each descriptor with its required scope"],
+    expect: ["standard Streamable HTTP JSON-RPC responses", "each MCP tool maps to a documented REST scope"]
   }
 ];
 

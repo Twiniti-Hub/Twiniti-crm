@@ -30,9 +30,27 @@ Keep changes focused, add tests for behavior changes, and never commit credentia
 | Web | http://localhost:5173 |
 | API | http://localhost:4000 |
 | Health | http://localhost:4000/health |
-| MCP | `POST` http://localhost:4000/mcp |
+| MCP | Streamable HTTP `POST` http://localhost:4000/mcp |
 
 With `AUTH_DISABLED=true` (default when `HEXCLAVE_SECRET_SERVER_KEY` is unset), the API bootstraps a single-organization owner for local development.
+
+### Agent / MCP connection
+
+The MCP surface is hosted Streamable HTTP only in this phase. Configure an
+agent with the regional HTTPS endpoint and a scoped credential created from
+the Agents page or `POST /api/v1/agents`. Send JSON-RPC requests with these
+headers:
+
+```text
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Authorization: Bearer twiniti_agent_<token>
+```
+
+The first request should be `initialize`, followed by `tools/list` and
+`tools/call` as needed. Agent credentials are scoped and can be revoked; the
+credential value is returned only once. A local stdio process is intentionally
+not part of this release.
 
 ### Workspace layout
 
