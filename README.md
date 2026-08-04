@@ -75,6 +75,10 @@ Vite embeds them during the build, a redeploy is required after changing them.
 | BCC email tracking + contact activity timeline | Live (requires Resend Receiving setup) |
 | Hardening runbooks | [docs/HARDENING.md](docs/HARDENING.md), [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) |
 
+## User help
+
+The end-user guide is in [docs/help/README.md](docs/help/README.md). It covers onboarding, contacts, companies, imports, audiences, campaigns, forms, workflows, agents, deliverability, settings, billing, and Super Admin workspace selection.
+
 ## Render
 
 `render.yaml` deploys regional APIs, a dedicated static landing site, and the

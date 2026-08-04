@@ -18,7 +18,8 @@ const links = [
   { to: "/agents", label: "Agents" },
   { to: "/deliverability", label: "Deliverability" },
   { to: "/settings", label: "Settings" },
-  { to: "/billing", label: "Billing" }
+  { to: "/billing", label: "Billing" },
+  { to: "/help", label: "Help" }
 ] as const;
 
 function AccountFooter({ me }: { me: Me | null }) {
