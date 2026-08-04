@@ -1,0 +1,94 @@
+.region-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.region-menu > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.region-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.region-menu-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 10;
+  display: grid;
+  min-width: 245px;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid rgba(141, 231, 212, 0.24);
+  border-radius: 8px;
+  background: #10292f;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+}
+
+.region-menu-panel strong {
+  color: #89e7d3;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.region-menu-panel a {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border-radius: 5px;
+  color: #e8f1ed;
+  text-decoration: none;
+}
+
+.region-menu-panel a:hover {
+  background: #183239;
+}
+
+.region-menu-panel a span {
+  font-size: 13px;
+}
+
+.region-menu-panel a small {
+  color: #87a0a1;
+  font-size: 10px;
+}
+
+.region-menu-nav > summary {
+  color: #eff8f5;
+}
+
+.region-menu-nav > summary span {
+  color: #89e7d3;
+  margin-left: 4px;
+}
+
+.region-menu-hero .region-menu-panel,
+.region-menu-cta .region-menu-panel {
+  right: auto;
+  left: 0;
+}
+
+.region-menu-cta .region-menu-panel,
+.region-menu-footer .region-menu-panel {
+  bottom: calc(100% + 10px);
+  top: auto;
+}
+
+.region-menu-footer > summary {
+  color: #a8c0bd;
+}
+
+@media (max-width: 620px) {
+  .region-menu-panel {
+    right: 0;
+    left: auto;
+  }
+
+  .region-menu-hero .region-menu-panel {
+    left: 0;
+    right: auto;
+  }
+}

@@ -68,7 +68,10 @@ regional worker from `development`. Secrets use `sync: false`.
 The production Blueprint is [render.production.yaml](render.production.yaml).
 Both Blueprints define US, EU, and UK API services, one static landing service,
 and one worker that processes all three regional queues. The landing service
-links visitors to the environment's CRM app for Hexclave sign-up and sign-in.
+offers explicit US, EU, and UK choices for Hexclave sign-up and sign-in.
+Configure `VITE_APP_URL_US`, `VITE_APP_URL_EU`, and `VITE_APP_URL_UK` on the
+landing service when regional domains differ; the checked-in defaults are
+`loop.us.twiniti.ai`, `loop.eu.twiniti.ai`, and `loop.uk.twiniti.ai`.
 The landing page brand assets are stored in `apps/landing/public/branding`.
 UK runs as a logical cell in the Frankfurt Render region.
 
