@@ -52,6 +52,8 @@ The first request should be `initialize`, followed by `tools/list` and
 credential value is returned only once. A local stdio process is intentionally
 not part of this release.
 
+The copy-ready connection guide is [`docs/AGENT_CONNECTION.md`](docs/AGENT_CONNECTION.md).
+
 ### Super Admin workspace context
 
 Super Admins must choose a workspace in `/super-admin` before using CRM
