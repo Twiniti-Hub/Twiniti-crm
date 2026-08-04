@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { getRequestedWorkspaceId, WORKSPACE_CONTEXT_HEADER } from "@twiniti/auth";
 import { assertProductionApiConfiguration, loadEnv } from "@twiniti/config";
 import { agentIdentitySchema, segmentSearchSchema } from "@twiniti/contracts";
 
@@ -24,4 +25,12 @@ test("production configuration fails closed without auth and Stripe", () => {
     AUTH_DISABLED: "true"
   });
   assert.throws(() => assertProductionApiConfiguration(env));
+});
+
+test("workspace context accepts only UUID headers", () => {
+  assert.equal(getRequestedWorkspaceId({ [WORKSPACE_CONTEXT_HEADER]: "not-a-workspace" }), undefined);
+  assert.equal(
+    getRequestedWorkspaceId({ [WORKSPACE_CONTEXT_HEADER]: "550e8400-e29b-41d4-a716-446655440000" }),
+    "550e8400-e29b-41d4-a716-446655440000"
+  );
 });

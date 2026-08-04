@@ -52,6 +52,14 @@ The first request should be `initialize`, followed by `tools/list` and
 credential value is returned only once. A local stdio process is intentionally
 not part of this release.
 
+### Super Admin workspace context
+
+Super Admins must choose a workspace in `/super-admin` before using CRM
+functions. The UI stores that choice per regional browser origin and sends it
+as `X-Twiniti-Workspace-Id`. The API only accepts the context for a signed-in
+Super Admin and resolves it against the current regional database, so use the
+US, EU, or UK Loop host that owns the workspace.
+
 ### Workspace layout
 
 - `apps/web` — React/Vite CRM UI

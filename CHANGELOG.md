@@ -2,6 +2,7 @@
 
 ## Unreleased (target 0.1.1)
 
+- Added an explicit Super Admin workspace selector with regional context persistence and server-side workspace validation.
 - Replaced the hand-rolled MCP JSON-RPC POST handler with the official SDK's stateless Streamable HTTP transport; stdio remains deferred.
 - Added MCP transport contract tests for initialization, tool discovery, sessionless responses, and Origin validation.
 - Fixed the public Loop sign-in entry path by declaring the Vite-safe Hexclave project and publishable client-key variables on all regional Render API builds.
