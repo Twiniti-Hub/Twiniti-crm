@@ -2,6 +2,11 @@
 
 Twiniti CRM is currently pre-1.0. Versions use the `0.10.x` series while the product, deployment model, commercial rules, and agent contracts continue to mature. This history was reconstructed from the repository's Git commits and release work through 2026-08-05.
 
+## [0.10.9] - 2026-08-05
+
+- Fixed the production Hexclave project mismatch that caused valid browser sessions to receive API 401 responses.
+- Added fail-closed startup validation requiring matching browser/server project IDs and a valid server auth configuration.
+
 ## [0.10.8] - 2026-08-05
 
 - Added non-blocking Hexclave authorization headers to browser API requests so production custom domains do not depend on cookie delivery alone.

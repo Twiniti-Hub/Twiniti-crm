@@ -25,6 +25,7 @@ export const envSchema = z.object({
   HEXCLAVE_BASE_URL: optionalUrl,
   HEXCLAVE_PROJECT_ID: z.string().optional().default(""),
   HEXCLAVE_SECRET_SERVER_KEY: z.string().optional().default(""),
+  VITE_HEXCLAVE_PROJECT_ID: z.string().optional().default(""),
   RESEND_API_KEY: z.string().optional().default(""),
   RESEND_WEBHOOK_SECRET: z.string().optional().default(""),
   EMAIL_TRACKING_DOMAIN: z.string().default("inbound.twiniti.ai"),
@@ -103,6 +104,12 @@ export function isSuperAdminEmail(email: string | null | undefined, env: Pick<Ap
   return parseSuperAdminEmails(env.SUPER_ADMIN_EMAILS).includes(email.trim().toLowerCase());
 }
 
+export function hasHexclaveServerConfiguration(
+  env: Pick<AppEnv, "AUTH_DISABLED" | "HEXCLAVE_PROJECT_ID" | "HEXCLAVE_SECRET_SERVER_KEY">
+) {
+  return !env.AUTH_DISABLED && Boolean(env.HEXCLAVE_PROJECT_ID && env.HEXCLAVE_SECRET_SERVER_KEY);
+}
+
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   const parsed = envSchema.safeParse({
     ...source,
@@ -122,8 +129,14 @@ export function assertProductionApiConfiguration(env: AppEnv) {
   // infrastructure boundary that determines which regional database contract
   // must be enforced.
   if (env.DEPLOYMENT_ENV !== "production") return;
-  if (env.AUTH_DISABLED || !env.HEXCLAVE_SECRET_SERVER_KEY) {
-    throw new Error("Production API requires Hexclave server authentication; AUTH_DISABLED must be false");
+  if (env.AUTH_DISABLED || !env.HEXCLAVE_PROJECT_ID || !env.HEXCLAVE_SECRET_SERVER_KEY) {
+    throw new Error("Production API requires Hexclave server authentication, project ID, and AUTH_DISABLED=false");
+  }
+  if (!env.VITE_HEXCLAVE_PROJECT_ID) {
+    throw new Error("Production API requires VITE_HEXCLAVE_PROJECT_ID for the browser auth client");
+  }
+  if (env.HEXCLAVE_PROJECT_ID !== env.VITE_HEXCLAVE_PROJECT_ID) {
+    throw new Error("Production API Hexclave project ID must match VITE_HEXCLAVE_PROJECT_ID");
   }
   for (const key of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_ID"] as const) {
     if (!env[key]) throw new Error(`Production API requires ${key}`);

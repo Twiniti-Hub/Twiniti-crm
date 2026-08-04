@@ -1,5 +1,5 @@
 import { HexclaveServerApp } from "@hexclave/js";
-import { isSuperAdminEmail, type AppEnv } from "@twiniti/config";
+import { hasHexclaveServerConfiguration, isSuperAdminEmail, type AppEnv } from "@twiniti/config";
 import type { RegionCode } from "@twiniti/contracts";
 import { createLicenseApiClient, type LicenseCheck } from "@twiniti/license-api";
 import {
@@ -314,7 +314,7 @@ export async function resolveRequestActor(
     };
   }
 
-  const bootstrapMode = env.AUTH_DISABLED || !env.HEXCLAVE_SECRET_SERVER_KEY;
+  const bootstrapMode = !hasHexclaveServerConfiguration(env);
   if (bootstrapMode) {
     return resolveBootstrapActor(db, env);
   }

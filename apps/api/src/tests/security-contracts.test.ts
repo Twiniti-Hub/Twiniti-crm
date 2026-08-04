@@ -27,6 +27,23 @@ test("production configuration fails closed without auth and Stripe", () => {
   assert.throws(() => assertProductionApiConfiguration(env));
 });
 
+test("production configuration rejects a browser/server Hexclave project mismatch", () => {
+  const env = loadEnv({
+    NODE_ENV: "production",
+    DATABASE_URL: "postgresql://example.invalid/db",
+    HEXCLAVE_PROJECT_ID: "server-project",
+    HEXCLAVE_SECRET_SERVER_KEY: "server-secret",
+    VITE_HEXCLAVE_PROJECT_ID: "browser-project",
+    AUTH_DISABLED: "false",
+    STRIPE_SECRET_KEY: "stripe-secret",
+    STRIPE_WEBHOOK_SECRET: "stripe-webhook",
+    STRIPE_PRICE_ID: "price_test",
+    LICENSE_API_URL: "https://license.example.invalid",
+    LICENSE_API_API_KEY: "license-key"
+  });
+  assert.throws(() => assertProductionApiConfiguration(env), /must match/);
+});
+
 test("workspace context accepts only UUID headers", () => {
   assert.equal(getRequestedWorkspaceId({ [WORKSPACE_CONTEXT_HEADER]: "not-a-workspace" }), undefined);
   assert.equal(
