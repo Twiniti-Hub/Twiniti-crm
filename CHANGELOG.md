@@ -2,6 +2,11 @@
 
 Twiniti CRM is currently pre-1.0. Versions use the `0.10.x` series while the product, deployment model, commercial rules, and agent contracts continue to mature. This history was reconstructed from the repository's Git commits and release work through 2026-08-05.
 
+## [0.10.11] - 2026-08-05
+
+- Applied and documented the regional production billing-trial migration after missing `organization_billing` columns caused authenticated `/api/v1/me` and report requests to return HTTP 500.
+- Added production troubleshooting guidance for pending billing displays, schema drift, and the non-blocking browser `unload` permissions-policy warning.
+
 ## [0.10.10] - 2026-08-05
 
 - Gated CRM access on confirmed Stripe billing and License_API allow decisions.
