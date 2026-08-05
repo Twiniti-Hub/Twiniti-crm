@@ -41,7 +41,7 @@ export function SettingsPage() {
   const [resendFromName, setResendFromName] = useState("");
   const [resendWebhookSecret, setResendWebhookSecret] = useState("");
 
-  const isAdmin = me?.role === "admin";
+  const isAdmin = me?.role === "admin" || me?.isSuperAdmin === true;
 
   async function refresh() {
     const meRes = await api("/api/v1/me");
