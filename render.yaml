@@ -10,6 +10,8 @@ services:
     startCommand: pnpm --filter @twiniti/api start
     healthCheckPath: /health
     envVars:
+      - fromGroup: twiniti-crm-development-common
+      - fromGroup: twiniti-crm-development-api-databases
       - key: NODE_ENV
         value: production
       - key: DEPLOYMENT_ENV
@@ -23,16 +25,6 @@ services:
       - key: REGIONAL_APP_URL
         sync: false
       - key: VITE_GOOGLE_ANALYTICS_ID
-        sync: false
-      - key: HEXCLAVE_BASE_URL
-        sync: false
-      - key: HEXCLAVE_PROJECT_ID
-        sync: false
-      - key: VITE_HEXCLAVE_PROJECT_ID
-        sync: false
-      - key: VITE_HEXCLAVE_PUBLISHABLE_CLIENT_KEY
-        sync: false
-      - key: HEXCLAVE_SECRET_SERVER_KEY
         sync: false
       - key: RESEND_API_KEY
         sync: false
@@ -86,6 +78,8 @@ services:
     startCommand: pnpm --filter @twiniti/api start
     healthCheckPath: /health
     envVars:
+      - fromGroup: twiniti-crm-development-common
+      - fromGroup: twiniti-crm-development-api-databases
       - key: NODE_ENV
         value: production
       - key: DEPLOYMENT_ENV
@@ -99,16 +93,6 @@ services:
       - key: REGIONAL_APP_URL
         sync: false
       - key: VITE_GOOGLE_ANALYTICS_ID
-        sync: false
-      - key: HEXCLAVE_BASE_URL
-        sync: false
-      - key: HEXCLAVE_PROJECT_ID
-        sync: false
-      - key: VITE_HEXCLAVE_PROJECT_ID
-        sync: false
-      - key: VITE_HEXCLAVE_PUBLISHABLE_CLIENT_KEY
-        sync: false
-      - key: HEXCLAVE_SECRET_SERVER_KEY
         sync: false
       - key: RESEND_API_KEY
         sync: false
@@ -162,6 +146,8 @@ services:
     startCommand: pnpm --filter @twiniti/api start
     healthCheckPath: /health
     envVars:
+      - fromGroup: twiniti-crm-development-common
+      - fromGroup: twiniti-crm-development-api-databases
       - key: NODE_ENV
         value: production
       - key: DEPLOYMENT_ENV
@@ -175,16 +161,6 @@ services:
       - key: REGIONAL_APP_URL
         sync: false
       - key: VITE_GOOGLE_ANALYTICS_ID
-        sync: false
-      - key: HEXCLAVE_BASE_URL
-        sync: false
-      - key: HEXCLAVE_PROJECT_ID
-        sync: false
-      - key: VITE_HEXCLAVE_PROJECT_ID
-        sync: false
-      - key: VITE_HEXCLAVE_PUBLISHABLE_CLIENT_KEY
-        sync: false
-      - key: HEXCLAVE_SECRET_SERVER_KEY
         sync: false
       - key: RESEND_API_KEY
         sync: false
@@ -262,6 +238,8 @@ services:
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/worker build
     startCommand: pnpm --filter @twiniti/worker start
     envVars:
+      - fromGroup: twiniti-crm-development-common
+      - fromGroup: twiniti-crm-development-worker-databases
       - key: NODE_ENV
         value: production
       - key: DEPLOYMENT_ENV
