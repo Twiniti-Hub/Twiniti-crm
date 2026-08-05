@@ -296,7 +296,7 @@ export async function resolveRequestActor(
       organizationId: agent.organizationId,
       userId: agent.id,
       subject: agent.id
-    }, billing?.status ?? "active");
+    }, billing?.status ?? "pending");
     return {
       type: "agent",
       id: agent.id,
@@ -358,7 +358,7 @@ export async function resolveRequestActor(
           organizationName: workspace.name,
           regionCode: workspace.residencyRegion as RegionCode,
           countryCode: null,
-          billingStatus: billing?.status ?? "active"
+          billingStatus: billing?.status ?? "pending"
         };
       }
     }
@@ -378,7 +378,7 @@ export async function resolveRequestActor(
         organizationName: organization?.name ?? null,
         regionCode: (organization?.residencyRegion as RegionCode | undefined) ?? null,
         countryCode: crmUser.countryCode ?? null,
-        billingStatus: billing?.status ?? "active"
+        billingStatus: billing?.status ?? "pending"
       };
     }
     return {
@@ -413,13 +413,13 @@ export async function resolveRequestActor(
   const organization = await getOrganizationById(db, crmUser.organizationId);
   const billing = await getOrganizationBilling(db, crmUser.organizationId);
   const license = superAdmin
-    ? { billingStatus: billing?.status ?? "active", check: null as LicenseCheck | null }
+    ? { billingStatus: billing?.status ?? "pending", check: null as LicenseCheck | null }
     : await checkOrganizationLicense(db, env, {
         organizationId: crmUser.organizationId,
         userId: crmUser.id,
         subject,
         email: crmUser.email ?? email
-      }, billing?.status ?? "active");
+    }, billing?.status ?? "pending");
 
   return {
     type: "user",

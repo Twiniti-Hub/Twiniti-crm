@@ -57,6 +57,13 @@
       "when": 1785782433836,
       "tag": "0007_regional_residency",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785870000000,
+      "tag": "0008_billing_trials",
+      "breakpoints": true
     }
   ]
 }

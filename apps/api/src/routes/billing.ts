@@ -12,6 +12,7 @@ import {
 } from "@twiniti/db";
 import { audit, requireActor, requireOrgId, requireUserRole, sendError } from "../auth-hook.js";
 import { buildSubscriptionState, enqueueLicenseSubscriptionSync } from "../license-jobs.js";
+import type { TrialKind } from "@twiniti/license-api";
 
 type RawBodyRequest = FastifyRequest & { rawBody?: string | Buffer };
 
@@ -36,6 +37,26 @@ function subscriptionStatus(status: string): string {
 
 function subscriptionPeriodEnd(value: unknown): Date | null {
   return typeof value === "number" && Number.isFinite(value) ? new Date(value * 1000) : null;
+}
+
+function stripeDate(value: unknown): Date | null {
+  return typeof value === "number" && Number.isFinite(value) ? new Date(value * 1000) : null;
+}
+
+function trialKind(trialStart: Date | null, trialEnd: Date | null, configuredDays: number): TrialKind {
+  if (!trialStart || !trialEnd || trialEnd <= trialStart) return "none";
+  const days = (trialEnd.getTime() - trialStart.getTime()) / (24 * 60 * 60 * 1000);
+  if (days >= 80) return "three_month";
+  if (days >= 5 && days <= 8 && configuredDays === 7) return "seven_day";
+  return "unknown";
+}
+
+function stripeDiscountIds(value: unknown) {
+  if (!Array.isArray(value)) return { promotionCodeId: null, couponId: null };
+  const discount = value[0] && typeof value[0] === "object" ? value[0] as Record<string, unknown> : {};
+  const promotionCode = stripeObjectId(discount.promotion_code);
+  const coupon = stripeObjectId(discount.coupon);
+  return { promotionCodeId: promotionCode, couponId: coupon };
 }
 
 export async function createOrganizationCheckoutSession(
@@ -75,7 +96,7 @@ export async function createOrganizationCheckoutSession(
   }, { idempotencyKey: `organization-checkout:${input.organizationId}` });
 
   await updateOrganizationBilling(db, input.organizationId, {
-    status: "pending",
+    status: ["active", "trialing"].includes(billing.status) ? billing.status : "pending",
     stripeCheckoutSessionId: session.id,
     stripeCustomerId: stripeObjectId(session.customer),
     stripePriceId: env.STRIPE_PRICE_ID
@@ -102,13 +123,26 @@ async function applySubscriptionEvent(db: Db, event: Stripe.Event, subscription:
     ? subscription.items as { data?: Array<{ price?: { id?: string } }> }
     : {};
   const priceId = items.data?.[0]?.price?.id ?? null;
+  const trialStart = stripeDate(subscription.trial_start);
+  const trialEnd = stripeDate(subscription.trial_end);
+  const nextStatus = subscriptionStatus(String(subscription.status ?? "pending"));
+  const discounts = stripeDiscountIds(subscription.discounts);
+  const nextTrialKind = nextStatus === "trialing" ? trialKind(trialStart, trialEnd, 7) : "none";
+  const convertedAt = billing.status === "trialing" && nextStatus === "active" ? new Date(event.created * 1000) : null;
   await updateOrganizationBilling(db, billing.organizationId, {
-    status: subscriptionStatus(String(subscription.status ?? "pending")),
+    status: nextStatus,
     stripeCustomerId: customerId,
     stripeSubscriptionId: subscriptionId,
+    stripeSubscriptionStatus: String(subscription.status ?? "pending"),
     ...(priceId ? { stripePriceId: priceId } : {}),
+    ...(trialStart ? { trialStart } : {}),
+    ...(trialEnd ? { trialEnd } : {}),
+    trialKind: nextTrialKind,
+    ...(discounts.promotionCodeId ? { stripePromotionCodeId: discounts.promotionCodeId } : {}),
+    ...(discounts.couponId ? { stripeCouponId: discounts.couponId } : {}),
     ...(subscriptionPeriodEnd(subscription.current_period_end) ? { currentPeriodEnd: subscriptionPeriodEnd(subscription.current_period_end) } : {}),
     cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
+    ...(convertedAt ? { trialConvertedAt: convertedAt } : {}),
     lastStripeEventCreatedAt: new Date(event.created * 1000)
   });
   return billing.organizationId;
@@ -124,12 +158,14 @@ async function applyCheckoutCompleted(db: Db, event: Stripe.Event, session: Reco
   if (!organizationId) return null;
   const billing = await ensureOrganizationBilling(db, organizationId);
   if (billing.lastStripeEventCreatedAt && billing.lastStripeEventCreatedAt.getTime() > event.created * 1000) return organizationId;
-  const paymentStatus = String(session.payment_status ?? "");
+  const discounts = stripeDiscountIds(session.discounts);
   await updateOrganizationBilling(db, organizationId, {
-    status: paymentStatus === "paid" || paymentStatus === "no_payment_required" ? "active" : "pending",
+    status: "pending",
     stripeCustomerId: stripeObjectId(session.customer),
     stripeSubscriptionId: stripeObjectId(session.subscription),
     stripeCheckoutSessionId: stripeObjectId(session.id),
+    ...(discounts.promotionCodeId ? { stripePromotionCodeId: discounts.promotionCodeId } : {}),
+    ...(discounts.couponId ? { stripeCouponId: discounts.couponId } : {}),
     lastStripeEventCreatedAt: new Date(event.created * 1000)
   });
   return organizationId;
@@ -144,10 +180,17 @@ export async function registerBillingRoutes(app: FastifyInstance, db: Db, env: A
       return {
         data: {
           organizationId,
-          status: billing?.status ?? "active",
+          status: billing?.status ?? "pending",
           customerId: billing?.stripeCustomerId ?? null,
           subscriptionId: billing?.stripeSubscriptionId ?? null,
+          stripeSubscriptionStatus: billing?.stripeSubscriptionStatus ?? null,
           currentPeriodEnd: billing?.currentPeriodEnd?.toISOString() ?? null,
+          trialKind: billing?.trialKind ?? "none",
+          trialStart: billing?.trialStart?.toISOString() ?? null,
+          trialEnd: billing?.trialEnd?.toISOString() ?? null,
+          stripePromotionCodeId: billing?.stripePromotionCodeId ?? null,
+          stripeCouponId: billing?.stripeCouponId ?? null,
+          trialConvertedAt: billing?.trialConvertedAt?.toISOString() ?? null,
           cancelAtPeriodEnd: billing?.cancelAtPeriodEnd ?? false,
           licenseProvisioningStatus: billing?.licenseProvisioningStatus ?? "pending",
           licenseDecision: billing?.licenseDecision ?? null,

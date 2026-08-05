@@ -87,6 +87,11 @@ export function buildSubscriptionState(
     stripeCustomerId: string | null;
     stripeSubscriptionId: string | null;
     stripePriceId: string | null;
+    trialKind: string;
+    trialStart: Date | null;
+    trialEnd: Date | null;
+    stripePromotionCodeId: string | null;
+    stripeCouponId: string | null;
     status: string;
     currentPeriodEnd: Date | null;
     cancelAtPeriodEnd: boolean;
@@ -110,6 +115,11 @@ export function buildSubscriptionState(
     stripeCustomerId: billing.stripeCustomerId,
     stripeSubscriptionId: billing.stripeSubscriptionId,
     stripePriceId: billing.stripePriceId,
+    trialKind: billing.trialKind as SubscriptionStateInput["trialKind"],
+    trialStart: billing.trialStart?.toISOString() ?? null,
+    trialEnd: billing.trialEnd?.toISOString() ?? null,
+    stripePromotionCodeId: billing.stripePromotionCodeId,
+    stripeCouponId: billing.stripeCouponId,
     normalizedState: status,
     periodEnd,
     expiresAt,

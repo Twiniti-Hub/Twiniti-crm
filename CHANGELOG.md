@@ -2,6 +2,12 @@
 
 Twiniti CRM is currently pre-1.0. Versions use the `0.10.x` series while the product, deployment model, commercial rules, and agent contracts continue to mature. This history was reconstructed from the repository's Git commits and release work through 2026-08-05.
 
+## [0.10.10] - 2026-08-05
+
+- Gated CRM access on confirmed Stripe billing and License_API allow decisions.
+- Added seven-day and three-month trial classification, Stripe trial metadata, and trial-to-active conversion tracking.
+- Added bounded post-Checkout confirmation polling and billing recovery messaging.
+
 ## [0.10.9] - 2026-08-05
 
 - Fixed the production Hexclave project mismatch that caused valid browser sessions to receive API 401 responses.

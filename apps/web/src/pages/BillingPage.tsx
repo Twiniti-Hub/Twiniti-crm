@@ -10,11 +10,14 @@ type Billing = {
   licenseStatus?: string | null;
   licenseReasonCode?: string | null;
   licenseGraceCutoff?: string | null;
+  trialKind?: "none" | "seven_day" | "three_month" | "unknown";
+  trialEnd?: string | null;
 };
 
 function trialDaysRemaining(billing: Billing | null): number | null {
-  if (billing?.status !== "trialing" || !billing.currentPeriodEnd) return null;
-  const remaining = new Date(billing.currentPeriodEnd).getTime() - Date.now();
+  const end = billing?.trialEnd ?? billing?.currentPeriodEnd;
+  if (billing?.status !== "trialing" || !end) return null;
+  const remaining = new Date(end).getTime() - Date.now();
   return Math.max(0, Math.ceil(remaining / (24 * 60 * 60 * 1000)));
 }
 
@@ -25,6 +28,7 @@ export function BillingPage() {
   const params = new URLSearchParams(window.location.search);
   const canceled = params.get("canceled") === "1";
   const success = params.get("success") === "1";
+  const [confirming, setConfirming] = useState(success);
 
   async function load() {
     try {
@@ -39,6 +43,24 @@ export function BillingPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    if (!success) return;
+    let cancelled = false;
+    let attempts = 0;
+    const poll = async () => {
+      if (cancelled) return;
+      attempts += 1;
+      await load();
+      if (attempts >= 10 || cancelled) {
+        setConfirming(false);
+        return;
+      }
+      window.setTimeout(() => void poll(), 2000);
+    };
+    void poll();
+    return () => { cancelled = true; };
+  }, [success]);
 
   async function startCheckout() {
     setBusy(true);
@@ -95,15 +117,17 @@ export function BillingPage() {
             )}
           </div>
           {canceled ? <div className="banner warning">Checkout was canceled. Your workspace remains locked until billing is completed.</div> : null}
-          {success && !active ? <div className="banner info">Payment was received. We are waiting for Stripe to confirm the subscription.</div> : null}
+          {success && confirming && !active ? <div className="banner info">Checkout returned successfully. We are waiting for Stripe to confirm your trial or subscription.</div> : null}
+          {success && !confirming && !active ? <div className="banner warning">Stripe has not confirmed the subscription yet. Please retry checkout or contact support if this persists.</div> : null}
           {error ? <div className="banner error">{error}</div> : null}
           <div className="panel">
             <strong>Status: {billing?.status ?? "loading"}</strong>
             {trialRemaining !== null ? (
               <p className="muted">
-                7-day free trial · {trialRemaining} {trialRemaining === 1 ? "day" : "days"} remaining
+                {billing?.trialKind === "three_month" ? "Three-month promotional trial" : "7-day free trial"} · {trialRemaining} {trialRemaining === 1 ? "day" : "days"} remaining
               </p>
             ) : null}
+            {!active && !confirming ? <p className="muted">A payment method is required in Stripe Checkout. You can enter a promotion code there.</p> : null}
             {billing?.currentPeriodEnd ? <p className="muted">Current period ends {new Date(billing.currentPeriodEnd).toLocaleDateString()}.</p> : null}
             {billing?.licenseReasonCode ? <p className="muted">License status: {billing.licenseReasonCode}</p> : null}
           </div>

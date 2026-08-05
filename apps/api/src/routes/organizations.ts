@@ -107,7 +107,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         displayName: actor.displayName ?? null,
         needsSetup: Boolean(actor.needsSetup),
         isSuperAdmin: Boolean(actor.isSuperAdmin),
-        billingStatus: actor.billingStatus ?? "active",
+        billingStatus: actor.billingStatus ?? "pending",
         licenseDecision: actor.licenseDecision ?? null,
         licenseReasonCode: actor.licenseReasonCode ?? null,
         licenseStatus: actor.licenseStatus ?? null
@@ -222,7 +222,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
           countryCode: input.countryCode,
           createdAt: created.organization.createdAt.toISOString(),
           joinedAsAdmin: joinAsAdmin,
-          billingStatus: "pending",
+          billingStatus: billing.status,
           licenseProvisioningStatus: billing.licenseProvisioningStatus,
           checkoutUrl,
           checkoutSessionId,
