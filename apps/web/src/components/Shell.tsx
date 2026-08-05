@@ -6,7 +6,7 @@ import { api } from "../lib/api";
 import type { Me } from "../lib/me";
 import { Brand } from "./Brand";
 
-const links = [
+const crmLinks = [
   { to: "/", label: "Overview", end: true },
   { to: "/contacts", label: "Contacts" },
   { to: "/import", label: "Import" },
@@ -55,6 +55,8 @@ export function Shell() {
       .catch(() => setMe(null));
   }, []);
 
+  const workspaceRequired = Boolean(me?.isSuperAdmin && !me.organizationId);
+
   return (
     <main className="shell">
       <aside className="sidebar">
@@ -65,7 +67,7 @@ export function Shell() {
           </div>
         ) : null}
         <nav>
-          {links.map((link) => (
+          {(workspaceRequired ? [] : crmLinks).map((link) => (
             <NavLink
               key={link.to}
               to={link.to}
