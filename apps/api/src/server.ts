@@ -7,7 +7,7 @@ import fastifyStatic from "@fastify/static";
 import rawBody from "fastify-raw-body";
 import swagger from "@fastify/swagger";
 import { assertProductionApiConfiguration, hasHexclaveServerConfiguration, loadEnv, regionalDatabaseUrl } from "@twiniti/config";
-import { ensureBootstrapOrg, getDb } from "@twiniti/db";
+import { ensureBootstrapOrg, getDb, getPool, scopedDb } from "@twiniti/db";
 import { registerAuthHook, requireActor, requireSuperAdmin } from "./auth-hook.js";
 import { registerMcpRoutes } from "./mcp.js";
 import { registerBillingRoutes } from "./routes/billing.js";
@@ -26,7 +26,9 @@ const env = loadEnv({
 });
 
 const app = Fastify({ logger: true });
-const db = getDb(regionalDatabaseUrl(env, env.REGION_CODE));
+const databaseUrl = regionalDatabaseUrl(env, env.REGION_CODE);
+const db = scopedDb(getDb(databaseUrl));
+const pool = getPool(databaseUrl);
 
 await app.register(cors, {
   origin: env.WEB_ORIGIN,
@@ -49,7 +51,7 @@ await app.register(rawBody, {
   runFirst: true
 });
 
-registerAuthHook(app, db, env);
+registerAuthHook(app, db, env, pool);
 
 app.get("/health", async () => ({
   status: "ok",
@@ -73,7 +75,7 @@ await registerOrganizationRoutes(app, db, env);
 await registerBillingRoutes(app, db, env);
 await registerCrmRoutes(app, db);
 await registerMarketingRoutes(app, db, env);
-await registerMcpRoutes(app, db, env);
+await registerMcpRoutes(app, db, env, pool);
 
 app.get("/docs", async (_, reply) => reply.redirect("/documentation"));
 

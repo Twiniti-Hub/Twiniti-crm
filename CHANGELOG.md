@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.10.13] - 2026-08-05
+
+- Added organization-scoped Resend domains with encrypted per-domain credentials and default-domain selection.
+- Removed global Resend delivery fallback; email sends now fail closed without an active verified organization domain.
+
+## [0.10.12] - 2026-08-05
+
+- Added a global Super Admin commercial-health dashboard across US, UK, and EU data stores.
+- Added organization, user, agent, company, contact, trial, paid, license, and attention KPIs with billing/trial filtering.
+- Added organization-level trial conversion and License_API synchronization visibility.
+- Added pooled/request-scoped tenant RLS infrastructure and worker service contexts.
+- Added fail-closed PostgreSQL row-level security policies for organization-scoped tables.
+- Added `withOrganizationRls` to establish an organization and authenticated-member context for a transaction.
+
 Twiniti CRM is currently pre-1.0. Versions use the `0.10.x` series while the product, deployment model, commercial rules, and agent contracts continue to mature. This history was reconstructed from the repository's Git commits and release work through 2026-08-05.
 
 ## [0.10.11] - 2026-08-05

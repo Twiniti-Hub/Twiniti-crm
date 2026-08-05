@@ -20,7 +20,6 @@ function trialDaysRemaining(billing: Billing | null): number | null {
   const remaining = new Date(end).getTime() - Date.now();
   return Math.max(0, Math.ceil(remaining / (24 * 60 * 60 * 1000)));
 }
-
 export function BillingPage() {
   const [billing, setBilling] = useState<Billing | null>(null);
   const [error, setError] = useState<string | null>(null);

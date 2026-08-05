@@ -23,6 +23,7 @@ import {
   forms,
   jobs,
   organizationBilling,
+  organizationResendDomains,
   organizationInvitations,
   organizations,
   propertyDefinitions,
@@ -34,6 +35,43 @@ import {
   workflows,
   webhookEvents
 } from "./schema.js";
+
+export async function listOrganizationResendDomains(db: Db, organizationId: string) {
+  return db.select({
+    id: organizationResendDomains.id,
+    organizationId: organizationResendDomains.organizationId,
+    domain: organizationResendDomains.domain,
+    resendDomainId: organizationResendDomains.resendDomainId,
+    fromEmail: organizationResendDomains.fromEmail,
+    fromName: organizationResendDomains.fromName,
+    verificationStatus: organizationResendDomains.verificationStatus,
+    verifiedAt: organizationResendDomains.verifiedAt,
+    isDefault: organizationResendDomains.isDefault,
+    active: organizationResendDomains.active,
+    lastValidatedAt: organizationResendDomains.lastValidatedAt,
+    rotatedAt: organizationResendDomains.rotatedAt,
+    createdAt: organizationResendDomains.createdAt,
+    updatedAt: organizationResendDomains.updatedAt
+  }).from(organizationResendDomains).where(eq(organizationResendDomains.organizationId, organizationId));
+}
+
+export async function getOrganizationResendDomain(db: Db, organizationId: string, id: string) {
+  const [row] = await db.select().from(organizationResendDomains).where(and(
+    eq(organizationResendDomains.organizationId, organizationId),
+    eq(organizationResendDomains.id, id)
+  )).limit(1);
+  return row ?? null;
+}
+
+export async function getDefaultOrganizationResendDomain(db: Db, organizationId: string) {
+  const [row] = await db.select().from(organizationResendDomains).where(and(
+    eq(organizationResendDomains.organizationId, organizationId),
+    eq(organizationResendDomains.isDefault, true),
+    eq(organizationResendDomains.active, true),
+    eq(organizationResendDomains.verificationStatus, "verified")
+  )).limit(1);
+  return row ?? null;
+}
 import { countryCodeSchema, regionForCountry, type RegionCode } from "@twiniti/contracts";
 
 export function normalizeEmail(email: string): string {
@@ -515,6 +553,53 @@ export async function listOrganizations(db: Db) {
     .groupBy(organizations.id)
     .orderBy(asc(organizations.name));
   return rows;
+}
+
+export async function getSuperAdminDashboard(db: Db, regionCode: RegionCode) {
+  const rows = await db
+    .select({
+      id: organizations.id,
+      name: organizations.name,
+      regionCode: sql<string>`${regionCode}`,
+      createdAt: organizations.createdAt,
+      billingStatus: organizationBilling.status,
+      subscriptionStatus: organizationBilling.stripeSubscriptionStatus,
+      trialKind: organizationBilling.trialKind,
+      trialEnd: organizationBilling.trialEnd,
+      trialConvertedAt: organizationBilling.trialConvertedAt,
+      licenseStatus: organizationBilling.licenseStatus,
+      licenseDecision: organizationBilling.licenseDecision,
+      lastStripeEventCreatedAt: organizationBilling.lastStripeEventCreatedAt,
+      lastLicenseSyncAt: organizationBilling.lastLicenseSyncAt,
+      activeUserCount: sql<number>`(
+        select count(*) from crm_users u
+        where u.organization_id = ${organizations.id} and u.active = true
+      )`,
+      agentCount: sql<number>`(
+        select count(*) from agent_identities a
+        where a.organization_id = ${organizations.id} and a.revoked_at is null
+      )`,
+      companyCount: sql<number>`(
+        select count(*) from companies c
+        where c.organization_id = ${organizations.id} and c.archived_at is null
+      )`,
+      contactCount: sql<number>`(
+        select count(*) from contacts c
+        where c.organization_id = ${organizations.id}
+          and c.archived_at is null and c.merged_into_contact_id is null
+      )`
+    })
+    .from(organizations)
+    .leftJoin(organizationBilling, eq(organizationBilling.organizationId, organizations.id))
+    .orderBy(asc(organizations.name));
+
+  return rows.map((row) => ({
+    ...row,
+    activeUserCount: Number(row.activeUserCount ?? 0),
+    agentCount: Number(row.agentCount ?? 0),
+    companyCount: Number(row.companyCount ?? 0),
+    contactCount: Number(row.contactCount ?? 0)
+  }));
 }
 
 export async function listOrgMembers(db: Db, organizationId: string) {

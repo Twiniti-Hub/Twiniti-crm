@@ -33,8 +33,10 @@ import {
   parseFilterAst,
   searchContacts,
   type Db,
+  type DbPool,
   updateContact
 } from "@twiniti/db";
+import { beginOrganizationRlsTransaction, clearDbContext } from "@twiniti/db";
 
 const MCP_SERVER_INFO = { name: "twiniti-crm", version: "0.1.0" } as const;
 
@@ -241,7 +243,7 @@ function writeTransportError(reply: { raw: { headersSent: boolean; writeHead: (s
   }));
 }
 
-export async function registerMcpRoutes(app: FastifyInstance, db: Db, env: AppEnv) {
+export async function registerMcpRoutes(app: FastifyInstance, db: Db, env: AppEnv, pool: DbPool) {
   app.route({
     method: ["GET", "POST", "DELETE"],
     url: "/mcp",
@@ -267,6 +269,13 @@ export async function registerMcpRoutes(app: FastifyInstance, db: Db, env: AppEn
         return reply.code(402).send({ jsonrpc: "2.0", id: null, error: { code: -32002, message: "Organization billing is required" } });
       }
       request.actor = actor;
+      const tenantTransaction = actor.organizationId && actor.hexclaveSubject
+        ? await beginOrganizationRlsTransaction(pool, {
+            organizationId: actor.organizationId,
+            hexclaveSubject: actor.hexclaveSubject
+          })
+        : null;
+      tenantTransaction?.enter();
       reply.hijack();
 
       const server = createMcpServer(db, actor);
@@ -280,12 +289,22 @@ export async function registerMcpRoutes(app: FastifyInstance, db: Db, env: AppEn
         void server.close();
       });
 
+      let failed = false;
       try {
         await server.connect(transport);
         await transport.handleRequest(request.raw, reply.raw, request.body);
       } catch (error) {
+        failed = true;
         request.log.error(error, "MCP request failed");
         writeTransportError(reply, error);
+        if (tenantTransaction) await tenantTransaction.rollback();
+      } finally {
+        if (tenantTransaction) {
+          if (failed) await tenantTransaction.rollback();
+          else await tenantTransaction.commit();
+          clearDbContext();
+          tenantTransaction.release();
+        }
       }
     }
   });

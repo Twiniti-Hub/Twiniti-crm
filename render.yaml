@@ -1,10 +1,10 @@
 services:
   - type: web
-    name: twiniti-crm-prod-api-us
+    name: twiniti-crm-dev-api-us
     runtime: node
-    plan: starter
+    plan: free
     region: virginia
-    branch: production
+    branch: development
     autoDeployTrigger: checksPass
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/web build && pnpm --filter @twiniti/api build
     startCommand: pnpm --filter @twiniti/api start
@@ -15,24 +15,20 @@ services:
       - key: NODE_ENV
         value: production
       - key: DEPLOYMENT_ENV
-        value: production
+        value: development
       - key: REGION_CODE
         value: us
       - key: WEB_ORIGIN
         sync: false
-      - key: DATABASE_URL_Prod_US
+      - key: DATABASE_URL_Dev_US
         sync: false
       - key: REGIONAL_APP_URL
         sync: false
       - key: VITE_GOOGLE_ANALYTICS_ID
         sync: false
-      - key: RESEND_API_KEY
-        sync: false
-      - key: RESEND_WEBHOOK_SECRET
+      - key: RESEND_CREDENTIAL_ENCRYPTION_KEY
         sync: false
       - key: EMAIL_TRACKING_DOMAIN
-        sync: false
-      - key: RESEND_FROM_EMAIL
         sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
@@ -68,11 +64,11 @@ services:
         sync: false
 
   - type: web
-    name: twiniti-crm-prod-api-eu
+    name: twiniti-crm-dev-api-eu
     runtime: node
-    plan: starter
+    plan: free
     region: frankfurt
-    branch: production
+    branch: development
     autoDeployTrigger: checksPass
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/web build && pnpm --filter @twiniti/api build
     startCommand: pnpm --filter @twiniti/api start
@@ -83,24 +79,20 @@ services:
       - key: NODE_ENV
         value: production
       - key: DEPLOYMENT_ENV
-        value: production
+        value: development
       - key: REGION_CODE
         value: eu
       - key: WEB_ORIGIN
         sync: false
-      - key: DATABASE_URL_Prod_EU
+      - key: DATABASE_URL_Dev_EU
         sync: false
       - key: REGIONAL_APP_URL
         sync: false
       - key: VITE_GOOGLE_ANALYTICS_ID
         sync: false
-      - key: RESEND_API_KEY
-        sync: false
-      - key: RESEND_WEBHOOK_SECRET
+      - key: RESEND_CREDENTIAL_ENCRYPTION_KEY
         sync: false
       - key: EMAIL_TRACKING_DOMAIN
-        sync: false
-      - key: RESEND_FROM_EMAIL
         sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
@@ -136,11 +128,11 @@ services:
         sync: false
 
   - type: web
-    name: twiniti-crm-prod-api-uk
+    name: twiniti-crm-dev-api-uk
     runtime: node
-    plan: starter
+    plan: free
     region: frankfurt
-    branch: production
+    branch: development
     autoDeployTrigger: checksPass
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/web build && pnpm --filter @twiniti/api build
     startCommand: pnpm --filter @twiniti/api start
@@ -151,24 +143,20 @@ services:
       - key: NODE_ENV
         value: production
       - key: DEPLOYMENT_ENV
-        value: production
+        value: development
       - key: REGION_CODE
         value: uk
       - key: WEB_ORIGIN
         sync: false
-      - key: DATABASE_URL_Prod_UK
+      - key: DATABASE_URL_Dev_UK
         sync: false
       - key: REGIONAL_APP_URL
         sync: false
       - key: VITE_GOOGLE_ANALYTICS_ID
         sync: false
-      - key: RESEND_API_KEY
-        sync: false
-      - key: RESEND_WEBHOOK_SECRET
+      - key: RESEND_CREDENTIAL_ENCRYPTION_KEY
         sync: false
       - key: EMAIL_TRACKING_DOMAIN
-        sync: false
-      - key: RESEND_FROM_EMAIL
         sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
@@ -204,9 +192,9 @@ services:
         sync: false
 
   - type: web
-    name: twiniti-crm-prod-landing
+    name: twiniti-crm-dev-landing
     runtime: static
-    branch: production
+    branch: development
     autoDeployTrigger: checksPass
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/landing build
     staticPublishPath: apps/landing/dist
@@ -222,16 +210,16 @@ services:
       - key: VITE_APP_URL_UK
         value: https://loop.uk.twiniti.ai
       - key: VITE_ENVIRONMENT_LABEL
-        value: Production
+        value: Development preview
       - key: VITE_GOOGLE_ANALYTICS_ID
         sync: false
 
   - type: worker
-    name: twiniti-crm-prod-worker
+    name: twiniti-crm-dev-worker
     runtime: node
     plan: starter
     region: frankfurt
-    branch: production
+    branch: development
     autoDeployTrigger: checksPass
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/worker build
     startCommand: pnpm --filter @twiniti/worker start
@@ -241,18 +229,14 @@ services:
       - key: NODE_ENV
         value: production
       - key: DEPLOYMENT_ENV
-        value: production
-      - key: DATABASE_URL_Prod_US
+        value: development
+      - key: DATABASE_URL_Dev_US
         sync: false
-      - key: DATABASE_URL_Prod_EU
+      - key: DATABASE_URL_Dev_EU
         sync: false
-      - key: DATABASE_URL_Prod_UK
+      - key: DATABASE_URL_Dev_UK
         sync: false
-      - key: RESEND_API_KEY
-        sync: false
-      - key: RESEND_FROM_EMAIL
-        sync: false
-      - key: RESEND_WEBHOOK_SECRET
+      - key: RESEND_CREDENTIAL_ENCRYPTION_KEY
         sync: false
       - key: EMAIL_TRACKING_DOMAIN
         sync: false

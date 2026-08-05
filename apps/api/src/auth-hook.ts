@@ -1,16 +1,17 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { assertOrganization, requireRole, resolveRequestActor, type AuthActor, type CrmRole } from "@twiniti/auth";
 import type { AppEnv } from "@twiniti/config";
-import type { Db } from "@twiniti/db";
-import { writeAudit } from "@twiniti/db";
+import { beginOrganizationRlsTransaction, clearDbContext, type Db, type DbPool, writeAudit } from "@twiniti/db";
 
 declare module "fastify" {
   interface FastifyRequest {
     actor?: AuthActor;
+    tenantDb?: Db;
+    tenantConnection?: { commit: () => Promise<void>; rollback: () => Promise<void>; release: () => void };
   }
 }
 
-export function registerAuthHook(app: FastifyInstance, db: Db, env: AppEnv) {
+export function registerAuthHook(app: FastifyInstance, db: Db, env: AppEnv, pool: DbPool) {
   app.addHook("preHandler", async (request, reply) => {
     const url = request.url.split("?")[0] ?? request.url;
     if (
@@ -48,6 +49,30 @@ export function registerAuthHook(app: FastifyInstance, db: Db, env: AppEnv) {
       });
       return;
     }
+
+    if (actor.organizationId && actor.hexclaveSubject) {
+      const transaction = await beginOrganizationRlsTransaction(pool, {
+        organizationId: actor.organizationId,
+        hexclaveSubject: actor.hexclaveSubject
+      });
+      transaction.enter();
+      request.tenantDb = transaction.db;
+      request.tenantConnection = transaction;
+    }
+  });
+
+  app.addHook("onResponse", async (request) => {
+    if (!request.tenantConnection) return;
+    await request.tenantConnection.commit();
+    request.tenantConnection.release();
+    clearDbContext();
+  });
+
+  app.addHook("onError", async (request) => {
+    if (!request.tenantConnection) return;
+    await request.tenantConnection.rollback();
+    request.tenantConnection.release();
+    clearDbContext();
   });
 }
 
