@@ -239,8 +239,6 @@ services:
         source: /*
         destination: /index.html
     envVars:
-      - key: VITE_APP_URL
-        value: https://twiniti-crm.onrender.com
       - key: VITE_APP_URL_US
         value: https://loop.us.twiniti.ai
       - key: VITE_APP_URL_EU

@@ -16,7 +16,7 @@ const defaultRegionalAppUrls = {
 } as const;
 
 const regionalAppUrls = {
-  us: (import.meta.env.VITE_APP_URL_US || import.meta.env.VITE_APP_URL || defaultRegionalAppUrls.us).replace(/\/$/, ""),
+  us: (import.meta.env.VITE_APP_URL_US || defaultRegionalAppUrls.us).replace(/\/$/, ""),
   eu: (import.meta.env.VITE_APP_URL_EU || defaultRegionalAppUrls.eu).replace(/\/$/, ""),
   uk: (import.meta.env.VITE_APP_URL_UK || defaultRegionalAppUrls.uk).replace(/\/$/, "")
 } as const;
