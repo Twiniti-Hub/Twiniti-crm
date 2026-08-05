@@ -12,6 +12,12 @@ type Billing = {
   licenseGraceCutoff?: string | null;
 };
 
+function trialDaysRemaining(billing: Billing | null): number | null {
+  if (billing?.status !== "trialing" || !billing.currentPeriodEnd) return null;
+  const remaining = new Date(billing.currentPeriodEnd).getTime() - Date.now();
+  return Math.max(0, Math.ceil(remaining / (24 * 60 * 60 * 1000)));
+}
+
 export function BillingPage() {
   const [billing, setBilling] = useState<Billing | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +74,7 @@ export function BillingPage() {
     && (!billing?.licenseDecision || billing.licenseDecision === "allow");
   const licenseExpired = billing?.licenseStatus === "expired"
     || billing?.licenseReasonCode === "LICENSE_EXPIRED";
+  const trialRemaining = trialDaysRemaining(billing);
 
   return (
     <div className="auth-page">
@@ -92,6 +99,11 @@ export function BillingPage() {
           {error ? <div className="banner error">{error}</div> : null}
           <div className="panel">
             <strong>Status: {billing?.status ?? "loading"}</strong>
+            {trialRemaining !== null ? (
+              <p className="muted">
+                7-day free trial · {trialRemaining} {trialRemaining === 1 ? "day" : "days"} remaining
+              </p>
+            ) : null}
             {billing?.currentPeriodEnd ? <p className="muted">Current period ends {new Date(billing.currentPeriodEnd).toLocaleDateString()}.</p> : null}
             {billing?.licenseReasonCode ? <p className="muted">License status: {billing.licenseReasonCode}</p> : null}
           </div>

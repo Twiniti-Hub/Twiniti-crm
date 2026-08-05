@@ -9,7 +9,8 @@ Release acceptance for the Agent-Native Marketing CRM. An agent (or human) can t
 - [x] Auth: Hexclave session + bootstrap/`AUTH_DISABLED` modes; role gates (implemented in code; live Hexclave verified on Render)
 - [x] MCP: standard stateless Streamable HTTP transport contract tests (`apps/api/src/tests/mcp-transport.test.ts`)
 - [ ] Auth entry: an unauthenticated visitor selecting “I already use Loop” reaches `/sign-in` without the CRM shell or bootstrap warning (requires the public `VITE_HEXCLAVE_*` build variables on the target API service)
-- [ ] Regional auth entry: the landing page exposes US, EU, and UK sign-in choices that resolve to the configured `VITE_APP_URL_US`, `VITE_APP_URL_EU`, and `VITE_APP_URL_UK` hosts
+- [x] Regional auth entry: the landing page exposes US, EU, and UK sign-in and signup choices that resolve by default to `https://loop.us.twiniti.ai`, `https://loop.eu.twiniti.ai`, and `https://loop.uk.twiniti.ai`; preview environments may override them with `VITE_APP_URL_US`, `VITE_APP_URL_EU`, and `VITE_APP_URL_UK`
+- [x] Trial visibility: the billing page shows the remaining days of the seven-day trial while the organization is in `trialing` status
 - [x] Super Admin workspace access: `/super-admin` provides an explicit workspace selector, persists the regional choice, and the API validates the selected workspace context before CRM access
 - [x] Email: Resend adapter contract tests (`packages/email/src/index.test.ts` personalize + signature)
 - [x] Webhooks: signature validation rejects invalid signatures (`POST /api/v1/webhooks/resend`)
