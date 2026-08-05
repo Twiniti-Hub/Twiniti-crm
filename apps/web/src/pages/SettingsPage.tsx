@@ -39,6 +39,7 @@ export function SettingsPage() {
   const [resendApiKey, setResendApiKey] = useState("");
   const [resendFromEmail, setResendFromEmail] = useState("");
   const [resendFromName, setResendFromName] = useState("");
+  const [resendWebhookSecret, setResendWebhookSecret] = useState("");
 
   const isAdmin = me?.role === "admin";
 
@@ -66,8 +67,8 @@ export function SettingsPage() {
   async function addResendDomain(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(null); setMessage(null);
     try {
-      await api("/api/v1/organization/integrations/resend/domains", { method: "POST", body: JSON.stringify({ domain: resendDomain, apiKey: resendApiKey, fromEmail: resendFromEmail, fromName: resendFromName || undefined, isDefault: resendDomains.length === 0 }) });
-      setResendDomain(""); setResendApiKey(""); setResendFromEmail(""); setResendFromName(""); setMessage("Resend domain connected."); await refresh();
+      await api("/api/v1/organization/integrations/resend/domains", { method: "POST", body: JSON.stringify({ domain: resendDomain, apiKey: resendApiKey, webhookSecret: resendWebhookSecret || undefined, fromEmail: resendFromEmail, fromName: resendFromName || undefined, isDefault: resendDomains.length === 0 }) });
+      setResendDomain(""); setResendApiKey(""); setResendWebhookSecret(""); setResendFromEmail(""); setResendFromName(""); setMessage("Resend domain connected."); await refresh();
     } catch (err) { setError(err instanceof Error ? err.message : "Could not connect Resend domain"); } finally { setBusy(false); }
   }
 
@@ -218,6 +219,7 @@ export function SettingsPage() {
           <form className="stack-form" style={{ boxShadow: "none", border: 0, padding: 0 }} onSubmit={addResendDomain}>
             <div className="form-row"><label>Domain<input value={resendDomain} onChange={(e) => setResendDomain(e.target.value)} placeholder="mail.example.com" required /></label><label>Resend API key<input type="password" value={resendApiKey} onChange={(e) => setResendApiKey(e.target.value)} placeholder="re_…" required /></label></div>
             <div className="form-row"><label>From email<input type="email" value={resendFromEmail} onChange={(e) => setResendFromEmail(e.target.value)} placeholder="hello@mail.example.com" required /></label><label>From name<input value={resendFromName} onChange={(e) => setResendFromName(e.target.value)} placeholder="Twiniti Loop" /></label></div>
+            <label>Webhook secret<input type="password" value={resendWebhookSecret} onChange={(e) => setResendWebhookSecret(e.target.value)} placeholder="whsec_…" /></label>
             <button className="primary" type="submit" disabled={busy}>{busy ? "Connecting…" : "Add Resend domain"}</button>
           </form>
         </section>
