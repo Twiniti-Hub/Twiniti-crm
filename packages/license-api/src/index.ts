@@ -2,6 +2,7 @@ import type { AppEnv } from "@twiniti/config";
 import { randomUUID } from "node:crypto";
 
 export type LicenseDecision = "allow" | "restricted" | "deny" | "retry";
+export type TrialKind = "none" | "seven_day" | "three_month" | "unknown";
 
 export type LicenseCheck = {
   decision: LicenseDecision;
@@ -12,6 +13,10 @@ export type LicenseCheck = {
   planCode?: string | null;
   licenseId?: string | null;
   licenseStatus?: string | null;
+  trialKind?: TrialKind;
+  trialStart?: string | null;
+  trialEnd?: string | null;
+  stripeSubscriptionId?: string | null;
   expiresAt?: string | null;
   graceCutoff?: string | null;
   entitlements?: unknown[];
@@ -38,6 +43,11 @@ export type SubscriptionStateInput = {
   stripeCustomerId?: string | null;
   stripeSubscriptionId?: string | null;
   stripePriceId?: string | null;
+  trialKind: TrialKind;
+  trialStart?: string | null;
+  trialEnd?: string | null;
+  stripePromotionCodeId?: string | null;
+  stripeCouponId?: string | null;
   normalizedState: "pending" | "trialing" | "active" | "grace" | "suspended" | "expired";
   periodEnd?: string | null;
   expiresAt?: string | null;
@@ -133,6 +143,10 @@ function normalizeCheck(data: unknown, fallbackOrganizationId: string, requestId
     planCode: (value.planCode ?? value.plan_code ?? license.planCode ?? null) as string | null,
     licenseId: (value.licenseId ?? value.license_id ?? license.id ?? null) as string | null,
     licenseStatus: (value.licenseStatus ?? value.license_status ?? license.status ?? user.status ?? null) as string | null,
+    trialKind: (value.trialKind ?? value.trial_kind ?? license.trialKind ?? license.trial_kind ?? "unknown") as TrialKind,
+    trialStart: (value.trialStart ?? value.trial_start ?? license.trialStart ?? license.trial_start ?? null) as string | null,
+    trialEnd: (value.trialEnd ?? value.trial_end ?? license.trialEnd ?? license.trial_end ?? null) as string | null,
+    stripeSubscriptionId: (value.stripeSubscriptionId ?? value.stripe_subscription_id ?? license.stripeSubscriptionId ?? license.stripe_subscription_id ?? null) as string | null,
     expiresAt: (value.expiresAt ?? value.expires_at ?? license.expiresAt ?? license.endDate ?? null) as string | null,
     graceCutoff: (value.graceCutoff ?? value.grace_cutoff ?? license.graceCutoff ?? null) as string | null,
     entitlements: Array.isArray(value.entitlements) ? value.entitlements : [],

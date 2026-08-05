@@ -98,3 +98,33 @@ test("checks agent access with an explicit principal type", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("normalizes trial classification and Stripe subscription metadata", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    success: true,
+    data: {
+      decision: "allow",
+      reasonCode: "OK",
+      organizationId: "crm-org-1",
+      licenseStatus: "Trial",
+      trialKind: "three_month",
+      trialStart: "2026-08-05T00:00:00.000Z",
+      trialEnd: "2026-11-05T00:00:00.000Z",
+      stripeSubscriptionId: "sub_123"
+    }
+  }), { status: 200, headers: { "content-type": "application/json" } });
+  try {
+    const result = await new LicenseApiClient(config).checkUserLicense({
+      externalOrganizationId: "crm-org-1",
+      externalUserId: "crm-user-1",
+      productCode: "twiniti-loop",
+      source: "twiniti-crm"
+    });
+    assert.equal(result.trialKind, "three_month");
+    assert.equal(result.stripeSubscriptionId, "sub_123");
+    assert.equal(result.licenseStatus, "Trial");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

@@ -407,9 +407,16 @@ export async function updateOrganizationBilling(
     stripeSubscriptionId: string | null;
     stripeCheckoutSessionId: string | null;
     stripePriceId: string | null;
+    stripeSubscriptionStatus: string | null;
+    trialKind: string;
+    trialStart: Date | null;
+    trialEnd: Date | null;
+    stripePromotionCodeId: string | null;
+    stripeCouponId: string | null;
     currentPeriodEnd: Date | null;
     cancelAtPeriodEnd: boolean;
     lastStripeEventCreatedAt: Date | null;
+    trialConvertedAt: Date | null;
   }>
 ) {
   const [updated] = await db.update(organizationBilling).set({
