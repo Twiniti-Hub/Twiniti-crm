@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Navigate, useNavigate } from "react-router";
+import { Navigate } from "react-router";
 import {
   api,
   clearWorkspaceContextId,
@@ -35,7 +35,6 @@ type Invitation = {
 };
 
 export function SuperAdminPage() {
-  const navigate = useNavigate();
   const [me, setMe] = useState<Me | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -149,7 +148,7 @@ export function SuperAdminPage() {
     const workspace = companies.find((company) => company.id === activeWorkspaceId);
     setWorkspaceContextId(activeWorkspaceId);
     setMessage(`Opening ${workspace?.name ?? "workspace"}…`);
-    navigate("/", { replace: true });
+    window.location.assign("/");
   }
 
   function onReturnToAdminConsole() {
