@@ -333,6 +333,7 @@ export async function resolveRequestActor(
     ?? null;
   const displayName = (user as { displayName?: string | null }).displayName ?? null;
   const superAdmin = isSuperAdminEmail(email, env);
+  const crmUser = await findCrmUserBySubject(db, subject);
 
   // A platform super admin must explicitly choose a workspace. The database
   // lookup below is the authorization boundary; an arbitrary client-supplied
@@ -361,6 +362,25 @@ export async function resolveRequestActor(
         };
       }
     }
+    if (crmUser?.active) {
+      const organization = await getOrganizationById(db, crmUser.organizationId);
+      const billing = await getOrganizationBilling(db, crmUser.organizationId);
+      return {
+        type: "user",
+        id: crmUser.id,
+        organizationId: crmUser.organizationId,
+        role: normalizeRole(crmUser.role) ?? "admin",
+        email: crmUser.email ?? email,
+        displayName: crmUser.displayName ?? displayName,
+        needsSetup: false,
+        isSuperAdmin: true,
+        hexclaveSubject: subject,
+        organizationName: organization?.name ?? null,
+        regionCode: (organization?.residencyRegion as RegionCode | undefined) ?? null,
+        countryCode: crmUser.countryCode ?? null,
+        billingStatus: billing?.status ?? "active"
+      };
+    }
     return {
       type: "user",
       id: subject,
@@ -374,8 +394,6 @@ export async function resolveRequestActor(
       organizationName: null
     };
   }
-
-  const crmUser = await findCrmUserBySubject(db, subject);
 
   if (!crmUser || !crmUser.active) {
     return {
