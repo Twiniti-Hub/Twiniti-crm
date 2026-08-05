@@ -26,6 +26,8 @@ import {
   findContactsByEmails,
   findContactByExternalRecordId,
   getDb,
+  withServiceRls,
+  scopedDb,
   HUBSPOT_CORE_CONTACT_FIELDS,
   importJobs,
   importRows,
@@ -66,7 +68,7 @@ const env = loadEnv({
 });
 
 const regionalDatabaseEntries = Object.entries(regionalDatabaseUrls(env)) as Array<[RegionCode, string]>;
-const regionalDatabases = regionalDatabaseEntries.map(([region, url]) => ({ region, db: getDb(url) }));
+const regionalDatabases = regionalDatabaseEntries.map(([region, url]) => ({ region, db: scopedDb(getDb(url)) }));
 let activeRegion: RegionCode = regionalDatabases[0]?.region ?? "us";
 let db = regionalDatabases[0]?.db ?? getDb();
 const licenseApi = createLicenseApiClient(env);
@@ -1049,16 +1051,18 @@ async function tick() {
     for (const target of regionalDatabases) {
       activeRegion = target.region;
       db = target.db;
-      const claimed = await claimJobs(db, 5);
+      const claimed = await withServiceRls(db, null, (serviceDb) => claimJobs(serviceDb, 5));
       for (const job of claimed) {
         try {
-          if (job.organizationId && !job.kind.startsWith("license.")) {
-            await assertWorkerLicense(job.organizationId);
-          }
-          await handleJob(job.kind, job.payload as Record<string, unknown>, job.organizationId);
-          await completeJob(db, job.id);
+          await withServiceRls(db, job.organizationId, async (tenantDb) => {
+            if (job.organizationId && !job.kind.startsWith("license.")) {
+              await assertWorkerLicense(job.organizationId);
+            }
+            await handleJob(job.kind, job.payload as Record<string, unknown>, job.organizationId);
+            await completeJob(tenantDb, job.id);
+          });
         } catch (error) {
-          await completeJob(db, job.id, error instanceof Error ? error.message : "job failed");
+          await withServiceRls(db, job.organizationId, (serviceDb) => completeJob(serviceDb, job.id, error instanceof Error ? error.message : "job failed"));
         }
       }
     }

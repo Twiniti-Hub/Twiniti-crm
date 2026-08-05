@@ -1,36 +1,101 @@
 # Changelog
 
-## Unreleased (target 0.1.1)
+## [0.10.12] - 2026-08-05
+
+- Added a global Super Admin commercial-health dashboard across US, UK, and EU data stores.
+- Added organization, user, agent, company, contact, trial, paid, license, and attention KPIs with billing/trial filtering.
+- Added organization-level trial conversion and License_API synchronization visibility.
+- Added pooled/request-scoped tenant RLS infrastructure and worker service contexts.
+- Added fail-closed PostgreSQL row-level security policies for organization-scoped tables.
+- Added `withOrganizationRls` to establish an organization and authenticated-member context for a transaction.
+
+Twiniti CRM is currently pre-1.0. Versions use the `0.10.x` series while the product, deployment model, commercial rules, and agent contracts continue to mature. This history was reconstructed from the repository's Git commits and release work through 2026-08-05.
+
+## [0.10.11] - 2026-08-05
+
+- Applied and documented the regional production billing-trial migration after missing `organization_billing` columns caused authenticated `/api/v1/me` and report requests to return HTTP 500.
+- Added production troubleshooting guidance for pending billing displays, schema drift, and the non-blocking browser `unload` permissions-policy warning.
+
+## [0.10.10] - 2026-08-05
+
+- Gated CRM access on confirmed Stripe billing and License_API allow decisions.
+- Added seven-day and three-month trial classification, Stripe trial metadata, and trial-to-active conversion tracking.
+- Added bounded post-Checkout confirmation polling and billing recovery messaging.
 
 ## [0.10.9] - 2026-08-05
 
 - Fixed the production Hexclave project mismatch that caused valid browser sessions to receive API 401 responses.
 - Added fail-closed startup validation requiring matching browser/server project IDs and a valid server auth configuration.
 
-- Added License_API-backed `TCRM_AGENT_ACCESS` enforcement and idempotent agent provision/revoke jobs; agent scopes remain controlled by Loop and no concurrency entitlement is used.
-- Replaced free-form agent scope text with a controlled multi-select and added organization-scoped access updates for existing agents.
-- Added a copy-ready regional MCP agent connection guide with credential, scope, request, and troubleshooting examples.
-- Super Admin workspace context bypasses the client billing redirect, matching the API's platform-admin billing policy.
-- Added the first end-user help guide under `docs/help/`, covering the current CRM navigation and user workflows.
-- Added an in-app Help menu item and `/help` page linking users to the main CRM workflows.
-- Added non-blocking Hexclave authorization headers to browser API requests so production custom domains do not depend on cookie delivery alone.
+## [0.10.8] - 2026-08-05
 
-- Added an explicit Super Admin workspace selector with regional context persistence and server-side workspace validation.
-- Replaced the hand-rolled MCP JSON-RPC POST handler with the official SDK's stateless Streamable HTTP transport; stdio remains deferred.
-- Added MCP transport contract tests for initialization, tool discovery, sessionless responses, and Origin validation.
-- Fixed the public Loop sign-in entry path by declaring the Vite-safe Hexclave project and publishable client-key variables on all regional Render API builds.
-- Added explicit US, EU, and UK choices for landing-page sign-in and sign-up redirects.
-- Documented that the public Hexclave variables must be set before the web bundle is built and redeployed.
+- Added non-blocking Hexclave authorization headers to browser API requests so production custom domains do not depend on cookie delivery alone.
+- Enforced License_API-backed `TCRM_AGENT_ACCESS` decisions with idempotent agent provision/revoke jobs.
+- Persisted agent license decisions while keeping scopes controlled by Loop and avoiding a concurrency entitlement.
+
+## [0.10.7] - 2026-08-04
+
+- Added managed agent scope selection and organization-scoped updates for existing agents.
+- Added a copy-ready regional MCP agent connection guide with credentials, scopes, requests, and troubleshooting.
+- Added the in-app Help menu, `/help` page, and first end-user workflow guides.
+- Added an explicit Super Admin workspace selector with regional context persistence and server-side validation.
+- Allowed Super Admin workspaces to bypass the client billing redirect in line with the API policy.
+- Replaced the hand-rolled MCP JSON-RPC handler with the official stateless Streamable HTTP transport and contract tests.
+
+## [0.10.6] - 2026-08-03 to 2026-08-04
+
+- Added regional landing-page sign-in and sign-up choices for US, EU, and UK Loop sites.
+- Fixed the public Loop sign-in build configuration and documented required Vite-safe Hexclave variables.
+- Added consent-aware GA4 page-view tracking for the landing page and CRM application.
+- Aligned analytics configuration with the supplied Google tag and supported the existing local `Google_Analytics` variable alias.
+- Added a static landing service per environment, supplied Twiniti logos, and refined product messaging.
+
+## [0.10.5] - 2026-08-03
+
 - Added immutable country-to-region assignment for EU, UK, and US workspaces.
-- Added regional residency fields and the development migration synchronizer.
-- Added country selection to account and company onboarding.
-- Added region metadata to health, identity, and organization responses.
-- Added explicit Development/Production database URL selection.
-- Added three regional API services and one multi-region worker per Render environment.
-- Fixed production-readiness checks to use `DEPLOYMENT_ENV`, allowing development services to run with `NODE_ENV=production` while selecting `Dev_*` databases.
-- Added a separate environment-specific static landing service with product messaging and CRM sign-up/sign-in links.
-- Applied the supplied Twiniti dark and light logo assets to the landing page and favicon.
-- Refined the landing page proof-strip messaging to address the whole team.
-- Added shared consent-aware GA4 page-view tracking for the landing page and CRM application.
-- Accepted the existing local `Google_Analytics` variable as an alias for the Vite analytics configuration.
-- Switched the deployed GA4 configuration to the supplied Google tag measurement ID.
+- Added residency fields, regional migration synchronization, onboarding country selection, and region metadata in health, identity, and organization responses.
+- Added explicit Development/Production database selection and three regional API services plus a multi-region worker per Render environment.
+- Corrected deployment readiness checks to use `DEPLOYMENT_ENV` and aligned production Render configuration.
+- Added recurring Twiniti Security scanning workflow updates.
+
+## [0.10.4] - 2026-07-31 to 2026-08-02
+
+- Added tenant-safe self-serve billing and MCP license lookup.
+- Added Stripe trials and customer-entered promotion codes, commercial licensing integration, expired-subscription recovery state, and CRM License API deployment configuration.
+- Fixed billing checkout request handling, forgot-password routing, and direct sign-out.
+- Loaded the repository root environment for database migrations and remediated dependency vulnerabilities.
+
+## [0.10.3] - 2026-07-27
+
+- Added contact-field archive and delete flows.
+- Improved contact UI and development authentication bootstrapping.
+- Hardened customer import job processing, including timeout handling.
+
+## [0.10.2] - 2026-07-24 to 2026-07-25
+
+- Added contact email activity, identity tracking, and field history.
+- Simplified contacts to a single CSV import flow.
+- Added company imports, import history, company browsing, CRM list pagination, and filtering.
+- Canonicalized contact-to-company matching during imports.
+
+## [0.10.1] - 2026-07-23
+
+- Added the Twiniti Loop CRM foundation and schema-driven HubSpot contact-property import UI.
+- Added Hexclave landing-gate authentication, same-origin sign-in, sign-out, SPA client-route serving, and publishable client-key support.
+- Added the initial agent-native CRM foundation, Render deployment configuration, and React app serving.
+- Updated Drizzle ORM and established the open-source application foundation.
+
+## [0.10.0] - 2026-07-23
+
+- Established the initial Twiniti CRM repository and application baseline.
+
+## Versioning notes
+
+- `0.10.x` denotes active pre-1.0 development; it is not a promise of API stability or production feature completeness.
+- Patch releases record focused fixes and security/deployment corrections; minor `0.10.x` increments group coherent product milestones.
+- `1.0.0` remains reserved for a later release decision after the core product, contracts, operations, and documentation are sufficiently stable.
+# Unreleased
+
+- Confirmed production landing redirects for US, EU, and UK application sign-in/signup entry points.
+- Added a seven-day trial days-remaining indicator to the authenticated billing page.
+- Removed the legacy `VITE_APP_URL` landing override that could send US auth links to Render's `onrender.com` host.

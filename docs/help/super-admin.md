@@ -4,7 +4,16 @@ Super Admin is a restricted console for operators who manage multiple workspaces
 
 ## Platform dashboard
 
-The Super Admin console includes a global platform-health dashboard covering the configured US, UK, and EU data stores. It shows total organizations, active users, registered agents, companies, contacts, trial and paid organizations, trial end dates, trial-to-paid conversions, billing state, and License_API state. Use the filters to review all organizations, trial organizations, paid organizations, or organizations needing attention.
+The Super Admin console includes a global platform-health dashboard covering the configured US, UK, and EU data stores. It shows:
+
+- total organizations, active users, registered agents, companies, and contacts;
+- organizations currently in a seven-day or three-month trial;
+- paid organizations and trial-to-paid conversion dates;
+- billing, subscription, License_API status, and license decision;
+- organizations that need attention, including pending or unavailable billing states;
+- trial end dates and the number of trials currently approaching completion.
+
+Use the billing filter to review all organizations, trial organizations, paid organizations, or organizations needing attention. The dashboard is calculated server-side and can be refreshed when investigating a webhook or license synchronization delay.
 
 Use the workspace selector to choose a company and region, then select **Open workspace**. Confirm the selected organization before viewing or changing CRM data. Return to the console when finished.
 

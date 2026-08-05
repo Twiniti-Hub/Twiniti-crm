@@ -12,17 +12,18 @@ import {
   createInvitation,
   createOrganization,
   ensureOrganizationBilling,
-  getDb,
-  getSuperAdminDashboard,
   findInvitationByToken,
   getOrganizationById,
   listOrganizations,
   listOrgMembers,
   listPendingInvitations,
+  getSuperAdminDashboard,
+  withServiceRls,
   updateMemberRole,
   writeAudit,
   type Db
 } from "@twiniti/db";
+import { getDb } from "@twiniti/db";
 import { regionForCountry, type RegionCode } from "@twiniti/contracts";
 import { sendEmail } from "@twiniti/email";
 import {
@@ -110,7 +111,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         displayName: actor.displayName ?? null,
         needsSetup: Boolean(actor.needsSetup),
         isSuperAdmin: Boolean(actor.isSuperAdmin),
-        billingStatus: actor.billingStatus ?? "active",
+        billingStatus: actor.billingStatus ?? "pending",
         licenseDecision: actor.licenseDecision ?? null,
         licenseReasonCode: actor.licenseReasonCode ?? null,
         licenseStatus: actor.licenseStatus ?? null
@@ -225,7 +226,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
           countryCode: input.countryCode,
           createdAt: created.organization.createdAt.toISOString(),
           joinedAsAdmin: joinAsAdmin,
-          billingStatus: "pending",
+          billingStatus: billing.status,
           licenseProvisioningStatus: billing.licenseProvisioningStatus,
           checkoutUrl,
           checkoutSessionId,
@@ -261,33 +262,42 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       const actor = requireActor(request);
       requireSuperAdmin(actor);
       const regions: RegionCode[] = ["us", "eu", "uk"];
-      const rows = (await Promise.all(
-        regions.map((region) => getSuperAdminDashboard(getDb(regionalDatabaseUrl(env, region)), region))
-      )).flat();
-      const totals = rows.reduce((summary, row) => {
-        summary.organizations += 1;
-        summary.users += row.activeUserCount;
-        summary.agents += row.agentCount;
-        summary.companies += row.companyCount;
-        summary.contacts += row.contactCount;
-        if (row.billingStatus === "trialing") summary.trialing += 1;
-        else if (row.billingStatus === "active") summary.paid += 1;
-        else summary.attention += 1;
-        if (row.trialEnd && row.trialEnd.getTime() > Date.now()) summary.trialsEnding += 1;
-        return summary;
-      }, { organizations: 0, users: 0, agents: 0, companies: 0, contacts: 0, trialing: 0, paid: 0, attention: 0, trialsEnding: 0 });
-      return { data: {
-        generatedAt: new Date().toISOString(),
-        totals,
-        organizations: rows.map((row) => ({
-          ...row,
-          createdAt: row.createdAt.toISOString(),
-          trialEnd: row.trialEnd?.toISOString() ?? null,
-          trialConvertedAt: row.trialConvertedAt?.toISOString() ?? null,
-          lastStripeEventCreatedAt: row.lastStripeEventCreatedAt?.toISOString() ?? null,
-          lastLicenseSyncAt: row.lastLicenseSyncAt?.toISOString() ?? null
-        }))
-      }};
+      const regionalDbs = regions.map((region) => ({ region, db: getDb(regionalDatabaseUrl(env, region)) }));
+      const regionalRows = await Promise.all(
+        regionalDbs.map(({ region, db: regionalDb }) => withServiceRls(regionalDb, null, (serviceDb) => getSuperAdminDashboard(serviceDb, region)))
+      );
+      const organizations = regionalRows.flat();
+      const now = Date.now();
+      const totals = organizations.reduce(
+        (summary, row) => {
+          summary.organizations += 1;
+          summary.users += row.activeUserCount;
+          summary.agents += row.agentCount;
+          summary.companies += row.companyCount;
+          summary.contacts += row.contactCount;
+          const billing = row.billingStatus ?? "pending";
+          if (billing === "trialing") summary.trialing += 1;
+          else if (billing === "active") summary.paid += 1;
+          else summary.attention += 1;
+          if (row.trialEnd && new Date(row.trialEnd).getTime() > now) summary.trialsEnding += 1;
+          return summary;
+        },
+        { organizations: 0, users: 0, agents: 0, companies: 0, contacts: 0, trialing: 0, paid: 0, attention: 0, trialsEnding: 0 }
+      );
+      return {
+        data: {
+          generatedAt: new Date().toISOString(),
+          totals,
+          organizations: organizations.map((row) => ({
+            ...row,
+            createdAt: row.createdAt.toISOString(),
+            trialEnd: row.trialEnd?.toISOString() ?? null,
+            trialConvertedAt: row.trialConvertedAt?.toISOString() ?? null,
+            lastStripeEventCreatedAt: row.lastStripeEventCreatedAt?.toISOString() ?? null,
+            lastLicenseSyncAt: row.lastLicenseSyncAt?.toISOString() ?? null
+          }))
+        }
+      };
     } catch (error) {
       return sendError(reply, error);
     }

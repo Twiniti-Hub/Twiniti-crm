@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Navigate, useNavigate } from "react-router";
+import { Navigate } from "react-router";
 import {
   api,
   clearWorkspaceContextId,
@@ -58,7 +58,6 @@ type Dashboard = {
 };
 
 export function SuperAdminPage() {
-  const navigate = useNavigate();
   const [me, setMe] = useState<Me | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
@@ -185,7 +184,7 @@ export function SuperAdminPage() {
     const workspace = companies.find((company) => company.id === activeWorkspaceId);
     setWorkspaceContextId(activeWorkspaceId);
     setMessage(`Opening ${workspace?.name ?? "workspace"}…`);
-    navigate("/", { replace: true });
+    window.location.assign("/");
   }
 
   function onReturnToAdminConsole() {
@@ -234,16 +233,40 @@ export function SuperAdminPage() {
       {dashboard ? (
         <section className="panel">
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
-            <div><p className="eyebrow">Platform health</p><h3>Commercial dashboard</h3><p className="muted">Global view across US, UK, and EU workspaces. Updated {new Date(dashboard.generatedAt).toLocaleString()}.</p></div>
+            <div>
+              <p className="eyebrow">Platform health</p>
+              <h3>Commercial dashboard</h3>
+              <p className="muted">Global view across US, UK, and EU workspaces. Updated {new Date(dashboard.generatedAt).toLocaleString()}.</p>
+            </div>
             <button className="secondary" type="button" onClick={() => loadDashboard().catch((err) => setError(err instanceof Error ? err.message : "Refresh failed"))}>Refresh</button>
           </div>
           <div className="metric-grid" style={{ marginTop: 16 }}>
-            {[["Organizations", dashboard.totals.organizations], ["Active users", dashboard.totals.users], ["Agents", dashboard.totals.agents], ["Companies", dashboard.totals.companies], ["Contacts", dashboard.totals.contacts], ["In trial", dashboard.totals.trialing], ["Paid", dashboard.totals.paid], ["Needs attention", dashboard.totals.attention]].map(([label, value]) => <div className="metric-card" key={label}><span>{label}</span><strong>{value}</strong></div>)}
+            {[
+              ["Organizations", dashboard.totals.organizations],
+              ["Active users", dashboard.totals.users],
+              ["Agents", dashboard.totals.agents],
+              ["Companies", dashboard.totals.companies],
+              ["Contacts", dashboard.totals.contacts],
+              ["In trial", dashboard.totals.trialing],
+              ["Paid", dashboard.totals.paid],
+              ["Needs attention", dashboard.totals.attention]
+            ].map(([label, value]) => <div className="metric-card" key={label}><span>{label}</span><strong>{value}</strong></div>)}
           </div>
           {dashboard.totals.trialsEnding > 0 ? <p className="banner info" style={{ marginTop: 14 }}>{dashboard.totals.trialsEnding} trial{dashboard.totals.trialsEnding === 1 ? " is" : "s are"} currently scheduled to end.</p> : null}
           <div className="table-wrap" style={{ marginTop: 16 }}>
-            <div className="form-row" style={{ alignItems: "end", marginBottom: 12 }}><label>Show <select value={dashboardFilter} onChange={(event) => setDashboardFilter(event.target.value)}><option value="all">All organizations</option><option value="trialing">Trial organizations</option><option value="paid">Paid organizations</option><option value="attention">Needs attention</option></select></label></div>
-            <table><thead><tr><th>Organization</th><th>Region</th><th>Users</th><th>Agents</th><th>Companies</th><th>Contacts</th><th>Billing</th><th>Trial / conversion</th><th>License</th></tr></thead><tbody>{dashboardRows.map((row) => <tr key={`${row.regionCode}-${row.id}`}><td><b>{row.name}</b><small style={{ display: "block" }}>{new Date(row.createdAt).toLocaleDateString()}</small></td><td>{row.regionCode.toUpperCase()}</td><td>{row.activeUserCount}</td><td>{row.agentCount}</td><td>{row.companyCount}</td><td>{row.contactCount}</td><td>{row.billingStatus ?? "pending"}</td><td>{row.billingStatus === "trialing" ? `${row.trialKind ?? "unknown"}${row.trialEnd ? ` · ends ${new Date(row.trialEnd).toLocaleDateString()}` : ""}` : row.trialConvertedAt ? `Converted ${new Date(row.trialConvertedAt).toLocaleDateString()}` : "—"}</td><td>{row.licenseStatus ?? "pending"} · {row.licenseDecision ?? "unknown"}</td></tr>)}</tbody></table>
+            <div className="form-row" style={{ alignItems: "end", marginBottom: 12 }}>
+              <label>Show <select value={dashboardFilter} onChange={(event) => setDashboardFilter(event.target.value)}><option value="all">All organizations</option><option value="trialing">Trial organizations</option><option value="paid">Paid organizations</option><option value="attention">Needs attention</option></select></label>
+            </div>
+            <table>
+              <thead><tr><th>Organization</th><th>Region</th><th>Users</th><th>Agents</th><th>Companies</th><th>Contacts</th><th>Billing</th><th>Trial / conversion</th><th>License</th></tr></thead>
+              <tbody>{dashboardRows.map((row) => <tr key={`${row.regionCode}-${row.id}`}>
+                <td><b>{row.name}</b><small style={{ display: "block" }}>{new Date(row.createdAt).toLocaleDateString()}</small></td>
+                <td>{row.regionCode.toUpperCase()}</td><td>{row.activeUserCount}</td><td>{row.agentCount}</td><td>{row.companyCount}</td><td>{row.contactCount}</td>
+                <td>{row.billingStatus ?? "pending"}</td>
+                <td>{row.billingStatus === "trialing" ? `${row.trialKind ?? "unknown"}${row.trialEnd ? ` · ends ${new Date(row.trialEnd).toLocaleDateString()}` : ""}` : row.trialConvertedAt ? `Converted ${new Date(row.trialConvertedAt).toLocaleDateString()}` : "—"}</td>
+                <td>{row.licenseStatus ?? "pending"} · {row.licenseDecision ?? "unknown"}</td>
+              </tr>)}</tbody>
+            </table>
           </div>
         </section>
       ) : null}
