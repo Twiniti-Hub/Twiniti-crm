@@ -1,4 +1,7 @@
-import { Navigate, Route, Routes } from "react-router";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
+import { useEffect, useState } from "react";
+import { api } from "../lib/api";
+import type { Me } from "../lib/me";
 import { AgentsPage } from "../pages/AgentsPage";
 import { BillingPage } from "../pages/BillingPage";
 import { CampaignsPage } from "../pages/CampaignsPage";
@@ -17,10 +20,27 @@ import { SuperAdminPage } from "../pages/SuperAdminPage";
 import { WorkflowsPage } from "../pages/WorkflowsPage";
 import { Shell } from "./Shell";
 
+function WorkspaceGate() {
+  const location = useLocation();
+  const [me, setMe] = useState<Me | null>(null);
+
+  useEffect(() => {
+    api("/api/v1/me")
+      .then((res) => setMe(res.data as Me))
+      .catch(() => setMe(null));
+  }, []);
+
+  if (location.pathname === "/super-admin" || !me || !me.isSuperAdmin || me.organizationId) {
+    return <Outlet />;
+  }
+  return <Navigate to="/super-admin" replace />;
+}
+
 export function CrmRoutes() {
   return (
     <Routes>
       <Route element={<Shell />}>
+        <Route element={<WorkspaceGate />}>
         <Route index element={<OverviewPage />} />
         <Route path="contacts" element={<ContactsPage />} />
         <Route path="contacts/:id" element={<ContactDetailPage />} />
@@ -38,6 +58,7 @@ export function CrmRoutes() {
         <Route path="help" element={<HelpPage />} />
         <Route path="super-admin" element={<SuperAdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
       </Route>
     </Routes>
   );
