@@ -21,6 +21,7 @@ type Invitation = {
 };
 
 type TrackingAddress = { address: string; domain: string };
+type ResendDomain = { id: string; domain: string; fromEmail: string; fromName: string | null; verificationStatus: string; isDefault: boolean; active: boolean };
 
 export function SettingsPage() {
   const [me, setMe] = useState<Me | null>(null);
@@ -33,6 +34,11 @@ export function SettingsPage() {
   const [busy, setBusy] = useState(false);
   const [trackingAddress, setTrackingAddress] = useState<TrackingAddress | null>(null);
   const [copied, setCopied] = useState(false);
+  const [resendDomains, setResendDomains] = useState<ResendDomain[]>([]);
+  const [resendDomain, setResendDomain] = useState("");
+  const [resendApiKey, setResendApiKey] = useState("");
+  const [resendFromEmail, setResendFromEmail] = useState("");
+  const [resendFromName, setResendFromName] = useState("");
 
   const isAdmin = me?.role === "admin";
 
@@ -52,7 +58,21 @@ export function SettingsPage() {
     if (nextMe.role === "admin") {
       const invitesRes = await api("/api/v1/organization/invitations");
       setInvitations(invitesRes.data as Invitation[]);
+      const resendRes = await api("/api/v1/organization/integrations/resend/domains");
+      setResendDomains(resendRes.data as ResendDomain[]);
     }
+  }
+
+  async function addResendDomain(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError(null); setMessage(null);
+    try {
+      await api("/api/v1/organization/integrations/resend/domains", { method: "POST", body: JSON.stringify({ domain: resendDomain, apiKey: resendApiKey, fromEmail: resendFromEmail, fromName: resendFromName || undefined, isDefault: resendDomains.length === 0 }) });
+      setResendDomain(""); setResendApiKey(""); setResendFromEmail(""); setResendFromName(""); setMessage("Resend domain connected."); await refresh();
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not connect Resend domain"); } finally { setBusy(false); }
+  }
+
+  async function makeDefaultResendDomain(id: string) {
+    try { await api(`/api/v1/organization/integrations/resend/domains/${id}/default`, { method: "POST" }); await refresh(); } catch (err) { setError(err instanceof Error ? err.message : "Could not select default domain"); }
   }
 
   useEffect(() => {
@@ -188,6 +208,20 @@ export function SettingsPage() {
           <p className="muted">Tracking address unavailable until the email tracking migration is applied.</p>
         )}
       </section>
+
+      {isAdmin ? (
+        <section className="panel" style={{ marginTop: 15 }}>
+          <p className="eyebrow">Email delivery</p>
+          <h3>Resend domains</h3>
+          <p className="muted">Connect verified Resend domains for this organization. Each domain uses its own API key.</p>
+          {resendDomains.map((domain) => <div className="form-row" key={domain.id} style={{ justifyContent: "space-between", marginBottom: 8 }}><span><strong>{domain.domain}</strong> · {domain.fromEmail} · {domain.verificationStatus}{domain.isDefault ? " · Default" : ""}</span>{!domain.isDefault ? <button className="secondary" type="button" onClick={() => void makeDefaultResendDomain(domain.id)}>Make default</button> : null}</div>)}
+          <form className="stack-form" style={{ boxShadow: "none", border: 0, padding: 0 }} onSubmit={addResendDomain}>
+            <div className="form-row"><label>Domain<input value={resendDomain} onChange={(e) => setResendDomain(e.target.value)} placeholder="mail.example.com" required /></label><label>Resend API key<input type="password" value={resendApiKey} onChange={(e) => setResendApiKey(e.target.value)} placeholder="re_…" required /></label></div>
+            <div className="form-row"><label>From email<input type="email" value={resendFromEmail} onChange={(e) => setResendFromEmail(e.target.value)} placeholder="hello@mail.example.com" required /></label><label>From name<input value={resendFromName} onChange={(e) => setResendFromName(e.target.value)} placeholder="Twiniti Loop" /></label></div>
+            <button className="primary" type="submit" disabled={busy}>{busy ? "Connecting…" : "Add Resend domain"}</button>
+          </form>
+        </section>
+      ) : null}
 
       {isAdmin ? (
         <section className="panel" style={{ marginTop: 15 }}>

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.10.13] - 2026-08-05
+
+- Added organization-scoped Resend domains with encrypted per-domain credentials and default-domain selection.
+- Removed global Resend delivery fallback; email sends now fail closed without an active verified organization domain.
+
 ## [0.10.12] - 2026-08-05
 
 - Added a global Super Admin commercial-health dashboard across US, UK, and EU data stores.

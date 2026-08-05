@@ -23,6 +23,7 @@ import {
   forms,
   jobs,
   organizationBilling,
+  organizationResendDomains,
   organizationInvitations,
   organizations,
   propertyDefinitions,
@@ -34,6 +35,43 @@ import {
   workflows,
   webhookEvents
 } from "./schema.js";
+
+export async function listOrganizationResendDomains(db: Db, organizationId: string) {
+  return db.select({
+    id: organizationResendDomains.id,
+    organizationId: organizationResendDomains.organizationId,
+    domain: organizationResendDomains.domain,
+    resendDomainId: organizationResendDomains.resendDomainId,
+    fromEmail: organizationResendDomains.fromEmail,
+    fromName: organizationResendDomains.fromName,
+    verificationStatus: organizationResendDomains.verificationStatus,
+    verifiedAt: organizationResendDomains.verifiedAt,
+    isDefault: organizationResendDomains.isDefault,
+    active: organizationResendDomains.active,
+    lastValidatedAt: organizationResendDomains.lastValidatedAt,
+    rotatedAt: organizationResendDomains.rotatedAt,
+    createdAt: organizationResendDomains.createdAt,
+    updatedAt: organizationResendDomains.updatedAt
+  }).from(organizationResendDomains).where(eq(organizationResendDomains.organizationId, organizationId));
+}
+
+export async function getOrganizationResendDomain(db: Db, organizationId: string, id: string) {
+  const [row] = await db.select().from(organizationResendDomains).where(and(
+    eq(organizationResendDomains.organizationId, organizationId),
+    eq(organizationResendDomains.id, id)
+  )).limit(1);
+  return row ?? null;
+}
+
+export async function getDefaultOrganizationResendDomain(db: Db, organizationId: string) {
+  const [row] = await db.select().from(organizationResendDomains).where(and(
+    eq(organizationResendDomains.organizationId, organizationId),
+    eq(organizationResendDomains.isDefault, true),
+    eq(organizationResendDomains.active, true),
+    eq(organizationResendDomains.verificationStatus, "verified")
+  )).limit(1);
+  return row ?? null;
+}
 import { countryCodeSchema, regionForCountry, type RegionCode } from "@twiniti/contracts";
 
 export function normalizeEmail(email: string): string {

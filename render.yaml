@@ -26,13 +26,9 @@ services:
         sync: false
       - key: VITE_GOOGLE_ANALYTICS_ID
         sync: false
-      - key: RESEND_API_KEY
-        sync: false
-      - key: RESEND_WEBHOOK_SECRET
+      - key: RESEND_CREDENTIAL_ENCRYPTION_KEY
         sync: false
       - key: EMAIL_TRACKING_DOMAIN
-        sync: false
-      - key: RESEND_FROM_EMAIL
         sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
@@ -94,13 +90,9 @@ services:
         sync: false
       - key: VITE_GOOGLE_ANALYTICS_ID
         sync: false
-      - key: RESEND_API_KEY
-        sync: false
-      - key: RESEND_WEBHOOK_SECRET
+      - key: RESEND_CREDENTIAL_ENCRYPTION_KEY
         sync: false
       - key: EMAIL_TRACKING_DOMAIN
-        sync: false
-      - key: RESEND_FROM_EMAIL
         sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
@@ -162,13 +154,9 @@ services:
         sync: false
       - key: VITE_GOOGLE_ANALYTICS_ID
         sync: false
-      - key: RESEND_API_KEY
-        sync: false
-      - key: RESEND_WEBHOOK_SECRET
+      - key: RESEND_CREDENTIAL_ENCRYPTION_KEY
         sync: false
       - key: EMAIL_TRACKING_DOMAIN
-        sync: false
-      - key: RESEND_FROM_EMAIL
         sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
@@ -248,11 +236,7 @@ services:
         sync: false
       - key: DATABASE_URL_Dev_UK
         sync: false
-      - key: RESEND_API_KEY
-        sync: false
-      - key: RESEND_FROM_EMAIL
-        sync: false
-      - key: RESEND_WEBHOOK_SECRET
+      - key: RESEND_CREDENTIAL_ENCRYPTION_KEY
         sync: false
       - key: EMAIL_TRACKING_DOMAIN
         sync: false

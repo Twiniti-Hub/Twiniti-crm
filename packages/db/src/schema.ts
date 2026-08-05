@@ -62,6 +62,29 @@ export const organizationBilling = pgTable("organization_billing", {
   checkoutIndex: uniqueIndex("organization_billing_checkout_idx").on(table.stripeCheckoutSessionId)
 }));
 
+export const organizationResendDomains = pgTable("organization_resend_domains", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  domain: varchar("domain", { length: 255 }).notNull(),
+  apiKeyCiphertext: text("api_key_ciphertext").notNull(),
+  webhookSecretCiphertext: text("webhook_secret_ciphertext"),
+  resendDomainId: varchar("resend_domain_id", { length: 255 }),
+  fromEmail: varchar("from_email", { length: 320 }).notNull(),
+  fromName: varchar("from_name", { length: 200 }),
+  verificationStatus: varchar("verification_status", { length: 32 }).notNull().default("unverified"),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  isDefault: boolean("is_default").notNull().default(false),
+  active: boolean("active").notNull().default(true),
+  lastValidatedAt: timestamp("last_validated_at", { withTimezone: true }),
+  rotatedAt: timestamp("rotated_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  organizationDomainIndex: uniqueIndex("organization_resend_domains_org_domain_idx").on(table.organizationId, table.domain),
+  organizationIndex: index("organization_resend_domains_org_idx").on(table.organizationId),
+  defaultIndex: uniqueIndex("organization_resend_domains_default_idx").on(table.organizationId).where(sql`${table.isDefault} = true AND ${table.active} = true`)
+}));
+
 export const stripeEvents = pgTable("stripe_events", {
   id: uuid("id").defaultRandom().primaryKey(),
   stripeEventId: varchar("stripe_event_id", { length: 255 }).notNull(),
@@ -628,6 +651,7 @@ export const reportDefinitions = pgTable("report_definitions", {
 
 export const schema = {
   organizations,
+  organizationResendDomains,
   organizationBilling,
   stripeEvents,
   crmUsers,

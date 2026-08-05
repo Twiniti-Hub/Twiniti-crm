@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { Resend } from "resend";
 import { z } from "zod";
 
@@ -22,6 +22,35 @@ export type SendEmailInput = z.infer<typeof sendEmailInputSchema>;
 
 export function createResendClient(apiKey: string): Resend {
   return new Resend(apiKey);
+}
+
+function encryptionKey(key: string): Buffer {
+  const value = Buffer.from(key, "base64");
+  if (value.length !== 32) throw new Error("RESEND_CREDENTIAL_ENCRYPTION_KEY must be a base64-encoded 32-byte key");
+  return value;
+}
+
+export function encryptResendSecret(secret: string, key: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", encryptionKey(key), iv);
+  const ciphertext = Buffer.concat([cipher.update(secret, "utf8"), cipher.final()]);
+  return `${iv.toString("base64url")}.${cipher.getAuthTag().toString("base64url")}.${ciphertext.toString("base64url")}`;
+}
+
+export function decryptResendSecret(value: string, key: string): string {
+  const [ivText, tagText, ciphertextText] = value.split(".");
+  if (!ivText || !tagText || !ciphertextText) throw new Error("Invalid encrypted Resend credential");
+  const decipher = createDecipheriv("aes-256-gcm", encryptionKey(key), Buffer.from(ivText, "base64url"));
+  decipher.setAuthTag(Buffer.from(tagText, "base64url"));
+  return Buffer.concat([decipher.update(Buffer.from(ciphertextText, "base64url")), decipher.final()]).toString("utf8");
+}
+
+export async function validateResendApiKey(apiKey: string, domain: string): Promise<{ valid: boolean; domainId?: string; verified: boolean }> {
+  const response = await fetch("https://api.resend.com/domains", { headers: { Authorization: `Bearer ${apiKey}` } });
+  if (!response.ok) return { valid: false, verified: false };
+  const body = await response.json() as { data?: Array<{ id?: string; name?: string; status?: string }> };
+  const match = body.data?.find((item) => item.name?.toLowerCase() === domain.toLowerCase());
+  return { valid: true, domainId: match?.id, verified: match?.status === "verified" };
 }
 
 export async function sendEmail(input: SendEmailInput) {

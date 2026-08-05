@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { and, eq } from "drizzle-orm";
 import { regionalDatabaseUrl } from "@twiniti/config";
 import type { AppEnv } from "@twiniti/config";
 import {
@@ -21,11 +22,15 @@ import {
   withServiceRls,
   updateMemberRole,
   writeAudit,
+  organizationResendDomains,
+  listOrganizationResendDomains,
+  getOrganizationResendDomain,
+  getDefaultOrganizationResendDomain,
   type Db
 } from "@twiniti/db";
 import { getDb } from "@twiniti/db";
 import { regionForCountry, type RegionCode } from "@twiniti/contracts";
-import { sendEmail } from "@twiniti/email";
+import { decryptResendSecret, encryptResendSecret, sendEmail, validateResendApiKey } from "@twiniti/email";
 import {
   audit,
   requireActor,
@@ -39,16 +44,16 @@ import { enqueueLicenseProvisioning } from "../license-jobs.js";
 
 async function sendInviteEmail(
   env: AppEnv,
-  input: { to: string; organizationName: string; role: string; token: string }
+  db: Db,
+  input: { to: string; organizationId: string; organizationName: string; role: string; token: string }
 ) {
   const inviteUrl = `${env.WEB_ORIGIN.replace(/\/$/, "")}/accept-invite?token=${encodeURIComponent(input.token)}`;
-  if (!env.RESEND_API_KEY) {
-    console.info(`[invite] Resend not configured. Invite URL for ${input.to}: ${inviteUrl}`);
-    return { inviteUrl, sent: false as const };
-  }
+  if (!env.RESEND_CREDENTIAL_ENCRYPTION_KEY) throw new Error("Resend credential encryption is not configured");
+  const config = await getDefaultOrganizationResendDomain(db, input.organizationId);
+  if (!config) throw new Error("Organization Resend configuration is required before sending invitations");
   await sendEmail({
-    apiKey: env.RESEND_API_KEY,
-    from: env.RESEND_FROM_EMAIL,
+    apiKey: decryptResendSecret(config.apiKeyCiphertext, env.RESEND_CREDENTIAL_ENCRYPTION_KEY),
+    from: config.fromName ? `${config.fromName} <${config.fromEmail}>` : config.fromEmail,
     to: input.to,
     subject: `You're invited to ${input.organizationName} on Twiniti Loop`,
     html: `<p>You've been invited to join <strong>${input.organizationName}</strong> as a <strong>${input.role}</strong>.</p>
@@ -117,6 +122,57 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         licenseStatus: actor.licenseStatus ?? null
       }
     };
+  });
+
+  app.get("/api/v1/organization/integrations/resend/domains", async (request, reply) => {
+    try {
+      const actor = requireActor(request); requireUserRole(actor, "admin");
+      if (!actor.organizationId) return reply.code(409).send({ error: { code: "organization_required", message: "Organization required" } });
+      return { data: await listOrganizationResendDomains(db, actor.organizationId) };
+    } catch (error) { return sendError(reply, error); }
+  });
+
+  app.post("/api/v1/organization/integrations/resend/domains", async (request, reply) => {
+    try {
+      const actor = requireActor(request); requireUserRole(actor, "admin");
+      if (!actor.organizationId || !env.RESEND_CREDENTIAL_ENCRYPTION_KEY) throw new Error("Resend credential encryption is not configured");
+      const body = request.body as { domain?: string; apiKey?: string; webhookSecret?: string; fromEmail?: string; fromName?: string; isDefault?: boolean };
+      const domain = body.domain?.trim().toLowerCase(); const apiKey = body.apiKey?.trim(); const fromEmail = body.fromEmail?.trim().toLowerCase();
+      if (!domain || !apiKey || !fromEmail || !fromEmail.endsWith(`@${domain}`)) return reply.code(400).send({ error: { code: "invalid_resend_domain", message: "Domain, API key, and a sender address on that domain are required" } });
+      const validation = await validateResendApiKey(apiKey, domain);
+      if (!validation.valid || !validation.verified) return reply.code(422).send({ error: { code: "resend_domain_unverified", message: "Resend credentials are invalid or the domain is not verified" } });
+      if (body.isDefault) await db.update(organizationResendDomains).set({ isDefault: false, updatedAt: new Date() }).where(eq(organizationResendDomains.organizationId, actor.organizationId));
+      const [created] = await db.insert(organizationResendDomains).values({ organizationId: actor.organizationId, domain, apiKeyCiphertext: encryptResendSecret(apiKey, env.RESEND_CREDENTIAL_ENCRYPTION_KEY), webhookSecretCiphertext: body.webhookSecret ? encryptResendSecret(body.webhookSecret, env.RESEND_CREDENTIAL_ENCRYPTION_KEY) : null, resendDomainId: validation.domainId ?? null, fromEmail, fromName: body.fromName?.trim() || null, verificationStatus: "verified", verifiedAt: new Date(), isDefault: Boolean(body.isDefault) }).returning({ id: organizationResendDomains.id });
+      await writeAudit(db, { organizationId: actor.organizationId, actorType: actor.type, actorId: actor.id, action: "resend.domain.create", entityType: "resend_domain", entityId: created.id, metadata: { domain, fromEmail } });
+      return reply.code(201).send({ data: { id: created.id, domain, fromEmail, fromName: body.fromName?.trim() || null, verificationStatus: "verified", isDefault: Boolean(body.isDefault), active: true } });
+    } catch (error) { return sendError(reply, error); }
+  });
+
+  app.post("/api/v1/organization/integrations/resend/domains/:id/default", async (request, reply) => {
+    try { const actor = requireActor(request); requireUserRole(actor, "admin"); if (!actor.organizationId) throw new Error("Organization required"); const domain = await getOrganizationResendDomain(db, actor.organizationId, (request.params as { id: string }).id); if (!domain || !domain.active || domain.verificationStatus !== "verified") return reply.code(409).send({ error: { code: "invalid_default_domain", message: "Only active verified domains can be default" } }); await db.update(organizationResendDomains).set({ isDefault: false, updatedAt: new Date() }).where(eq(organizationResendDomains.organizationId, actor.organizationId)); await db.update(organizationResendDomains).set({ isDefault: true, updatedAt: new Date() }).where(and(eq(organizationResendDomains.id, domain.id), eq(organizationResendDomains.organizationId, actor.organizationId))); return { data: { id: domain.id, isDefault: true } }; } catch (error) { return sendError(reply, error); }
+  });
+
+  app.post("/api/v1/organization/integrations/resend/domains/:id/rotate", async (request, reply) => {
+    try {
+      const actor = requireActor(request); requireUserRole(actor, "admin");
+      if (!actor.organizationId || !env.RESEND_CREDENTIAL_ENCRYPTION_KEY) throw new Error("Resend credential encryption is not configured");
+      const id = (request.params as { id: string }).id; const current = await getOrganizationResendDomain(db, actor.organizationId, id); const body = request.body as { apiKey?: string };
+      if (!current || !body.apiKey?.trim()) return reply.code(404).send({ error: { code: "not_found", message: "Resend domain not found" } });
+      const validation = await validateResendApiKey(body.apiKey.trim(), current.domain); if (!validation.valid || !validation.verified) return reply.code(422).send({ error: { code: "resend_domain_unverified", message: "Resend credentials are invalid or the domain is not verified" } });
+      await db.update(organizationResendDomains).set({ apiKeyCiphertext: encryptResendSecret(body.apiKey.trim(), env.RESEND_CREDENTIAL_ENCRYPTION_KEY), resendDomainId: validation.domainId ?? current.resendDomainId, verificationStatus: "verified", verifiedAt: new Date(), lastValidatedAt: new Date(), rotatedAt: new Date(), updatedAt: new Date() }).where(and(eq(organizationResendDomains.id, id), eq(organizationResendDomains.organizationId, actor.organizationId)));
+      return { data: { id, rotated: true, verificationStatus: "verified" } };
+    } catch (error) { return sendError(reply, error); }
+  });
+
+  app.delete("/api/v1/organization/integrations/resend/domains/:id", async (request, reply) => {
+    try {
+      const actor = requireActor(request); requireUserRole(actor, "admin"); if (!actor.organizationId) throw new Error("Organization required");
+      const id = (request.params as { id: string }).id; const current = await getOrganizationResendDomain(db, actor.organizationId, id);
+      if (!current) return reply.code(404).send({ error: { code: "not_found", message: "Resend domain not found" } });
+      if (current.isDefault && current.active) return reply.code(409).send({ error: { code: "default_domain_required", message: "Select another default domain before removing this domain" } });
+      await db.delete(organizationResendDomains).where(and(eq(organizationResendDomains.id, id), eq(organizationResendDomains.organizationId, actor.organizationId)));
+      return { data: { id, deleted: true } };
+    } catch (error) { return sendError(reply, error); }
   });
 
   app.post("/api/v1/organizations", async (request, reply) => {
@@ -199,8 +255,9 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
           role: "admin",
           invitedByUserId: joinAsAdmin ? created.admin?.id ?? null : actor.organizationId ? actor.id : null
         });
-        const emailResult = await sendInviteEmail(env, {
+        const emailResult = await sendInviteEmail(env, db, {
           to: input.inviteAdminEmail,
+          organizationId: created.organization.id,
           organizationName: created.organization.name,
           role: "admin",
           token: invite.token
@@ -351,8 +408,9 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         role: input.role,
         invitedByUserId: actor.organizationId ? actor.id : null
       });
-      const emailResult = await sendInviteEmail(env, {
+      const emailResult = await sendInviteEmail(env, db, {
         to: input.email,
+        organizationId: id,
         organizationName: org.name,
         role: input.role,
         token: invite.token
@@ -430,8 +488,9 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         role: input.role,
         invitedByUserId: actor.id
       });
-      const emailResult = await sendInviteEmail(env, {
+      const emailResult = await sendInviteEmail(env, db, {
         to: input.email,
+        organizationId,
         organizationName: org.name,
         role: input.role,
         token: invite.token

@@ -23,6 +23,7 @@ import {
   enqueueJob,
   getContactById,
   getOrganizationBilling,
+  getDefaultOrganizationResendDomain,
   findContactsByEmails,
   findContactByExternalRecordId,
   getDb,
@@ -56,7 +57,7 @@ import {
   workflows,
   writeAudit
 } from "@twiniti/db";
-import { getReceivedEmail, personalizeForContact, sendEmail } from "@twiniti/email";
+import { decryptResendSecret, getReceivedEmail, personalizeForContact, sendEmail } from "@twiniti/email";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 loadDotenv({ path: path.join(rootDir, ".env") });
@@ -170,6 +171,11 @@ function mapCompanyImportRow(row: Record<string, unknown>): {
 }
 
 async function processCampaignSend(payload: { campaignId: string; organizationId: string }) {
+  if (!env.RESEND_CREDENTIAL_ENCRYPTION_KEY) throw new Error("Resend credential encryption is not configured");
+  const resendConfig = await getDefaultOrganizationResendDomain(db, payload.organizationId);
+  if (!resendConfig) throw new Error("Organization Resend default domain is not configured");
+  const resendApiKey = decryptResendSecret(resendConfig.apiKeyCiphertext, env.RESEND_CREDENTIAL_ENCRYPTION_KEY);
+  const resendFrom = resendConfig.fromName ? `${resendConfig.fromName} <${resendConfig.fromEmail}>` : resendConfig.fromEmail;
   const [campaign] = await db.select().from(campaigns).where(and(
     eq(campaigns.id, payload.campaignId),
     eq(campaigns.organizationId, payload.organizationId)
@@ -202,37 +208,9 @@ async function processCampaignSend(payload: { campaignId: string; organizationId
       properties: (contact?.properties ?? {}) as Record<string, unknown>
     });
 
-    if (!env.RESEND_API_KEY) {
-      await db.update(campaignRecipients).set({ status: "simulated" }).where(and(
-        eq(campaignRecipients.id, recipient.id),
-        eq(campaignRecipients.organizationId, campaign.organizationId)
-      ));
-      await db.insert(emailSends).values({
-        organizationId: campaign.organizationId,
-        campaignId: campaign.id,
-        contactId: recipient.contactId,
-        toEmail: recipient.emailNormalized,
-        status: "simulated",
-        idempotencyKey: recipient.idempotencyKey
-      });
-      await db.insert(emailActivities).values({
-        organizationId: campaign.organizationId,
-        contactId: recipient.contactId,
-        direction: "outbound",
-        activityType: "sent",
-        fromEmail: env.RESEND_FROM_EMAIL,
-        toEmails: [recipient.emailNormalized],
-        subject: campaign.subject ?? campaign.name,
-        dedupeKey: `campaign:${recipient.idempotencyKey}:sent`,
-        occurredAt: new Date(),
-        metadata: { campaignId: campaign.id, simulated: true }
-      }).onConflictDoNothing();
-      continue;
-    }
-
     const result = await sendEmail({
-      apiKey: env.RESEND_API_KEY,
-      from: env.RESEND_FROM_EMAIL,
+      apiKey: resendApiKey,
+      from: resendFrom,
       to: recipient.emailNormalized,
       subject: campaign.subject ?? campaign.name,
       html,
@@ -265,7 +243,7 @@ async function processCampaignSend(payload: { campaignId: string; organizationId
       direction: "outbound",
       activityType: result.error ? "failed" : "sent",
       providerEmailId: resendId,
-      fromEmail: env.RESEND_FROM_EMAIL,
+      fromEmail: resendFrom,
       toEmails: [recipient.emailNormalized],
       subject: campaign.subject ?? campaign.name,
       dedupeKey: `campaign:${recipient.idempotencyKey}:sent`,
@@ -720,9 +698,10 @@ async function processReceivedEmail(
     return;
   }
 
-  const receivedResult = env.RESEND_API_KEY
-    ? await getReceivedEmail({ apiKey: env.RESEND_API_KEY, emailId })
-    : { data: null, error: null };
+  if (!event.organizationId || !env.RESEND_CREDENTIAL_ENCRYPTION_KEY) throw new Error("Organization Resend configuration is required for received email processing");
+  const resendConfig = await getDefaultOrganizationResendDomain(db, event.organizationId);
+  if (!resendConfig) throw new Error("Organization Resend default domain is not configured");
+  const receivedResult = await getReceivedEmail({ apiKey: decryptResendSecret(resendConfig.apiKeyCiphertext, env.RESEND_CREDENTIAL_ENCRYPTION_KEY), emailId });
   if (receivedResult.error) throw new Error(`Unable to retrieve received email ${emailId}`);
   const message = { ...data, ...(receivedResult.data ?? {}) } as Record<string, unknown>;
   const addressValues = [message.to, message.received_for, getEmailHeader(message.headers, "to", "delivered-to")];
