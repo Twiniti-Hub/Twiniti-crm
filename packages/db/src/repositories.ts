@@ -510,6 +510,53 @@ export async function listOrganizations(db: Db) {
   return rows;
 }
 
+export async function getSuperAdminDashboard(db: Db, regionCode: RegionCode) {
+  const rows = await db
+    .select({
+      id: organizations.id,
+      name: organizations.name,
+      regionCode: sql<string>`${regionCode}`,
+      createdAt: organizations.createdAt,
+      billingStatus: organizationBilling.status,
+      subscriptionStatus: organizationBilling.stripeSubscriptionStatus,
+      trialKind: organizationBilling.trialKind,
+      trialEnd: organizationBilling.trialEnd,
+      trialConvertedAt: organizationBilling.trialConvertedAt,
+      licenseStatus: organizationBilling.licenseStatus,
+      licenseDecision: organizationBilling.licenseDecision,
+      lastStripeEventCreatedAt: organizationBilling.lastStripeEventCreatedAt,
+      lastLicenseSyncAt: organizationBilling.lastLicenseSyncAt,
+      activeUserCount: sql<number>`(
+        select count(*) from crm_users u
+        where u.organization_id = ${organizations.id} and u.active = true
+      )`,
+      agentCount: sql<number>`(
+        select count(*) from agent_identities a
+        where a.organization_id = ${organizations.id} and a.revoked_at is null
+      )`,
+      companyCount: sql<number>`(
+        select count(*) from companies c
+        where c.organization_id = ${organizations.id} and c.archived_at is null
+      )`,
+      contactCount: sql<number>`(
+        select count(*) from contacts c
+        where c.organization_id = ${organizations.id}
+          and c.archived_at is null and c.merged_into_contact_id is null
+      )`
+    })
+    .from(organizations)
+    .leftJoin(organizationBilling, eq(organizationBilling.organizationId, organizations.id))
+    .orderBy(asc(organizations.name));
+
+  return rows.map((row) => ({
+    ...row,
+    activeUserCount: Number(row.activeUserCount ?? 0),
+    agentCount: Number(row.agentCount ?? 0),
+    companyCount: Number(row.companyCount ?? 0),
+    contactCount: Number(row.contactCount ?? 0)
+  }));
+}
+
 export async function listOrgMembers(db: Db, organizationId: string) {
   return db
     .select({

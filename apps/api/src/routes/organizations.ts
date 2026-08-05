@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { regionalDatabaseUrl } from "@twiniti/config";
 import type { AppEnv } from "@twiniti/config";
 import {
   acceptInvitationSchema,
@@ -11,6 +12,8 @@ import {
   createInvitation,
   createOrganization,
   ensureOrganizationBilling,
+  getDb,
+  getSuperAdminDashboard,
   findInvitationByToken,
   getOrganizationById,
   listOrganizations,
@@ -20,7 +23,7 @@ import {
   writeAudit,
   type Db
 } from "@twiniti/db";
-import { regionForCountry } from "@twiniti/contracts";
+import { regionForCountry, type RegionCode } from "@twiniti/contracts";
 import { sendEmail } from "@twiniti/email";
 import {
   audit,
@@ -248,6 +251,43 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
           regionCode: row.residencyRegion
         }))
       };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.get("/api/v1/super-admin/dashboard", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireSuperAdmin(actor);
+      const regions: RegionCode[] = ["us", "eu", "uk"];
+      const rows = (await Promise.all(
+        regions.map((region) => getSuperAdminDashboard(getDb(regionalDatabaseUrl(env, region)), region))
+      )).flat();
+      const totals = rows.reduce((summary, row) => {
+        summary.organizations += 1;
+        summary.users += row.activeUserCount;
+        summary.agents += row.agentCount;
+        summary.companies += row.companyCount;
+        summary.contacts += row.contactCount;
+        if (row.billingStatus === "trialing") summary.trialing += 1;
+        else if (row.billingStatus === "active") summary.paid += 1;
+        else summary.attention += 1;
+        if (row.trialEnd && row.trialEnd.getTime() > Date.now()) summary.trialsEnding += 1;
+        return summary;
+      }, { organizations: 0, users: 0, agents: 0, companies: 0, contacts: 0, trialing: 0, paid: 0, attention: 0, trialsEnding: 0 });
+      return { data: {
+        generatedAt: new Date().toISOString(),
+        totals,
+        organizations: rows.map((row) => ({
+          ...row,
+          createdAt: row.createdAt.toISOString(),
+          trialEnd: row.trialEnd?.toISOString() ?? null,
+          trialConvertedAt: row.trialConvertedAt?.toISOString() ?? null,
+          lastStripeEventCreatedAt: row.lastStripeEventCreatedAt?.toISOString() ?? null,
+          lastLicenseSyncAt: row.lastLicenseSyncAt?.toISOString() ?? null
+        }))
+      }};
     } catch (error) {
       return sendError(reply, error);
     }

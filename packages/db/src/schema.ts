@@ -32,6 +32,12 @@ export const organizationBilling = pgTable("organization_billing", {
   stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
   stripeCheckoutSessionId: varchar("stripe_checkout_session_id", { length: 255 }),
   stripePriceId: varchar("stripe_price_id", { length: 255 }),
+  stripeSubscriptionStatus: varchar("stripe_subscription_status", { length: 32 }),
+  trialKind: varchar("trial_kind", { length: 32 }).notNull().default("none"),
+  trialStart: timestamp("trial_start", { withTimezone: true }),
+  trialEnd: timestamp("trial_end", { withTimezone: true }),
+  stripePromotionCodeId: varchar("stripe_promotion_code_id", { length: 255 }),
+  stripeCouponId: varchar("stripe_coupon_id", { length: 255 }),
   currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
   cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
   lastStripeEventCreatedAt: timestamp("last_stripe_event_created_at", { withTimezone: true }),
@@ -46,6 +52,7 @@ export const organizationBilling = pgTable("organization_billing", {
   licenseGraceCutoff: timestamp("license_grace_cutoff", { withTimezone: true }),
   lastLicenseCheckedAt: timestamp("last_license_checked_at", { withTimezone: true }),
   lastLicenseSyncAt: timestamp("last_license_sync_at", { withTimezone: true }),
+  trialConvertedAt: timestamp("trial_converted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => ({

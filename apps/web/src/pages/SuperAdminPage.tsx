@@ -34,10 +34,35 @@ type Invitation = {
   sent?: boolean;
 };
 
+type DashboardOrganization = Omit<Company, "regionCode"> & {
+  regionCode: "eu" | "uk" | "us";
+  billingStatus: string | null;
+  subscriptionStatus: string | null;
+  trialKind: string | null;
+  trialEnd: string | null;
+  trialConvertedAt: string | null;
+  licenseStatus: string | null;
+  licenseDecision: string | null;
+  lastStripeEventCreatedAt: string | null;
+  lastLicenseSyncAt: string | null;
+  activeUserCount: number;
+  agentCount: number;
+  companyCount: number;
+  contactCount: number;
+};
+
+type Dashboard = {
+  generatedAt: string;
+  totals: { organizations: number; users: number; agents: number; companies: number; contacts: number; trialing: number; paid: number; attention: number; trialsEnding: number };
+  organizations: DashboardOrganization[];
+};
+
 export function SuperAdminPage() {
   const navigate = useNavigate();
   const [me, setMe] = useState<Me | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+  const [dashboardFilter, setDashboardFilter] = useState("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(getWorkspaceContextId());
   const [members, setMembers] = useState<Member[]>([]);
@@ -70,6 +95,11 @@ export function SuperAdminPage() {
     }
   }
 
+  async function loadDashboard() {
+    const res = await api("/api/v1/super-admin/dashboard");
+    setDashboard(res.data as Dashboard);
+  }
+
   async function loadSelected(companyId: string) {
     const [membersRes, invitesRes] = await Promise.all([
       api(`/api/v1/organizations/${companyId}/members`),
@@ -85,7 +115,7 @@ export function SuperAdminPage() {
         const nextMe = res.data as Me;
         setMe(nextMe);
         if (nextMe.isSuperAdmin) {
-          await loadCompanies();
+          await Promise.all([loadCompanies(), loadDashboard()]);
         }
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
@@ -108,6 +138,12 @@ export function SuperAdminPage() {
   }
 
   const selected = companies.find((company) => company.id === selectedId) ?? null;
+  const dashboardRows = dashboard?.organizations.filter((row) => {
+    if (dashboardFilter === "trialing") return row.billingStatus === "trialing";
+    if (dashboardFilter === "paid") return row.billingStatus === "active";
+    if (dashboardFilter === "attention") return !["trialing", "active"].includes(row.billingStatus ?? "pending");
+    return true;
+  }) ?? [];
 
   async function onCreateCompany(event: FormEvent) {
     event.preventDefault();
@@ -194,6 +230,23 @@ export function SuperAdminPage() {
       </header>
       {error ? <div className="banner error">{error}</div> : null}
       {message ? <div className="banner info">{message}</div> : null}
+
+      {dashboard ? (
+        <section className="panel">
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
+            <div><p className="eyebrow">Platform health</p><h3>Commercial dashboard</h3><p className="muted">Global view across US, UK, and EU workspaces. Updated {new Date(dashboard.generatedAt).toLocaleString()}.</p></div>
+            <button className="secondary" type="button" onClick={() => loadDashboard().catch((err) => setError(err instanceof Error ? err.message : "Refresh failed"))}>Refresh</button>
+          </div>
+          <div className="metric-grid" style={{ marginTop: 16 }}>
+            {[["Organizations", dashboard.totals.organizations], ["Active users", dashboard.totals.users], ["Agents", dashboard.totals.agents], ["Companies", dashboard.totals.companies], ["Contacts", dashboard.totals.contacts], ["In trial", dashboard.totals.trialing], ["Paid", dashboard.totals.paid], ["Needs attention", dashboard.totals.attention]].map(([label, value]) => <div className="metric-card" key={label}><span>{label}</span><strong>{value}</strong></div>)}
+          </div>
+          {dashboard.totals.trialsEnding > 0 ? <p className="banner info" style={{ marginTop: 14 }}>{dashboard.totals.trialsEnding} trial{dashboard.totals.trialsEnding === 1 ? " is" : "s are"} currently scheduled to end.</p> : null}
+          <div className="table-wrap" style={{ marginTop: 16 }}>
+            <div className="form-row" style={{ alignItems: "end", marginBottom: 12 }}><label>Show <select value={dashboardFilter} onChange={(event) => setDashboardFilter(event.target.value)}><option value="all">All organizations</option><option value="trialing">Trial organizations</option><option value="paid">Paid organizations</option><option value="attention">Needs attention</option></select></label></div>
+            <table><thead><tr><th>Organization</th><th>Region</th><th>Users</th><th>Agents</th><th>Companies</th><th>Contacts</th><th>Billing</th><th>Trial / conversion</th><th>License</th></tr></thead><tbody>{dashboardRows.map((row) => <tr key={`${row.regionCode}-${row.id}`}><td><b>{row.name}</b><small style={{ display: "block" }}>{new Date(row.createdAt).toLocaleDateString()}</small></td><td>{row.regionCode.toUpperCase()}</td><td>{row.activeUserCount}</td><td>{row.agentCount}</td><td>{row.companyCount}</td><td>{row.contactCount}</td><td>{row.billingStatus ?? "pending"}</td><td>{row.billingStatus === "trialing" ? `${row.trialKind ?? "unknown"}${row.trialEnd ? ` · ends ${new Date(row.trialEnd).toLocaleDateString()}` : ""}` : row.trialConvertedAt ? `Converted ${new Date(row.trialConvertedAt).toLocaleDateString()}` : "—"}</td><td>{row.licenseStatus ?? "pending"} · {row.licenseDecision ?? "unknown"}</td></tr>)}</tbody></table>
+          </div>
+        </section>
+      ) : null}
 
       <section className="panel">
         <p className="eyebrow">Workspace access</p>
