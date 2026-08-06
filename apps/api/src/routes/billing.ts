@@ -93,9 +93,9 @@ export async function createOrganizationCheckoutSession(
     customer_email: billing.stripeCustomerId ? undefined : input.customerEmail ?? undefined,
     client_reference_id: input.organizationId,
     allow_promotion_codes: true,
-    metadata: { organizationId: input.organizationId },
+    metadata: { organizationId: input.organizationId, regionCode: env.REGION_CODE },
     subscription_data: {
-      metadata: { organizationId: input.organizationId },
+      metadata: { organizationId: input.organizationId, regionCode: env.REGION_CODE },
       ...(env.STRIPE_TRIAL_PERIOD_DAYS > 0
         ? {
             trial_period_days: env.STRIPE_TRIAL_PERIOD_DAYS,
