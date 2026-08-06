@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Added repository-enforced development-first promotion, required PR evidence,
+  CODEOWNERS coverage, and production-source validation.
+- Added migration manifest/checksum validation, regional schema preflight and
+  postflight checks, protected migration execution, and migration receipts.
+
 ## [0.10.15] - 2026-08-06
 
 - Added Playwright end-to-end coverage for login, workspace gates, authenticated CRM routes, and contact creation.

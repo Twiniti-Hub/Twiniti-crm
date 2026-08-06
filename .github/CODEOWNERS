@@ -1,0 +1,11 @@
+# Release and database policy changes require the repository owner review.
+# Replace this owner with the approved Twiniti engineering team once the
+# organization team slug is finalized.
+* @George-Twiniti
+
+/.github/ @George-Twiniti
+/packages/db/ @George-Twiniti
+/scripts/migrate-regional.mjs @George-Twiniti
+/render.yaml @George-Twiniti
+/render.production.yaml @George-Twiniti
+/docs/*POLICY.md @George-Twiniti

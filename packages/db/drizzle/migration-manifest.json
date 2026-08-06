@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "reconciliationIssue": "TWI-186",
+  "entries": [
+    {"file":"0000_foundation.sql","status":"journaled","sha256":"d4b178a5bac6a5356ed1be2fe11be17c9e80d0ea64f05dce2047eebf6fa22373"},
+    {"file":"0001_multi_tenant.sql","status":"journaled","sha256":"78bbdaa59769faf6c6088f3d703d99b5bf14ec9c7114fb8433bcdfa1c566e8c8"},
+    {"file":"0002_email_tracking.sql","status":"journaled","sha256":"8e6122373bbafc13a72224d910ec44eb967da64012e628387fd6221e4e7d9894"},
+    {"file":"0003_contact_identity_history.sql","status":"journaled","sha256":"903247b2a7f157c8ec2c61ec67a29543f92ffae1f3319dfa3bede9d2e2c657bc"},
+    {"file":"0004_organization_billing.sql","status":"journaled","sha256":"9d52cb09207c201d85676f67d6d266e5d50f44ea54308a382176a5f56db3cbd2"},
+    {"file":"0005_license_integration.sql","status":"journaled","sha256":"ac75573ae646c1698dfe9ad87616e559cf117ce0efc397806b08923a42b51010"},
+    {"file":"0006_organization_provisioning_key.sql","status":"journaled","sha256":"1ea43efb807153364d19f873e7f45c66ad2fd5c186850f9c9e9122d6bc1d997a"},
+    {"file":"0007_regional_residency.sql","status":"journaled","sha256":"a05f8acc5d38137141c0ce22b18132c900bbc10babe12fbcc8a0fd6c144ef9bf"},
+    {"file":"0008_billing_trials.sql","status":"journaled","sha256":"f19b37b1845f8f75197338de71b032fa8bb558124fe41bfe7b3dd699b67ea4b5"},
+    {"file":"0008_organization_rls.sql","status":"legacy-unjournaled","sha256":"2d0490845a9ffb41112f679c0c9c13eae07422df11ed690d470286c03d616c8c"},
+    {"file":"0009_billing_trial_dashboard.sql","status":"legacy-unjournaled","sha256":"668d8187a385bdbf3bb9840ddf0a93086d87e2c24104cddcff19a02c9eda8c79"},
+    {"file":"0009_rls_runtime_role.sql","status":"legacy-unjournaled","sha256":"f84b9ab7470c878721ce62180c6d196a62c3f715763dfba6538d958b98b9b6ec"},
+    {"file":"0010_billing_and_rls_runtime_role.sql","status":"legacy-unjournaled","sha256":"249976b05c88f31b8f5e15e480f12a318b79c8df98242f3c3cc5d86db504b1ff"},
+    {"file":"0011_organization_resend_domains.sql","status":"legacy-unjournaled","sha256":"9e6c46f1be4ccff2ff082de1edd785785bc1e87fcd455256ab2441f0f5c4ad8b"}
+  ]
+}

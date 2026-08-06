@@ -28,7 +28,6 @@ jobs:
 
       - name: Run Semgrep
         id: semgrep
-        continue-on-error: true
         shell: bash
         run: |
           set +e
@@ -43,8 +42,9 @@ jobs:
           fi
 
           if [ "$scanner_status" -ne 0 ]; then
-            echo "::warning::Semgrep exited with status $scanner_status"
+            echo "::error::Semgrep exited with status $scanner_status"
           fi
+          echo "scanner_status=$scanner_status" >> "$GITHUB_OUTPUT"
 
       - name: Install Gitleaks
         run: |
@@ -53,7 +53,6 @@ jobs:
 
       - name: Run Gitleaks
         id: gitleaks
-        continue-on-error: true
         shell: bash
         run: |
           set +e
@@ -68,8 +67,9 @@ jobs:
           fi
 
           if [ "$scanner_status" -ne 0 ]; then
-            echo "::warning::Gitleaks exited with status $scanner_status"
+            echo "::error::Gitleaks exited with status $scanner_status"
           fi
+          echo "scanner_status=$scanner_status" >> "$GITHUB_OUTPUT"
 
       - name: Upload Semgrep SARIF to Twiniti Security
         if: >-
@@ -130,3 +130,14 @@ jobs:
             -H "Authorization: Bearer $SECURITY_INGEST_TOKEN" \
             -H "Content-Type: application/json" \
             -d @gitleaks-payload.json
+
+      - name: Enforce scanner results
+        if: always()
+        shell: bash
+        run: |
+          semgrep_status="${{ steps.semgrep.outputs.scanner_status }}"
+          gitleaks_status="${{ steps.gitleaks.outputs.scanner_status }}"
+          if [ "$semgrep_status" != "0" ] || [ "$gitleaks_status" != "0" ]; then
+            echo "::error::Security scanning failed or reported findings (Semgrep=$semgrep_status, Gitleaks=$gitleaks_status)"
+            exit 1
+          fi
