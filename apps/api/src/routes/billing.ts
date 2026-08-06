@@ -130,7 +130,6 @@ async function applySubscriptionEvent(db: Db, event: Stripe.Event, subscription:
   }
   if (!billing) return null;
 
-  if (billing.lastStripeEventCreatedAt && billing.lastStripeEventCreatedAt.getTime() > event.created * 1000) return billing.organizationId;
   const items = subscription.items && typeof subscription.items === "object"
     ? subscription.items as { data?: Array<{ price?: { id?: string } }> }
     : {};
@@ -138,6 +137,14 @@ async function applySubscriptionEvent(db: Db, event: Stripe.Event, subscription:
   const trialStart = stripeDate(subscription.trial_start);
   const trialEnd = stripeDate(subscription.trial_end);
   const nextStatus = subscriptionStatus(String(subscription.status ?? "pending"));
+  // Stripe delivery order is not guaranteed. Do not discard a trialing/active
+  // subscription event merely because another event has a later timestamp
+  // while the CRM is still pending.
+  if (
+    billing.lastStripeEventCreatedAt
+    && billing.lastStripeEventCreatedAt.getTime() > event.created * 1000
+    && !(billing.status === "pending" && ["active", "trialing"].includes(nextStatus))
+  ) return billing.organizationId;
   const discounts = stripeDiscountIds(subscription.discounts);
   const nextTrialKind = nextStatus === "trialing" ? trialKind(trialStart, trialEnd, 7) : "none";
   const convertedAt = billing.status === "trialing" && nextStatus === "active" ? new Date(event.created * 1000) : null;
