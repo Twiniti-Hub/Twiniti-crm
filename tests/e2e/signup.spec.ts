@@ -17,13 +17,14 @@ test("new user can create an account and reach authenticated billing", async ({ 
 
   await expect.poll(() => page.url(), { timeout: 30_000 }).toMatch(/checkout\.stripe\.com/);
 
-  // Do not submit payment in the automated signup test. Returning to the app
-  // still verifies that Hexclave authentication and CRM organization creation
-  // completed before the billing gate.
-  await page.goto(`${baseURL ?? ""}/billing?canceled=1`);
-  await page.waitForTimeout(3000);
-  await expect(page.getByRole("heading", { name: "Activate your client workspace" })).toBeVisible();
-  await expect(page.locator("body")).toContainText(/Status:\s*pending/i);
+  await page.getByLabel(/card number/i).fill("4242 4242 4242 4242");
+  await page.getByPlaceholder("MM / YY").fill("12 / 34");
+  await page.getByPlaceholder("CVC").fill("123");
+  await page.getByPlaceholder("Full name on card").fill("Twiniti E2E Test");
+  await page.getByRole("button", { name: /start trial|subscribe|complete order/i }).last().click();
+  await page.waitForTimeout(10_000);
+  await page.goto(`${baseURL ?? ""}/billing?success=1`);
+  await expect(page.locator("body")).toContainText(/Status:\s*(active|trialing)/i, { timeout: 30_000 });
   await expect(page.locator("body")).not.toContainText("LICENSE_API_UNAVAILABLE");
   await expect(page.locator("body")).not.toContainText(/failed to load session|unauthorized/i);
 });

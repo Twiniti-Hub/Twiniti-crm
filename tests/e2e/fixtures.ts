@@ -9,9 +9,9 @@ export const test = base.extend<{ signedInPage: Page }>({
     }
     await page.goto("/sign-in");
     await page.getByLabel(/email/i).fill(email);
-    await page.getByLabel(/password/i).fill(password);
-    await page.getByRole("button", { name: /sign in/i }).click();
-    await page.waitForLoadState("networkidle");
+    await page.getByRole("textbox", { name: /password/i }).fill(password);
+    await page.getByRole("button", { name: "Sign In", exact: true }).click();
+    await page.waitForLoadState("domcontentloaded");
     await use(page);
   }
 });

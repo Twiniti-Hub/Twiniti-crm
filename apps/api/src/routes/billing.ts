@@ -172,7 +172,9 @@ async function applyCheckoutCompleted(db: Db, event: Stripe.Event, session: Reco
   if (billing.lastStripeEventCreatedAt && billing.lastStripeEventCreatedAt.getTime() > event.created * 1000) return organizationId;
   const discounts = stripeDiscountIds(session.discounts);
   await updateOrganizationBilling(db, organizationId, {
-    status: "pending",
+    // Stripe can deliver invoice/subscription activation before the checkout
+    // completion event. Never downgrade an already active or trialing license.
+    status: ["active", "trialing"].includes(billing.status) ? billing.status : "pending",
     stripeCustomerId: stripeObjectId(session.customer),
     stripeSubscriptionId: stripeObjectId(session.subscription),
     stripeCheckoutSessionId: stripeObjectId(session.id),
