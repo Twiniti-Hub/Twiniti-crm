@@ -1,7 +1,7 @@
 {
   "name": "twiniti-crm",
   "private": true,
-  "version": "0.10.11",
+  "version": "0.10.17",
   "packageManager": "pnpm@10.17.1",
   "engines": {
     "node": ">=22.22.0"
@@ -11,6 +11,9 @@
     "build": "pnpm -r build",
     "check": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
+    "e2e:install": "playwright install chromium",
     "test": "pnpm --filter @twiniti/db test && pnpm --filter @twiniti/email test && pnpm --filter @twiniti/license-api test && pnpm --filter @twiniti/api test && pnpm --filter @twiniti/web test",
     "policy:check": "node scripts/policy/check-release-policy.mjs",
     "policy:db-chain": "node scripts/policy/check-migration-chain.mjs",
@@ -26,6 +29,7 @@
     }
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/node": "^22.15.0",
     "typescript": "^5.8.3"
   }
