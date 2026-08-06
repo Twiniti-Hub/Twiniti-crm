@@ -36,7 +36,8 @@ for (const required of [
   ".github/CODEOWNERS",
   ".github/pull_request_template.md",
   ".github/workflows/policy-check.yml",
-  ".github/workflows/production-promotion.yml"
+  ".github/workflows/production-promotion.yml",
+  ".github/workflows/e2e.yml"
 ]) read(required);
 
 if (!/branches:\s*\[main,\s*development,\s*production\]/m.test(ci)) {
