@@ -21,7 +21,9 @@ test("new user can create an account and reach authenticated billing", async ({ 
   // still verifies that Hexclave authentication and CRM organization creation
   // completed before the billing gate.
   await page.goto(`${baseURL ?? ""}/billing?canceled=1`);
+  await page.waitForTimeout(3000);
   await expect(page.getByRole("heading", { name: "Activate your client workspace" })).toBeVisible();
   await expect(page.locator("body")).toContainText(/Status:\s*pending/i);
+  await expect(page.locator("body")).not.toContainText("LICENSE_API_UNAVAILABLE");
   await expect(page.locator("body")).not.toContainText(/failed to load session|unauthorized/i);
 });
