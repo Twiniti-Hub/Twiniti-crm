@@ -1,10 +1,11 @@
 # Changelog
 
-## [0.10.15] - 2026-08-06
+## [0.10.16] - 2026-08-06
 
 - Added Playwright end-to-end coverage for login, workspace gates, authenticated CRM routes, and contact creation.
 - Added scheduled and manual GitHub Actions execution with protected environment credentials and failure artifacts.
 - Added the global Stripe billing gateway service and regional webhook forwarding contract.
+- Added repeatable automated new-user signup coverage with generated test identities per run.
 
 ## [0.10.14] - 2026-08-06
 
