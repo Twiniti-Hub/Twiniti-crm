@@ -9,6 +9,8 @@
 - Reconciled all six regional migration ledgers to 13 canonical entries and
   added an idempotent repair for the missing Production UK Resend verification
   column.
+- Added consent-gated Microsoft Clarity instrumentation to the landing site
+  and CRM application.
 
 ## [0.10.15] - 2026-08-06
 

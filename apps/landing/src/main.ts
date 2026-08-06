@@ -5,6 +5,7 @@ import "./analytics-consent.css";
 import {
   getAnalyticsConsent,
   initializeGoogleAnalytics,
+  initializeMicrosoftClarity,
   mountAnalyticsConsentBanner,
   trackPageView
 } from "@twiniti/analytics";
@@ -29,6 +30,8 @@ const regions = [
 const environmentLabel = import.meta.env.VITE_ENVIRONMENT_LABEL || "Preview";
 const googleAnalyticsId =
   import.meta.env.VITE_GOOGLE_ANALYTICS_ID?.trim() || import.meta.env.Google_Analytics?.trim() || "";
+const microsoftClarityId = import.meta.env.VITE_MICROSOFT_CLARITY_ID?.trim() || "xyd0gcl234";
+const analyticsConfigured = Boolean(googleAnalyticsId || microsoftClarityId);
 const darkLogoPath = "/branding/Twiniti_Logo_Square_Dark.png";
 const lightLogoPath = "/branding/Twiniti_Logo_Square_Light.png";
 
@@ -118,14 +121,23 @@ function trackCurrentPage(): void {
   trackPageView(`${window.location.pathname}${window.location.search}${window.location.hash}`);
 }
 
-if (googleAnalyticsId) {
-  if (getAnalyticsConsent() === "granted") {
+function initializeOptionalAnalytics(): void {
+  if (googleAnalyticsId) {
     initializeGoogleAnalytics(googleAnalyticsId);
+  }
+  if (microsoftClarityId) {
+    initializeMicrosoftClarity(microsoftClarityId);
+  }
+}
+
+if (analyticsConfigured) {
+  if (getAnalyticsConsent() === "granted") {
+    initializeOptionalAnalytics();
     trackCurrentPage();
   } else if (getAnalyticsConsent() === null) {
     mountAnalyticsConsentBanner({
       onAccept: () => {
-        initializeGoogleAnalytics(googleAnalyticsId);
+        initializeOptionalAnalytics();
         trackCurrentPage();
       }
     });

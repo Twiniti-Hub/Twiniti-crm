@@ -97,7 +97,8 @@ US, EU, or UK Loop host that owns the workspace.
 - The landing package is `apps/landing`; configure its `VITE_APP_URL_US`, `VITE_APP_URL_EU`, and `VITE_APP_URL_UK` values so every sign-up and sign-in choice stays in the intended data region. The supplied regional domains are the checked-in defaults.
 - Keep the supplied Twiniti dark/light logo assets in `apps/landing/public/branding` when updating the landing page identity.
 - Google Analytics uses the public `VITE_GOOGLE_ANALYTICS_ID` build variable; do not send names, email addresses, or other CRM fields to analytics.
-- The analytics package mirrors the supplied Google `gtag.js` snippet behind consent; do not add a second raw Google tag to either HTML entrypoint.
+- Microsoft Clarity uses the public `VITE_MICROSOFT_CLARITY_ID` build variable; the current default is `xyd0gcl234` and it is not a secret. Use separate Clarity projects for development and production when available.
+- The analytics package loads Google Analytics and Microsoft Clarity only after optional-analytics consent; do not add a second raw tag to either HTML entrypoint. Before enabling Clarity for authenticated CRM sessions, configure Clarity masking/privacy controls for all customer and contact data.
 - Agent API tokens are shown once at creation; store hashes only in `agent_identities`.
 
 ## Pull requests
