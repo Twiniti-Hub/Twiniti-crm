@@ -6,7 +6,9 @@ test("new user can create an account and reach authenticated billing", async ({ 
   const email = `e2e-signup-${runId}@${emailDomain}`;
   const password = `Twiniti-E2E-${runId}!`;
 
-  await page.goto("/sign-up");
+  await page.goto(process.env.E2E_LANDING_URL ?? "https://twiniti-crm-dev-landing.onrender.com");
+  await page.getByText("Start your workspace", { exact: false }).first().click();
+  await page.getByRole("link", { name: /United States/ }).click();
   await page.getByLabel("Company name", { exact: true }).fill(`E2E Workspace ${runId}`);
   await page.locator("select").first().selectOption({ label: "United States" });
   await page.getByLabel("Work email", { exact: true }).fill(email);

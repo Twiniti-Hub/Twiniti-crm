@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.10.17] - 2026-08-06
+
+- Separated landing-page and regional CRM URLs in E2E configuration.
+- Corrected development landing links to point to development regional applications.
+
 ## [0.10.16] - 2026-08-06
 
 - Added Playwright end-to-end coverage for login, workspace gates, authenticated CRM routes, and contact creation.
