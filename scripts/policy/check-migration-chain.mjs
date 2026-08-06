@@ -26,7 +26,8 @@ for (const file of sqlFiles) {
   const entry = manifestByFile.get(file);
   if (!entry) failures.push(`SQL migration is missing from migration-manifest.json: ${file}`);
   if (entry) {
-    const sha256 = crypto.createHash("sha256").update(fs.readFileSync(path.join(migrationDir, file))).digest("hex");
+    const normalized = fs.readFileSync(path.join(migrationDir, file), "utf8").replace(/\r\n/g, "\n");
+    const sha256 = crypto.createHash("sha256").update(normalized, "utf8").digest("hex");
     if (sha256 !== entry.sha256) failures.push(`Migration checksum mismatch: ${file}`);
   }
 }
@@ -37,8 +38,8 @@ for (const entry of manifestEntries) {
   if (entry.status === "journaled" && !journalTags.includes(tag)) {
     failures.push(`Journaled manifest entry is absent from the Drizzle journal: ${entry.file}`);
   }
-  if (entry.status === "legacy-unjournaled" && journalTags.includes(tag)) {
-    failures.push(`Legacy entry unexpectedly appears in the Drizzle journal: ${entry.file}`);
+  if (["retired-folded", "legacy-unjournaled"].includes(entry.status) && journalTags.includes(tag)) {
+    failures.push(`Retired or legacy entry unexpectedly appears in the Drizzle journal: ${entry.file}`);
   }
 }
 
@@ -49,9 +50,9 @@ for (const tag of journalTags) {
   if (entry?.status !== "journaled") failures.push(`Drizzle journal entry is not marked journaled: ${file}`);
 }
 
-const legacy = manifestEntries.filter((entry) => entry.status === "legacy-unjournaled");
-if (strict && legacy.length) {
-  failures.push(`${legacy.length} legacy unjournaled migrations require reconciliation before execution`);
+const unresolved = manifestEntries.filter((entry) => entry.status === "legacy-unjournaled");
+if (strict && unresolved.length) {
+  failures.push(`${unresolved.length} legacy unjournaled migrations require reconciliation before execution`);
 }
 
 if (failures.length) {
@@ -60,4 +61,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`Migration chain check passed: ${journalTags.length} journaled entries, ${legacy.length} legacy entries`);
+console.log(`Migration chain check passed: ${journalTags.length} journaled entries, ${unresolved.length} unresolved legacy entries`);

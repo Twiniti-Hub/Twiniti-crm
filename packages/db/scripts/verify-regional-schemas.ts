@@ -16,8 +16,8 @@ async function snapshot(url: string) {
   try {
     const [migrations, columns, indexes, policies, roles] = await Promise.all([
       pool.query("SELECT id, hash, created_at FROM drizzle.__drizzle_migrations ORDER BY id"),
-      pool.query(`SELECT table_schema, table_name, column_name, ordinal_position, data_type, udt_name, is_nullable, column_default
-        FROM information_schema.columns WHERE table_schema = 'public' ORDER BY table_schema, table_name, ordinal_position`),
+      pool.query(`SELECT table_schema, table_name, column_name, data_type, udt_name, is_nullable, column_default
+        FROM information_schema.columns WHERE table_schema = 'public' ORDER BY table_schema, table_name, column_name`),
       pool.query("SELECT schemaname, tablename, indexname, indexdef FROM pg_indexes WHERE schemaname = 'public' ORDER BY schemaname, tablename, indexname"),
       pool.query(`SELECT schemaname, tablename, policyname, permissive, roles::text, cmd, qual, with_check
         FROM pg_policies WHERE schemaname = 'public' ORDER BY schemaname, tablename, policyname`),

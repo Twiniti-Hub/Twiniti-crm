@@ -22,11 +22,12 @@ migration chain, schema objects, RLS policies, and runtime role contract.
 
 ## Current reconciliation gate
 
-The repository contains legacy SQL files outside the Drizzle journal. They are
-listed explicitly in `packages/db/drizzle/migration-manifest.json` so the policy
-can detect edits and prevent new untracked migrations. They must be reconciled
-into the canonical chain or formally retired before the next production schema
-change. This work is tracked in Linear as TWI-186.
+The repository previously contained five SQL files outside the canonical
+Drizzle journal. The billing-trial files were folded into the combined billing
+and runtime-role migration; the RLS, runtime-role, and Resend migrations are
+now the canonical journal entries. All files remain listed in
+`packages/db/drizzle/migration-manifest.json` so the policy can detect edits.
+This reconciliation is tracked in Linear as TWI-186.
 
 ## Required receipt
 

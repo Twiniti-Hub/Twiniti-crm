@@ -6,6 +6,9 @@
   CODEOWNERS coverage, and production-source validation.
 - Added migration manifest/checksum validation, regional schema preflight and
   postflight checks, protected migration execution, and migration receipts.
+- Reconciled all six regional migration ledgers to 13 canonical entries and
+  added an idempotent repair for the missing Production UK Resend verification
+  column.
 
 ## [0.10.15] - 2026-08-06
 
