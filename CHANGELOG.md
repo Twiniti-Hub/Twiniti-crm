@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.10.14] - 2026-08-06
+
+- Fixed checkout recovery so expired Stripe sessions are replaced with a fresh secure checkout session.
+
 ## [0.10.13] - 2026-08-05
 
 - Added organization-scoped Resend domains with encrypted per-domain credentials and default-domain selection.

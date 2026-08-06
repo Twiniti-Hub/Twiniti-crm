@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppEnv } from "@twiniti/config";
 import {
@@ -74,6 +75,17 @@ export async function createOrganizationCheckoutSession(
   const billing = await ensureOrganizationBilling(db, input.organizationId);
   if (["active", "trialing"].includes(billing.status)) return null;
 
+  // Reuse only a still-open session. Stripe idempotency keys are durable, so
+  // a fixed organization key can otherwise return an expired checkout forever.
+  if (billing.stripeCheckoutSessionId) {
+    try {
+      const existing = await stripe.checkout.sessions.retrieve(billing.stripeCheckoutSessionId);
+      if (existing.status === "open" && existing.url) return existing;
+    } catch {
+      // Create a fresh session when the stored session was deleted or expired.
+    }
+  }
+
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     line_items: [{ price: env.STRIPE_PRICE_ID, quantity: 1 }],
@@ -93,7 +105,7 @@ export async function createOrganizationCheckoutSession(
     },
     success_url: `${env.WEB_ORIGIN.replace(/\/$/, "")}/billing?success=1`,
     cancel_url: `${env.WEB_ORIGIN.replace(/\/$/, "")}/billing?canceled=1`
-  }, { idempotencyKey: `organization-checkout:${input.organizationId}` });
+  }, { idempotencyKey: `organization-checkout:${input.organizationId}:${randomUUID()}` });
 
   await updateOrganizationBilling(db, input.organizationId, {
     status: ["active", "trialing"].includes(billing.status) ? billing.status : "pending",
