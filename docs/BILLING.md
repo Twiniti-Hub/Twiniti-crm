@@ -13,7 +13,7 @@ In production, the API refuses to start without the first three values and witho
 
 ## Stripe webhook
 
-Configure Stripe to send these events to `/api/v1/webhooks/stripe`:
+Configure Stripe to send these events to the global billing gateway at `/api/v1/webhooks/stripe`. The current development Render gateway URL is `https://twiniti-billing-gateway-qx9x.onrender.com`; production must use its separate gateway URL.
 
 - `checkout.session.completed`
 - `customer.subscription.created`

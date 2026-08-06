@@ -1,0 +1,23 @@
+{
+  "name": "@twiniti/billing-gateway",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "fastify": "^5.3.3",
+    "fastify-raw-body": "^5.0.0",
+    "stripe": "^22.4.0",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

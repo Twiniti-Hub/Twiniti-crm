@@ -214,6 +214,34 @@ services:
       - key: VITE_GOOGLE_ANALYTICS_ID
         sync: false
 
+  - type: web
+    name: twiniti-billing-gateway-dev
+    runtime: node
+    plan: free
+    region: ohio
+    branch: development
+    autoDeployTrigger: checksPass
+    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/billing-gateway build
+    startCommand: pnpm --filter @twiniti/billing-gateway start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DEPLOYMENT_ENV
+        value: development
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: REGIONAL_WEBHOOK_URL_US
+        value: https://twiniti-crm-dev-us.onrender.com/api/v1/webhooks/stripe
+      - key: REGIONAL_WEBHOOK_URL_EU
+        value: https://twiniti-crm-dev-eu.onrender.com/api/v1/webhooks/stripe
+      - key: REGIONAL_WEBHOOK_URL_UK
+        value: https://twiniti-crm-dev-uk.onrender.com/api/v1/webhooks/stripe
+      - key: GATEWAY_FORWARD_TIMEOUT_MS
+        value: "10000"
+
   - type: worker
     name: twiniti-crm-dev-worker
     runtime: node
