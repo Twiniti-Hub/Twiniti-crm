@@ -7,6 +7,7 @@ import {
   companySearchSchema,
   type ContactSearch,
   updateContactSchema,
+  updateCompanySchema,
   upsertContactSchema
 } from "@twiniti/contracts";
 import {
@@ -15,18 +16,20 @@ import {
   countContacts,
   contactCompanyAssociations,
   contacts as contactsTable,
+  createCompany,
   createContact,
   customerEvents,
   findContactByEmail,
   getContactById,
   getContactPropertyHistory,
   getContactTimeline,
+  getCompanyById,
   listCompanies,
-  normalizeDomain,
   normalizeEmail,
   searchContacts,
   suppressionEntries,
   updateContact,
+  updateCompany,
   type Db
 } from "@twiniti/db";
 import { and as andOp, eq as eqOp, isNull } from "drizzle-orm";
@@ -275,11 +278,7 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
       if (actor.type === "agent") assertScope(actor, "companies:read");
       const { id } = request.params as { id: string };
       const organizationId = requireOrgId(actor);
-      const [company] = await db.select().from(companies).where(andOp(
-        eqOp(companies.id, id),
-        eqOp(companies.organizationId, organizationId),
-        isNull(companies.archivedAt)
-      )).limit(1);
+      const company = await getCompanyById(db, organizationId, id);
       if (!company) return reply.code(404).send({ error: { code: "not_found", message: "Company not found" } });
 
       const associated = await db.select({
@@ -307,19 +306,38 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
   app.post("/api/v1/companies", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      requireUserRole(actor, "member");
+      if (actor.type === "agent") assertScope(actor, "companies:create");
+      else requireUserRole(actor, "member");
       const input = createCompanySchema.parse(request.body);
-      const [row] = await db.insert(companies).values({
+      const row = await createCompany(db, {
         organizationId: requireOrgId(actor),
         name: input.name,
         domain: input.domain ?? null,
-        domainNormalized: normalizeDomain(input.domain),
         industry: input.industry ?? null,
         properties: input.properties ?? {}
-      }).returning();
-      await audit(db, actor, "company.create", "company", row.id);
+      });
+      await audit(db, actor, "company.create", "company", row.id, { source: `${actor.type}.company.create` });
       reply.code(201);
       return { data: row };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.patch("/api/v1/companies/:id", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      if (actor.type === "agent") assertScope(actor, "companies:update");
+      else requireUserRole(actor, "member");
+      const { id } = request.params as { id: string };
+      const input = updateCompanySchema.parse(request.body);
+      const result = await updateCompany(db, requireOrgId(actor), id, input);
+      if (!result) return reply.code(404).send({ error: { code: "not_found", message: "Company not found" } });
+      if (result.conflict) {
+        return reply.code(409).send({ error: { code: "version_conflict", message: "Company version conflict", details: { current: result.current } } });
+      }
+      await audit(db, actor, "company.update", "company", result.row.id, { source: `${actor.type}.company.update` });
+      return { data: result.row };
     } catch (error) {
       return sendError(reply, error);
     }

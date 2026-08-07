@@ -10,30 +10,39 @@ import {
   ReadResourceRequestSchema
 } from "@modelcontextprotocol/sdk/types.js";
 import { assertOrganization, assertScope, resolveRequestActor, type AuthActor } from "@twiniti/auth";
+import { audit } from "./auth-hook.js";
 import type { AppEnv } from "@twiniti/config";
 import {
   contactSearchSchema,
+  companySearchSchema,
+  companyIdSchema,
   createCampaignSchema,
+  createCompanySchema,
   createContactSchema,
   segmentIdSchema,
   segmentSearchSchema,
   updateContactSchema,
+  updateCompanySchema,
   upsertContactSchema
 } from "@twiniti/contracts";
 import {
   compileFilterAst,
   contacts,
   createContact,
+  createCompany,
   findContactByEmail,
+  getCompanyById,
   getContactById,
   getContactTimeline,
   getSegmentById,
   listCampaigns,
+  listCompanies,
   listSegments,
   parseFilterAst,
   searchContacts,
   type Db,
   type DbPool,
+  updateCompany,
   updateContact
 } from "@twiniti/db";
 import { beginOrganizationRlsTransaction, clearDbContext } from "@twiniti/db";
@@ -50,6 +59,10 @@ export const toolDefs = [
   { name: "upsert_contact", description: "Create or update a contact by email", scope: "contacts:update", inputSchema: { type: "object" } },
   { name: "update_contact", description: "Update a contact", scope: "contacts:update", inputSchema: { type: "object" } },
   { name: "get_contact_timeline", description: "Get contact timeline events", scope: "contacts:read", inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
+  { name: "search_companies", description: "Search companies in the authenticated organization", scope: "companies:read", inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "integer", maximum: 100 }, page: { type: "integer", minimum: 1 } } } },
+  { name: "get_company", description: "Get a company by id in the authenticated organization", scope: "companies:read", inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
+  { name: "create_company", description: "Create a company in the authenticated organization", scope: "companies:create", inputSchema: { type: "object", required: ["name"], properties: { name: { type: "string", minLength: 1, maxLength: 200 }, domain: { type: "string", maxLength: 255 }, industry: { type: "string", maxLength: 120 }, properties: { type: "object" } } } },
+  { name: "update_company", description: "Update a company in the authenticated organization", scope: "companies:update", inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" }, name: { type: "string", minLength: 1, maxLength: 200 }, domain: { type: ["string", "null"], maxLength: 255 }, industry: { type: ["string", "null"], maxLength: 120 }, properties: { type: "object" }, version: { type: "integer", minimum: 0 } } } },
   { name: "create_campaign_draft", description: "Create a campaign draft", scope: "campaigns:create", inputSchema: { type: "object" } },
   { name: "get_campaign_status", description: "List campaigns / status", scope: "campaigns:preview", inputSchema: { type: "object" } }
 ] as const;
@@ -197,6 +210,38 @@ export function createMcpServer(db: Db, actor: AuthActor) {
       }
       case "get_contact_timeline": {
         result = await getContactTimeline(db, assertOrganization(actor), String(args.id));
+        break;
+      }
+      case "search_companies": {
+        result = await listCompanies(db, assertOrganization(actor), companySearchSchema.parse(args));
+        break;
+      }
+      case "get_company": {
+        const input = companyIdSchema.parse(args);
+        result = await getCompanyById(db, assertOrganization(actor), input.id);
+        break;
+      }
+      case "create_company": {
+        const input = createCompanySchema.parse(args);
+        const organizationId = assertOrganization(actor);
+        const row = await createCompany(db, {
+          organizationId,
+          ...input
+        });
+        await audit(db, actor, "company.create", "company", row.id, { source: "mcp.company.create" });
+        result = row;
+        break;
+      }
+      case "update_company": {
+        const { id } = companyIdSchema.parse(args);
+        const input = updateCompanySchema.parse(args);
+        const updated = await updateCompany(db, assertOrganization(actor), id, input);
+        if (updated && !updated.conflict) {
+          await audit(db, actor, "company.update", "company", updated.row.id, { source: "mcp.company.update" });
+          result = updated.row;
+        } else {
+          result = updated;
+        }
         break;
       }
       case "create_campaign_draft": {

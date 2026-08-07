@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added `companies:read`, `companies:create`, and `companies:update` agent scopes
+  with organization-scoped MCP/API company search, creation, and optimistic
+  concurrency updates for registration integrations such as Lexi Lite.
 - Added repository-enforced development-first promotion, required PR evidence,
   CODEOWNERS coverage, and production-source validation.
 - Added migration manifest/checksum validation, regional schema preflight and

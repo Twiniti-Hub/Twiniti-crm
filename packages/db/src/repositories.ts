@@ -1239,6 +1239,77 @@ export async function countCompanies(
   return Number(rows[0]?.value ?? 0);
 }
 
+/** Return one active company within an organization boundary. */
+export async function getCompanyById(db: Db, organizationId: string, id: string) {
+  const rows = await db.select().from(companies).where(and(
+    eq(companies.id, id),
+    eq(companies.organizationId, organizationId),
+    isNull(companies.archivedAt)
+  )).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function createCompany(
+  db: Db,
+  input: {
+    organizationId: string;
+    name: string;
+    domain?: string | null;
+    industry?: string | null;
+    properties?: Record<string, unknown>;
+  }
+) {
+  const [row] = await db.insert(companies).values({
+    organizationId: input.organizationId,
+    name: input.name.trim(),
+    domain: input.domain ?? null,
+    domainNormalized: normalizeDomain(input.domain),
+    industry: input.industry ?? null,
+    properties: input.properties ?? {}
+  }).returning();
+  return row;
+}
+
+export async function updateCompany(
+  db: Db,
+  organizationId: string,
+  id: string,
+  input: {
+    name?: string;
+    domain?: string | null;
+    industry?: string | null;
+    properties?: Record<string, unknown>;
+    version?: number;
+  }
+) {
+  const current = await getCompanyById(db, organizationId, id);
+  if (!current) return null;
+  if (input.version !== undefined && input.version !== current.version) {
+    return { conflict: true as const, current };
+  }
+
+  const updateFilters = [
+    eq(companies.id, id),
+    eq(companies.organizationId, organizationId),
+    isNull(companies.archivedAt)
+  ];
+  if (input.version !== undefined) updateFilters.push(eq(companies.version, current.version));
+  const [row] = await db.update(companies).set({
+    name: input.name === undefined ? current.name : input.name.trim(),
+    domain: input.domain === undefined ? current.domain : input.domain,
+    domainNormalized: input.domain === undefined ? current.domainNormalized : normalizeDomain(input.domain),
+    industry: input.industry === undefined ? current.industry : input.industry,
+    properties: input.properties === undefined ? current.properties : input.properties,
+    version: current.version + 1,
+    updatedAt: new Date()
+  }).where(and(...updateFilters)).returning();
+  if (!row) {
+    const latest = await getCompanyById(db, organizationId, id);
+    return { conflict: true as const, current: latest ?? current };
+  }
+  return { conflict: false as const, row };
+}
+
 export async function findCompanyByName(db: Db, organizationId: string, name: string) {
   const normalized = name.trim();
   if (!normalized) return null;
