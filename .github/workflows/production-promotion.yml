@@ -1,0 +1,58 @@
+name: Production promotion policy
+
+on:
+  pull_request:
+    branches: [production]
+
+permissions:
+  contents: read
+  actions: read
+  checks: read
+
+jobs:
+  source:
+    name: production / development-source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require development as the promotion source
+        shell: bash
+        env:
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ "$HEAD_REPOSITORY" != "$REPOSITORY" ]; then
+            echo "::error::Production can only be promoted from the canonical repository's development branch."
+            exit 1
+          fi
+          if [ "$HEAD_BRANCH" != "development" ]; then
+            echo "::error::Production pull requests must have development as their source branch."
+            exit 1
+          fi
+          git fetch origin development production --quiet
+          if ! git merge-base --is-ancestor "$HEAD_SHA" origin/development; then
+            echo "::error::The proposed promotion commit is not contained in origin/development."
+            exit 1
+          fi
+          echo "Promotion source verified: development -> production ($HEAD_SHA)"
+
+      - name: Require successful Development E2E evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          checks="$(gh api --paginate "repos/$REPOSITORY/commits/$HEAD_SHA/check-runs?per_page=100" --jq '.check_runs[] | [.name, .status, .conclusion] | @tsv')"
+          if ! printf '%s\n' "$checks" | awk -F '\t' '$1 == "E2E / development-smoke" && $2 == "completed" && $3 == "success" { found = 1 } END { exit(found ? 0 : 1) }'; then
+            echo "::error::No successful E2E / development-smoke check was found for the exact development commit $HEAD_SHA."
+            exit 1
+          fi
+          echo "Development E2E evidence verified for $HEAD_SHA"

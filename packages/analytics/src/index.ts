@@ -4,12 +4,15 @@ const CONSENT_STORAGE_KEY = "twiniti.analytics-consent";
 const CONSENT_BANNER_ID = "twiniti-analytics-consent";
 
 type Gtag = (...args: unknown[]) => void;
+type Clarity = ((...args: unknown[]) => void) & { q?: unknown[][] };
 
 declare global {
   interface Window {
     dataLayer?: unknown[];
     gtag?: Gtag;
+    clarity?: Clarity;
     __twinitiAnalyticsMeasurementId?: string;
+    __twinitiClarityProjectId?: string;
   }
 }
 
@@ -75,6 +78,40 @@ export function initializeGoogleAnalytics(measurementId: string): boolean {
   return true;
 }
 
+export function initializeMicrosoftClarity(projectId: string): boolean {
+  const id = projectId.trim();
+  if (!id || typeof window === "undefined") {
+    return false;
+  }
+
+  if (window.__twinitiClarityProjectId === id && window.clarity) {
+    return true;
+  }
+
+  if (!window.clarity) {
+    const clarity = ((...args: unknown[]) => {
+      clarity.q = clarity.q ?? [];
+      clarity.q.push(args);
+    }) as Clarity;
+    clarity.q = [];
+    window.clarity = clarity;
+  }
+
+  window.__twinitiClarityProjectId = id;
+  const existingScript = document.querySelector<HTMLScriptElement>(
+    `script[data-twiniti-clarity="${id}"]`
+  );
+  if (!existingScript) {
+    const script = document.createElement("script");
+    script.async = true;
+    script.dataset.twinitiClarity = id;
+    script.src = `https://www.clarity.ms/tag/${encodeURIComponent(id)}`;
+    document.head.appendChild(script);
+  }
+
+  return true;
+}
+
 export function trackPageView(path: string, title = document.title): void {
   if (getAnalyticsConsent() !== "granted" || !window.gtag || !window.__twinitiAnalyticsMeasurementId) {
     return;
@@ -106,7 +143,7 @@ export function mountAnalyticsConsentBanner(options: {
   banner.innerHTML = `
     <div class="analytics-consent-copy">
       <strong>Help us improve Twiniti</strong>
-      <p>We use optional Google Analytics to understand visits and improve the product. You can accept or decline.</p>
+      <p>We use optional Google Analytics and Microsoft Clarity to understand visits and improve the product. You can accept or decline.</p>
     </div>
     <div class="analytics-consent-actions">
       <button type="button" class="analytics-consent-decline">Decline</button>

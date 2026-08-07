@@ -1,13 +1,18 @@
 name: End-to-end tests
 
 on:
+  push:
+    branches: [development]
   workflow_dispatch:
   schedule:
     - cron: "17 3 * * *"
 
+permissions:
+  contents: read
+
 jobs:
   browser:
-    # Pin the hosted image so GitHub can place the job on the available pool.
+    name: E2E / development-smoke
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:

@@ -18,8 +18,12 @@ Thanks for helping build Twiniti CRM.
    configuring `DATABASE_URL_Dev_US`, `DATABASE_URL_Dev_EU`, and
    `DATABASE_URL_Dev_UK`. Use the `Prod` variants only from a protected
    production migration job.
-5. Run `pnpm check` before opening a pull request.
-6. Run `pnpm build` before submitting changes that affect the web or API packages.
+5. Run `pnpm check`, `pnpm test`, `pnpm build`, `pnpm policy:check`, and
+   `pnpm policy:db-chain` before opening a pull request.
+6. Open feature pull requests against `development`. Production changes are
+   promoted only through a pull request whose source is `development` after
+   Development deployment and authenticated E2E evidence are recorded.
+7. Run `pnpm build` before submitting changes that affect the web or API packages.
 
 Keep changes focused, add tests for behavior changes, and never commit credentials, customer data, or production exports.
 
@@ -76,7 +80,12 @@ US, EU, or UK Loop host that owns the workspace.
 
 ### Database changes
 
-- Edit `packages/db/src/schema.ts`, then generate with `pnpm db:generate` and apply with `pnpm db:migrate`.
+- Read [the database change policy](docs/DATABASE_CHANGE_POLICY.md) first.
+- Edit `packages/db/src/schema.ts`, generate with `pnpm db:generate`, and run
+  `pnpm policy:db-chain` before applying anything.
+- Regional changes use the protected `Regional database migration` workflow.
+  Do not run production SQL manually or use a developer workstation for a
+  production migration.
 - Pull requests that change schema must note migration impact and stay backward-compatible with the deployed application during rollout.
 - Agents and clients must never connect to Neon directly; use the public API / MCP tools.
 
@@ -88,9 +97,14 @@ US, EU, or UK Loop host that owns the workspace.
 - The landing package is `apps/landing`; configure its `VITE_APP_URL_US`, `VITE_APP_URL_EU`, and `VITE_APP_URL_UK` values so every sign-up and sign-in choice stays in the intended data region. The supplied regional domains are the checked-in defaults.
 - Keep the supplied Twiniti dark/light logo assets in `apps/landing/public/branding` when updating the landing page identity.
 - Google Analytics uses the public `VITE_GOOGLE_ANALYTICS_ID` build variable; do not send names, email addresses, or other CRM fields to analytics.
-- The analytics package mirrors the supplied Google `gtag.js` snippet behind consent; do not add a second raw Google tag to either HTML entrypoint.
+- Microsoft Clarity uses the public `VITE_MICROSOFT_CLARITY_ID` build variable; the current default is `xyd0gcl234` and it is not a secret. Use separate Clarity projects for development and production when available.
+- The analytics package loads Google Analytics and Microsoft Clarity only after optional-analytics consent; do not add a second raw tag to either HTML entrypoint. Before enabling Clarity for authenticated CRM sessions, configure Clarity masking/privacy controls for all customer and contact data.
 - Agent API tokens are shown once at creation; store hashes only in `agent_identities`.
 
 ## Pull requests
 
-Pull requests should explain the user impact, include validation steps, and call out schema or migration changes. See [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) for agent-ready criteria and [docs/HARDENING.md](docs/HARDENING.md) for production cutover checks.
+Pull requests should explain the user impact, include validation steps, and
+call out schema or migration changes. The checked-in template and
+[release policy](docs/RELEASE_POLICY.md) define the required evidence. See
+[docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) for agent-ready criteria and
+[docs/HARDENING.md](docs/HARDENING.md) for production cutover checks.

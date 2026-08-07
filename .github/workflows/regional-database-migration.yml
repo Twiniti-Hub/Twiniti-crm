@@ -1,0 +1,65 @@
+name: Regional database migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - development
+          - production
+      change_id:
+        description: Linear issue or approved change identifier
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: regional-migration-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: migrate / ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm policy:db-chain:strict
+
+      - name: Run controlled regional migration
+        env:
+          DEPLOYMENT_ENV: ${{ inputs.environment }}
+          MIGRATION_APPROVED: ${{ inputs.environment == 'production' && 'true' || 'false' }}
+          MIGRATION_CHANGE_ID: ${{ inputs.change_id }}
+          MIGRATION_RECEIPT_PATH: migration-receipt.json
+          DATABASE_URL_Dev_US: ${{ secrets.DATABASE_URL_DEV_US }}
+          DATABASE_URL_Dev_EU: ${{ secrets.DATABASE_URL_DEV_EU }}
+          DATABASE_URL_Dev_UK: ${{ secrets.DATABASE_URL_DEV_UK }}
+          DATABASE_URL_Prod_US: ${{ secrets.DATABASE_URL_PROD_US }}
+          DATABASE_URL_Prod_EU: ${{ secrets.DATABASE_URL_PROD_EU }}
+          DATABASE_URL_Prod_UK: ${{ secrets.DATABASE_URL_PROD_UK }}
+        run: node scripts/migrate-regional.mjs
+
+      - name: Upload migration receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-receipt-${{ inputs.environment }}-${{ github.run_id }}
+          path: migration-receipt.json
+          if-no-files-found: ignore

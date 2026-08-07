@@ -9,7 +9,8 @@
     "lint": "tsc --noEmit",
     "test": "tsx --test src/hubspot.test.ts src/email-tracking.test.ts src/contact-identities.test.ts src/regional-policy.test.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "db:verify:regional": "tsx scripts/verify-regional-schemas.ts"
   },
   "exports": {
     ".": "./src/index.ts"
