@@ -12,11 +12,17 @@
 - Added consent-gated Microsoft Clarity instrumentation to the landing site
   and CRM application.
 
-## [0.10.15] - 2026-08-06
+## [0.10.17] - 2026-08-06
+
+- Separated landing-page and regional CRM URLs in E2E configuration.
+- Corrected development landing links to point to development regional applications.
+
+## [0.10.16] - 2026-08-06
 
 - Added Playwright end-to-end coverage for login, workspace gates, authenticated CRM routes, and contact creation.
 - Added scheduled and manual GitHub Actions execution with protected environment credentials and failure artifacts.
 - Added the global Stripe billing gateway service and regional webhook forwarding contract.
+- Added repeatable automated new-user signup coverage with generated test identities per run.
 
 ## [0.10.14] - 2026-08-06
 
