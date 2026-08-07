@@ -42,6 +42,9 @@ Grant only the scopes required by the integration. Examples include:
 - `contacts:read` — search, retrieve, and read contact timelines
 - `contacts:create` — create contacts
 - `contacts:update` — update or upsert contacts
+- `companies:read` — search and retrieve companies
+- `companies:create` — create a company when registration lookup finds no match
+- `companies:update` — update an existing company with optional optimistic version checking
 - `segments:read` — read saved segments
 - `campaigns:create` — create campaign drafts
 - `campaigns:preview` — preview campaigns
@@ -103,7 +106,7 @@ integration configuration.
 
 ## 5. Call a tool
 
-Example request to search contacts in the authenticated workspace:
+Example request to search companies in the authenticated workspace:
 
 ```json
 {
@@ -111,9 +114,9 @@ Example request to search contacts in the authenticated workspace:
   "id": 3,
   "method": "tools/call",
   "params": {
-    "name": "search_contacts",
+    "name": "search_companies",
     "arguments": {
-      "query": "acme",
+      "query": "Acme",
       "limit": 25,
       "page": 1
     }
@@ -121,9 +124,11 @@ Example request to search contacts in the authenticated workspace:
 }
 ```
 
-The current tool catalog includes contact, segment, campaign, resource, and
-prompt capabilities. Each tool declares the scope it requires; calls without
-that scope fail closed.
+The current tool catalog includes contact, company, segment, campaign, resource,
+and prompt capabilities. Each tool declares the scope it requires; calls without
+that scope fail closed. For registration, call `search_companies` first. If the
+result is empty, call `create_company`; call `update_company` only when the
+company already exists and the integration needs to change its details.
 
 ## 6. Minimal command-line check
 

@@ -6,3 +6,10 @@ Use the search field for a company name or domain, select **Apply filter**, and 
 
 When importing contacts, a company name can be matched to an existing company. If no match exists, Loop creates the company and stores the relationship as a contact-to-company association.
 
+Company records can also be managed by scoped MCP agents. The `companies:read`
+scope permits search and retrieval; `companies:create` permits creation; and
+`companies:update` permits edits. An integration such as Lexi Lite should search
+the authenticated workspace before creating a new company, then retain the
+returned company ID. Company writes are organization-scoped and updates support
+the `version` field for optimistic concurrency.
+

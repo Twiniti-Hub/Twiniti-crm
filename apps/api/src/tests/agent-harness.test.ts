@@ -51,6 +51,21 @@ export const agentHarnessCases: HarnessCase[] = [
     expect: ["creates or updates without 403", "meta.upserted is create|update"]
   },
   {
+    id: "companies.crud",
+    title: "Find, create, and update a company through MCP",
+    scopes: ["companies:read", "companies:create", "companies:update"],
+    steps: [
+      "tools/call search_companies with the registration company name",
+      "If no company matches, tools/call create_company with name and domain",
+      "tools/call update_company with the returned id and version when details change"
+    ],
+    expect: [
+      "company results stay within the authenticated organization",
+      "create returns a company id",
+      "update honors optimistic version conflicts"
+    ]
+  },
+  {
     id: "campaigns.draft.preview",
     title: "Draft and preview campaign",
     scopes: ["campaigns:create", "campaigns:preview"],

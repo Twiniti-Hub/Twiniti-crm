@@ -78,6 +78,11 @@ describe("MCP Streamable HTTP transport", () => {
     const { response, body } = await post({ jsonrpc: "2.0", id: 2, method: "tools/list" });
     assert.equal(response.status, 200);
     assert.ok(body.result.tools.some((tool: { name: string }) => tool.name === "search_contacts"));
+    assert.deepEqual(
+      body.result.tools.filter((tool: { name: string }) => tool.name.endsWith("_company")).map((tool: { name: string }) => tool.name),
+      ["get_company", "create_company", "update_company"]
+    );
+    assert.ok(body.result.tools.some((tool: { name: string }) => tool.name === "search_companies"));
   });
 
   it("allows configured browser origins and non-browser agent requests only", () => {

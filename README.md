@@ -48,6 +48,11 @@ See [docs/AGENT_CONNECTION.md](docs/AGENT_CONNECTION.md) for a copy-ready
 agent connection guide, credential and scope rules, request examples, and
 troubleshooting.
 
+Company registration integrations can use `companies:read` to search or get a
+company, `companies:create` to create a missing company, and `companies:update`
+to update an existing record. The recommended flow is search first, create only
+when no active company matches, and retain the returned company ID.
+
 Super Admins choose an explicit workspace from `/super-admin` before using CRM
 functions. The selected workspace is kept in that regional browser origin and
 sent as `X-Twiniti-Workspace-Id`; the API validates that the workspace exists

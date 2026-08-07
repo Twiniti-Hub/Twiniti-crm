@@ -168,6 +168,10 @@ export const companySearchSchema = z.object({
   cursor: z.string().optional()
 });
 
+export const companyIdSchema = z.object({
+  id: z.string().uuid()
+});
+
 export const propertyDataTypeSchema = z.enum([
   "string",
   "number",
@@ -211,6 +215,9 @@ export const agentScopeSchema = z.enum([
   "contacts:read",
   "contacts:create",
   "contacts:update",
+  "companies:read",
+  "companies:create",
+  "companies:update",
   "segments:read",
   "lists:read",
   "forms:read",
@@ -505,12 +512,11 @@ export const agentToolNameSchema = z.enum([
   "upsert_contact",
   "update_contact",
   "get_contact_timeline",
-  "list_segments",
-  "get_segment",
   "search_companies",
   "get_company",
   "create_company",
   "update_company",
+  "list_segments",
   "get_segment",
   "estimate_segment_size",
   "create_campaign_draft",
@@ -537,6 +543,7 @@ export type Company = z.infer<typeof companySchema>;
 export type CreateCompany = z.infer<typeof createCompanySchema>;
 export type UpdateCompany = z.infer<typeof updateCompanySchema>;
 export type CompanySearch = z.infer<typeof companySearchSchema>;
+export type CompanyId = z.infer<typeof companyIdSchema>;
 export type PropertyDefinition = z.infer<typeof propertyDefinitionSchema>;
 export type CreatePropertyDefinition = z.infer<typeof createPropertyDefinitionSchema>;
 export type UpdatePropertyDefinition = z.infer<typeof updatePropertyDefinitionSchema>;

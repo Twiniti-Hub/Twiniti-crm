@@ -65,3 +65,10 @@ test("agent scope updates require at least one supported scope", () => {
     expiresAt: null
   }).scopes, ["contacts:read"]);
 });
+
+test("company agent scopes are supported and remain controlled", () => {
+  assert.deepEqual(updateAgentIdentitySchema.parse({
+    scopes: ["companies:read", "companies:create", "companies:update"]
+  }).scopes, ["companies:read", "companies:create", "companies:update"]);
+  assert.throws(() => updateAgentIdentitySchema.parse({ scopes: ["companies:delete"] }));
+});

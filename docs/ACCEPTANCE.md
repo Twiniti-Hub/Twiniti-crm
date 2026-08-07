@@ -51,6 +51,7 @@ Use [`apps/api/src/tests/agent-harness.test.ts`](../apps/api/src/tests/agent-har
 - [ ] Agent request-approval succeeds; send without approved approval fails (live)
 - [ ] Revoked agent credentials are rejected (live)
 - [ ] Dry-run headers do not persist mutations (live)
+- [x] Company search, create, and update tools are available through scoped MCP/API capabilities
 - [ ] MCP tool list matches scoped REST capabilities (live)
 
 ## Product slices (SPA)
