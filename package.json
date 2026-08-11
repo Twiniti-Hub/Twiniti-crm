@@ -1,7 +1,7 @@
 {
   "name": "twiniti-crm",
   "private": true,
-  "version": "0.10.17",
+  "version": "0.10.18",
   "packageManager": "pnpm@10.17.1",
   "engines": {
     "node": ">=22.22.0"
