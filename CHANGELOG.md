@@ -17,6 +17,8 @@
 - Added the supplied Loop light- and dark-mode logo lockups alongside the
   existing Twiniti application mark, with automatic theme selection and a
   compact mobile sidebar treatment.
+- Clarified the required bot-push and CODEOWNER-approval identity separation
+  for protected pull requests.
 
 ## [0.10.17] - 2026-08-06
 
