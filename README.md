@@ -14,6 +14,9 @@ Twiniti Loop is an agent-friendly marketing CRM built with React, Fastify, Neon 
 - `packages/config` — environment validation
 - `packages/ui` — small shared UI helpers
 
+Application brand assets and theme-selection rules are documented in
+[docs/BRANDING.md](docs/BRANDING.md).
+
 ## Local setup
 
 ```powershell

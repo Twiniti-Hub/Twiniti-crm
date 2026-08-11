@@ -12,6 +12,14 @@
 - Added consent-gated Microsoft Clarity instrumentation to the landing site
   and CRM application.
 
+## [0.10.18] - 2026-08-11
+
+- Added the supplied Loop light- and dark-mode logo lockups alongside the
+  existing Twiniti application mark, with automatic theme selection and a
+  compact mobile sidebar treatment.
+- Clarified the required bot-push and CODEOWNER-approval identity separation
+  for protected pull requests.
+
 ## [0.10.17] - 2026-08-06
 
 - Separated landing-page and regional CRM URLs in E2E configuration.

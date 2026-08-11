@@ -13,6 +13,19 @@ application, infrastructure, workflow, and configuration changes.
 - Emergency fixes use the same production PR path with an explicit incident or
   change reference and a recorded post-incident review.
 
+## Approval identity workflow
+
+- Feature-branch commits and the final reviewable branch push are made by
+  `twiniti-code-bot`.
+- `George-Twiniti`, as repository CODEOWNER, reviews and approves the final
+  bot-pushed commit after required checks have started.
+- A review must be submitted with GitHub's **Approve** decision. An approval
+  statement submitted as a comment does not satisfy the repository ruleset.
+- Any later reviewable push dismisses the effective approval. Required checks
+  must run for the new commit and `George-Twiniti` must approve that commit.
+- Do not weaken or bypass independent approval, CODEOWNER review, last-push
+  separation, required-thread resolution, or mandatory status checks.
+
 ## Required evidence
 
 Every PR must identify its Linear issue, user or operational impact, validation
