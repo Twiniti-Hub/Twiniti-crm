@@ -12,6 +12,17 @@
 - Added consent-gated Microsoft Clarity instrumentation to the landing site
   and CRM application.
 
+## [0.10.24] - 2026-08-12
+
+- Hardened the Gitleaks security-gate installer with HTTP retries and upstream
+  checksum verification after repeated release-asset transport failures.
+
+## [0.10.23] - 2026-08-12
+
+- Made hosted Stripe Checkout E2E handle both collapsed and already-expanded
+  card payment states, including delayed UI rendering, without weakening the
+  required signup journey.
+
 ## [0.10.22] - 2026-08-12
 
 - Made authenticated route/contact smoke tests report a setup-gated persistent
