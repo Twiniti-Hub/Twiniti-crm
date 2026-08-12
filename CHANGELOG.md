@@ -12,6 +12,19 @@
 - Added consent-gated Microsoft Clarity instrumentation to the landing site
   and CRM application.
 
+## [0.10.34] - 2026-08-12
+
+- Restored the Windows command shell only for `pnpm.cmd` regional migration
+  calls while keeping direct Node and Linux execution shell-free.
+
+## [0.10.33] - 2026-08-12
+
+- Replaced Drizzle Kit's opaque migration subprocess with the application
+  migrator so protected regional runs preserve actionable PostgreSQL errors.
+- Disabled unnecessary shell invocation in the regional runner, including the
+  Windows path-splitting failure observed during local validation.
+- Preserved the documented root `.env` loading behavior for local migrations.
+
 ## [0.10.32] - 2026-08-12
 
 - Added a forward-only RLS enforcement migration so databases with the legacy
