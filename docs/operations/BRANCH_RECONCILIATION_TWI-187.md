@@ -135,6 +135,12 @@ Version `0.10.34` retains that direct execution on Linux and Node commands but
 uses the Windows command shell for `pnpm.cmd`, which Windows cannot spawn
 directly.
 
+The diagnostic Production run identified the precise metadata failure: the
+ledger contained row ID 13 but its serial sequence still generated 13. Version
+`0.10.36` aligns the sequence with the highest recorded ID before Drizzle runs
+when the ledger already exists, while preserving first-run setup. The migration
+transaction itself remained unapplied during the failed attempt.
+
 ## Deployment and rollback boundary
 
 The reconciliation pull request changes repository history and documentation;

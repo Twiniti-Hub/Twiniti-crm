@@ -13,6 +13,17 @@ if (!connectionString) throw new Error("DATABASE_URL is required");
 const pool = new Pool({ connectionString, max: 1 });
 try {
   const db = drizzle(pool);
+  const ledger = await pool.query(
+    `SELECT to_regclass('drizzle.__drizzle_migrations') IS NOT NULL AS ledger_exists`
+  );
+  if (ledger.rows[0]?.ledger_exists) {
+    // Legacy reconciliation can insert ledger IDs without advancing the serial sequence.
+    await pool.query(`SELECT setval(
+      pg_get_serial_sequence('drizzle.__drizzle_migrations', 'id'),
+      COALESCE((SELECT MAX(id) FROM drizzle.__drizzle_migrations), 1),
+      EXISTS (SELECT 1 FROM drizzle.__drizzle_migrations)
+    )`);
+  }
   await migrate(db, {
     migrationsFolder: path.resolve(packageDir, "drizzle")
   });
