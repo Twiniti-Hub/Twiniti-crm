@@ -15,7 +15,8 @@
 ## [0.10.23] - 2026-08-12
 
 - Made hosted Stripe Checkout E2E handle both collapsed and already-expanded
-  card payment states without weakening the required signup journey.
+  card payment states, including delayed UI rendering, without weakening the
+  required signup journey.
 
 ## [0.10.22] - 2026-08-12
 

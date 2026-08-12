@@ -18,10 +18,12 @@ test("new user can create an account and reach authenticated billing", async ({ 
   await expect.poll(() => page.url(), { timeout: 30_000 }).toMatch(/checkout\.stripe\.com/);
 
   const payWithCard = page.getByRole("button", { name: "Pay with card", exact: true });
+  const cardNumber = page.getByRole("textbox", { name: "Card number", exact: true });
+  await expect.poll(async () => (await payWithCard.isVisible()) || (await cardNumber.isVisible())).toBe(true);
   if (await payWithCard.isVisible()) {
     await payWithCard.click();
   }
-  await page.getByRole("textbox", { name: "Card number", exact: true }).fill("4242 4242 4242 4242");
+  await cardNumber.fill("4242 4242 4242 4242");
   await page.getByRole("textbox", { name: "Expiration", exact: true }).fill("12 / 34");
   await page.getByRole("textbox", { name: "CVC", exact: true }).fill("123");
   await page.getByRole("textbox", { name: "Cardholder name", exact: true }).fill("Twiniti E2E Test");
