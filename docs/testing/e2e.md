@@ -47,10 +47,11 @@ postal code when Stripe displays it and opts out of optional Link enrollment,
 which otherwise introduces a required phone field unrelated to CRM billing.
 
 After submission, the signup test waits for Stripe to return to the application
-before checking hosted billing. It observes the URL transition and then polls
-the hosted billing page for webhook settlement. It does not use a fixed delay
-or force navigation away from Stripe. Hosted API startup rejects a localhost
-`WEB_ORIGIN`, and each Render region declares its own public return origin.
+before checking hosted billing. It observes the URL transition and then keeps
+the returned page mounted while React restores the workspace and the webhook
+settles. It does not use a fixed delay or repeatedly navigate during bootstrap.
+Hosted API startup rejects a localhost `WEB_ORIGIN`, and each Render region
+declares its own public return origin.
 
 If the persistent authenticated test account is onboarding- or billing-gated,
 route and contact tests report the unavailable scenarios as skipped. The

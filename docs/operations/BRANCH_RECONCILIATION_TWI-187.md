@@ -100,6 +100,11 @@ on Stripe because the current hosted form required a postal code and optional
 Link enrollment had introduced a required phone field. Version `0.10.28`
 satisfies the visible postal-code contract and opts out of Link before submit.
 
+The exact `0.10.28` rerun against the corrected regional origins confirmed
+Stripe returned successfully and authenticated API calls answered, but the test
+reloaded `/billing` on every poll and repeatedly reset React bootstrap. Version
+`0.10.29` keeps the returned page mounted while billing settlement completes.
+
 ## Deployment and rollback boundary
 
 The reconciliation pull request changes repository history and documentation;

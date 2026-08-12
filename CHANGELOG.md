@@ -12,6 +12,11 @@
 - Added consent-gated Microsoft Clarity instrumentation to the landing site
   and CRM application.
 
+## [0.10.29] - 2026-08-12
+
+- Kept the returned CRM page mounted while waiting for billing settlement so
+  hosted E2E no longer resets application bootstrap with repeated navigation.
+
 ## [0.10.28] - 2026-08-12
 
 - Completed Stripe's visible postal-code requirement and disabled optional

@@ -37,11 +37,7 @@ test("new user can create an account and reach authenticated billing", async ({ 
   }
   await page.getByRole("button", { name: /start trial|subscribe|complete order/i }).last().click();
   await expect.poll(() => page.url(), { timeout: 60_000 }).not.toMatch(/checkout\.stripe\.com/);
-  const billingUrl = `${baseURL ?? ""}/billing?success=1`;
-  await expect.poll(async () => {
-    await page.goto(billingUrl);
-    return page.locator("body").innerText();
-  }, { timeout: 60_000, intervals: [2_000, 5_000, 10_000] }).toMatch(/Status:\s*(active|trialing)/i);
+  await expect(page.locator("body")).toContainText(/Status:\s*(active|trialing)/i, { timeout: 60_000 });
   await expect(page.locator("body")).not.toContainText("LICENSE_API_UNAVAILABLE");
   await expect(page.locator("body")).not.toContainText(/failed to load session|unauthorized/i);
 
