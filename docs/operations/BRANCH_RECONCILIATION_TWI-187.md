@@ -83,6 +83,10 @@ payment-method radio while Stripe's similarly named helper button remains
 hidden. Version `0.10.25` selects the visible radio only when card fields are
 collapsed and retains the full billing journey.
 
+The exact `0.10.25` Development run located the Card radio but showed Stripe's
+styled accordion intercepting pointer clicks on the input. Version `0.10.26`
+uses radio-check semantics and verifies selection before filling card fields.
+
 ## Deployment and rollback boundary
 
 The reconciliation pull request changes repository history and documentation;

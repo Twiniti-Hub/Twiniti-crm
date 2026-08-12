@@ -12,6 +12,11 @@
 - Added consent-gated Microsoft Clarity instrumentation to the landing site
   and CRM application.
 
+## [0.10.26] - 2026-08-12
+
+- Made Stripe Card selection use verified radio-check semantics when Checkout's
+  styled accordion intercepts pointer clicks on the underlying input.
+
 ## [0.10.25] - 2026-08-12
 
 - Updated hosted Stripe Checkout E2E to select the visible Card payment-method
