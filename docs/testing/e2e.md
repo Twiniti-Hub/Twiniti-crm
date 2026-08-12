@@ -38,7 +38,9 @@ in the hosted checkout page, so the signup journey uses their accessible names
 and ignores duplicate secure-payment iframes belonging to express controls.
 The Card payment-method radio is selected only when the fields are not already
 expanded. Stripe may also render a hidden **Pay with card** helper button; the
-test intentionally does not use that implementation detail.
+test intentionally does not use that implementation detail. Because Stripe's
+styled accordion can intercept pointer clicks, the test checks the radio and
+verifies its selected state before continuing.
 
 If the persistent authenticated test account is onboarding- or billing-gated,
 route and contact tests report the unavailable scenarios as skipped. The
