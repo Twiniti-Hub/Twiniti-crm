@@ -12,6 +12,13 @@
 - Added consent-gated Microsoft Clarity instrumentation to the landing site
   and CRM application.
 
+## [0.10.22] - 2026-08-12
+
+- Made authenticated route/contact smoke tests report a setup-gated persistent
+  test account as skipped instead of waiting for controls that cannot render.
+- Updated hosted Stripe Checkout automation to address card fields by their
+  accessible names while ignoring duplicate express-payment iframes.
+
 ## [0.10.21] - 2026-08-12
 
 - Hardened the protected Development E2E promotion gate to wait for Hexclave

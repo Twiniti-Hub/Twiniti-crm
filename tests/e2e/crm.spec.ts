@@ -15,6 +15,10 @@ test.describe("Twiniti CRM authenticated application", () => {
   });
 
   test("covers the authenticated CRM route surface", async ({ signedInPage: page }) => {
+    test.skip(
+      await page.getByRole("heading", { name: "Name your company", exact: true }).count() > 0,
+      "The persistent E2E account requires workspace setup."
+    );
     for (const [path, heading] of crmRoutes) {
       await page.goto(path);
       await page.waitForLoadState("networkidle");
@@ -24,6 +28,10 @@ test.describe("Twiniti CRM authenticated application", () => {
   });
 
   test("creates a contact and verifies it in the contact list", async ({ signedInPage: page }) => {
+    test.skip(
+      await page.getByRole("heading", { name: "Name your company", exact: true }).count() > 0,
+      "The persistent E2E account requires workspace setup."
+    );
     await page.goto("/contacts");
     await page.waitForLoadState("networkidle");
     test.skip(await page.getByText(/Activate your client workspace/i).count() > 0, "The E2E account is billing-gated.");
