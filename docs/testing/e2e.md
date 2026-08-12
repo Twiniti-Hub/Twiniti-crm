@@ -54,6 +54,9 @@ does not use a fixed delay or repeatedly navigate during bootstrap.
 Hosted API startup rejects a localhost `WEB_ORIGIN`, and each Render region
 declares its own public return origin.
 
+Hosted route URLs are constructed from a trailing-slash-normalized base URL so
+the final Contacts CRUD assertion reaches `/contacts`, never `//contacts`.
+
 If the persistent authenticated test account is onboarding- or billing-gated,
 route and contact tests report the unavailable scenarios as skipped. The
 generated signup journey remains required and covers workspace creation,
