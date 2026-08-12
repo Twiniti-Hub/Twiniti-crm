@@ -126,6 +126,12 @@ regional preflight accepts a valid prefix during partial-rollout recovery while
 still rejecting divergent ledgers and same-level drift; and mobile layouts keep
 the complete CRM route list available through horizontal navigation.
 
+The first protected Production migration attempt stopped at US without
+recording migration `0013`; a rollback-only diagnostic proved every statement
+was compatible with the current Production schema. Version `0.10.33` moves the
+runner to Drizzle's application migrator and preserves the underlying database
+error, while removing an unnecessary shell boundary from regional execution.
+
 ## Deployment and rollback boundary
 
 The reconciliation pull request changes repository history and documentation;
