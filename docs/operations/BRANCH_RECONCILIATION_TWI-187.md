@@ -103,7 +103,8 @@ satisfies the visible postal-code contract and opts out of Link before submit.
 The exact `0.10.28` rerun against the corrected regional origins confirmed
 Stripe returned successfully and authenticated API calls answered, but the test
 reloaded `/billing` on every poll and repeatedly reset React bootstrap. Version
-`0.10.29` keeps the returned page mounted while billing settlement completes.
+`0.10.29` keeps the returned page mounted while billing settlement completes
+and extends its own refresh cycle across the full 60-second promotion window.
 
 ## Deployment and rollback boundary
 

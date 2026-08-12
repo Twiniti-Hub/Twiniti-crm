@@ -49,7 +49,8 @@ which otherwise introduces a required phone field unrelated to CRM billing.
 After submission, the signup test waits for Stripe to return to the application
 before checking hosted billing. It observes the URL transition and then keeps
 the returned page mounted while React restores the workspace and the webhook
-settles. It does not use a fixed delay or repeatedly navigate during bootstrap.
+settles. The page refreshes billing for the full 60-second promotion window. It
+does not use a fixed delay or repeatedly navigate during bootstrap.
 Hosted API startup rejects a localhost `WEB_ORIGIN`, and each Render region
 declares its own public return origin.
 

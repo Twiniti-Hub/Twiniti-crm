@@ -16,6 +16,8 @@
 
 - Kept the returned CRM page mounted while waiting for billing settlement so
   hosted E2E no longer resets application bootstrap with repeated navigation.
+- Extended the mounted billing page's Stripe-confirmation refresh window to
+  cover the full 60-second promotion gate.
 
 ## [0.10.28] - 2026-08-12
 
