@@ -87,6 +87,14 @@ The exact `0.10.25` Development run located the Card radio but showed Stripe's
 styled accordion intercepting pointer clicks on the input. Version `0.10.26`
 uses radio-check semantics and verifies selection before filling card fields.
 
+The exact `0.10.26` run completed the changed card-selection path but exposed a
+later timing defect: the test forced CRM navigation ten seconds after submit,
+before CI checkout settlement, and observed billing as `pending`. Version
+`0.10.27` waits for Stripe's application return before asserting billing. The
+same run exposed that regional `WEB_ORIGIN` values were manual and could fall
+back to localhost; the Render manifests now bind each API to its public origin,
+and hosted startup rejects local callback origins.
+
 ## Deployment and rollback boundary
 
 The reconciliation pull request changes repository history and documentation;

@@ -42,6 +42,12 @@ test intentionally does not use that implementation detail. Because Stripe's
 styled accordion can intercept pointer clicks, the test checks the radio and
 verifies its selected state before continuing.
 
+After submission, the signup test waits for Stripe to return to the application
+before checking hosted billing. It observes the URL transition and then polls
+the hosted billing page for webhook settlement. It does not use a fixed delay
+or force navigation away from Stripe. Hosted API startup rejects a localhost
+`WEB_ORIGIN`, and each Render region declares its own public return origin.
+
 If the persistent authenticated test account is onboarding- or billing-gated,
 route and contact tests report the unavailable scenarios as skipped. The
 generated signup journey remains required and covers workspace creation,

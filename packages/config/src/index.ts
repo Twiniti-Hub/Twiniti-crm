@@ -126,6 +126,9 @@ export function assertProductionApiConfiguration(env: AppEnv) {
   // so the runtime uses production semantics. DEPLOYMENT_ENV is the data and
   // infrastructure boundary that determines which regional database contract
   // must be enforced.
+  if (env.NODE_ENV === "production" && /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(env.WEB_ORIGIN)) {
+    throw new Error("Hosted API requires a public WEB_ORIGIN; localhost callbacks are not allowed");
+  }
   if (env.DEPLOYMENT_ENV !== "production") return;
   if (env.AUTH_DISABLED || !env.HEXCLAVE_PROJECT_ID || !env.HEXCLAVE_SECRET_SERVER_KEY) {
     throw new Error("Production API requires Hexclave server authentication, project ID, and AUTH_DISABLED=false");

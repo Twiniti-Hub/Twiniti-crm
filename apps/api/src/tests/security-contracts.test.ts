@@ -27,9 +27,19 @@ test("production configuration fails closed without auth and Stripe", () => {
   assert.throws(() => assertProductionApiConfiguration(env));
 });
 
+test("hosted configuration rejects a localhost browser origin", () => {
+  const env = loadEnv({
+    NODE_ENV: "production",
+    DEPLOYMENT_ENV: "development",
+    WEB_ORIGIN: "http://localhost:5173"
+  });
+  assert.throws(() => assertProductionApiConfiguration(env), /public WEB_ORIGIN/);
+});
+
 test("production configuration rejects a browser/server Hexclave project mismatch", () => {
   const env = loadEnv({
     NODE_ENV: "production",
+    WEB_ORIGIN: "https://loop.example.invalid",
     DATABASE_URL: "postgresql://example.invalid/db",
     HEXCLAVE_PROJECT_ID: "server-project",
     HEXCLAVE_SECRET_SERVER_KEY: "server-secret",
