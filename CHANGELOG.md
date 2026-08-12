@@ -12,6 +12,13 @@
 - Added consent-gated Microsoft Clarity instrumentation to the landing site
   and CRM application.
 
+## [0.10.27] - 2026-08-12
+
+- Replaced the Stripe post-submit timer with an explicit return transition and
+  hosted billing polling so CI waits for checkout and webhook settlement.
+- Bound each regional Render API to its public browser origin and made hosted
+  startup fail closed when Stripe callbacks would resolve to localhost.
+
 ## [0.10.26] - 2026-08-12
 
 - Made Stripe Card selection use verified radio-check semantics when Checkout's

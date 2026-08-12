@@ -1,6 +1,7 @@
 import { test, expect } from "./fixtures";
 
 test("new user can create an account and reach authenticated billing", async ({ page, baseURL }) => {
+  test.setTimeout(120_000);
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const emailDomain = process.env.E2E_SIGNUP_EMAIL_DOMAIN ?? "example.test";
   const email = process.env.E2E_SIGNUP_EMAIL ?? `e2e-signup-${runId}@${emailDomain}`;
@@ -29,9 +30,12 @@ test("new user can create an account and reach authenticated billing", async ({ 
   await page.getByRole("textbox", { name: "CVC", exact: true }).fill("123");
   await page.getByRole("textbox", { name: "Cardholder name", exact: true }).fill("Twiniti E2E Test");
   await page.getByRole("button", { name: /start trial|subscribe|complete order/i }).last().click();
-  await page.waitForTimeout(10_000);
-  await page.goto(`${baseURL ?? ""}/billing?success=1`);
-  await expect(page.locator("body")).toContainText(/Status:\s*(active|trialing)/i, { timeout: 30_000 });
+  await expect.poll(() => page.url(), { timeout: 60_000 }).not.toMatch(/checkout\.stripe\.com/);
+  const billingUrl = `${baseURL ?? ""}/billing?success=1`;
+  await expect.poll(async () => {
+    await page.goto(billingUrl);
+    return page.locator("body").innerText();
+  }, { timeout: 60_000, intervals: [2_000, 5_000, 10_000] }).toMatch(/Status:\s*(active|trialing)/i);
   await expect(page.locator("body")).not.toContainText("LICENSE_API_UNAVAILABLE");
   await expect(page.locator("body")).not.toContainText(/failed to load session|unauthorized/i);
 
