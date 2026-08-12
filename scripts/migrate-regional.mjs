@@ -45,7 +45,7 @@ console.log("[db:migrate:regional] Validating the canonical migration chain");
 run(process.execPath, [path.join(root, "scripts/policy/check-migration-chain.mjs"), "--strict"]);
 
 console.log(`[db:migrate:regional] Verifying all ${deploymentEnvironment} regional schemas before migration`);
-run(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["--filter", "@twiniti/db", "db:verify:regional"]);
+run(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["--filter", "@twiniti/db", "db:verify:regional", "--", "--allow-migration-prefix"]);
 
 const startedAt = new Date().toISOString();
 const results = [];

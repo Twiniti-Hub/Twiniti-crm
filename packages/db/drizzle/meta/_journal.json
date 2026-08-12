@@ -92,6 +92,13 @@
       "when": 1786057019021,
       "tag": "0012_reconcile_resend_domain_verification",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786570200000,
+      "tag": "0013_enforce_organization_rls",
+      "breakpoints": true
     }
   ]
 }
