@@ -51,7 +51,7 @@ export function BillingPage() {
       if (cancelled) return;
       attempts += 1;
       await load();
-      if (attempts >= 10 || cancelled) {
+      if (attempts >= 30 || cancelled) {
         setConfirming(false);
         return;
       }
