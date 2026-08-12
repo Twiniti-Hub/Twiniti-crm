@@ -12,6 +12,11 @@
 - Added consent-gated Microsoft Clarity instrumentation to the landing site
   and CRM application.
 
+## [0.10.23] - 2026-08-12
+
+- Made hosted Stripe Checkout E2E handle both collapsed and already-expanded
+  card payment states without weakening the required signup journey.
+
 ## [0.10.22] - 2026-08-12
 
 - Made authenticated route/contact smoke tests report a setup-gated persistent

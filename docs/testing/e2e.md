@@ -36,6 +36,8 @@ an authenticated workspace, onboarding, billing, or Super Admin state before a
 test navigates to CRM routes. Stripe Checkout renders the selected card fields
 in the hosted checkout page, so the signup journey uses their accessible names
 and ignores duplicate secure-payment iframes belonging to express controls.
+The card method is expanded only when Checkout presents a visible **Pay with
+card** button; other hosted sessions render the fields already expanded.
 
 If the persistent authenticated test account is onboarding- or billing-gated,
 route and contact tests report the unavailable scenarios as skipped. The

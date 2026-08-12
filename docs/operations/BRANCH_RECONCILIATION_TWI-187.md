@@ -67,6 +67,12 @@ duplicate express-payment iframes. Version `0.10.22` records those hosted-state
 corrections. The generated signup test must still complete billing and contact
 creation before Production promotion.
 
+The exact Development run for `0.10.22` then showed a Stripe presentation
+difference: CI offered a visible collapsed **Pay with card** choice while the
+local hosted validation rendered Card already expanded. Version `0.10.23`
+conditionally expands Card and preserves the required field, billing, and
+contact assertions in both states.
+
 ## Deployment and rollback boundary
 
 The reconciliation pull request changes repository history and documentation;
