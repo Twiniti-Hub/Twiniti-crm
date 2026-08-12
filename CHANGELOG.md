@@ -12,6 +12,12 @@
 - Added consent-gated Microsoft Clarity instrumentation to the landing site
   and CRM application.
 
+## [0.10.35] - 2026-08-12
+
+- Aligned the Drizzle migration ledger sequence with its highest recorded ID
+  before applying migrations, repairing legacy reconciliation metadata that
+  caused duplicate primary keys on the next migration receipt.
+
 ## [0.10.34] - 2026-08-12
 
 - Restored the Windows command shell only for `pnpm.cmd` regional migration
