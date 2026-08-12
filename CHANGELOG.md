@@ -12,6 +12,14 @@
 - Added consent-gated Microsoft Clarity instrumentation to the landing site
   and CRM application.
 
+## [0.10.20] - 2026-08-12
+
+- Reconciled the legacy Production branch ancestry into Development through the
+  protected pull-request workflow without changing application behavior or
+  copying environment-specific Development configuration into Production.
+- Documented the branch-divergence cause, conflict resolution, verification
+  gates, promotion sequence, and rollback boundary for TWI-187.
+
 ## [0.10.19] - 2026-08-12
 
 - Replaced the visible Twiniti application mark with the supplied Loop logo
