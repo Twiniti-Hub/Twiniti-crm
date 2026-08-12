@@ -1,7 +1,7 @@
 import { test, expect } from "./fixtures";
 
 test("new user can create an account and reach authenticated billing", async ({ page, baseURL }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const emailDomain = process.env.E2E_SIGNUP_EMAIL_DOMAIN ?? "example.test";
   const email = process.env.E2E_SIGNUP_EMAIL ?? `e2e-signup-${runId}@${emailDomain}`;
@@ -41,7 +41,8 @@ test("new user can create an account and reach authenticated billing", async ({ 
   await expect(page.locator("body")).not.toContainText("LICENSE_API_UNAVAILABLE");
   await expect(page.locator("body")).not.toContainText(/failed to load session|unauthorized/i);
 
-  await page.goto(`${baseURL ?? ""}/contacts`);
+  const appOrigin = (baseURL ?? "").replace(/\/$/, "");
+  await page.goto(`${appOrigin}/contacts`);
   await expect(page.locator("body")).toContainText(/Contacts/i, { timeout: 30_000 });
   const contactEmail = `e2e-contact-${runId}@example.test`;
   await page.getByLabel("Email", { exact: true }).fill(contactEmail);

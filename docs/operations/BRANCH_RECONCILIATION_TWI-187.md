@@ -106,6 +106,11 @@ reloaded `/billing` on every poll and repeatedly reset React bootstrap. Version
 `0.10.29` keeps the returned page mounted while billing settlement completes
 and extends its own refresh cycle across the full 60-second promotion window.
 
+The exact `0.10.29` run then passed signup, checkout, billing activation, and
+licensing, but a trailing slash in the hosted base URL produced `//contacts`
+for the final CRUD check. Version `0.10.30` normalizes the base URL and gives the
+complete journey enough time for the full billing-settlement window.
+
 ## Deployment and rollback boundary
 
 The reconciliation pull request changes repository history and documentation;
