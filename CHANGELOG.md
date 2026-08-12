@@ -12,6 +12,12 @@
 - Added consent-gated Microsoft Clarity instrumentation to the landing site
   and CRM application.
 
+## [0.10.31] - 2026-08-12
+
+- Recorded the protected release approval chain for TWI-187 so the final
+  Development push, CODEOWNER approval, and merge are performed by distinct
+  policy-compliant identities before Production promotion.
+
 ## [0.10.30] - 2026-08-12
 
 - Normalized the hosted CRM base URL before opening Contacts in signup E2E and
