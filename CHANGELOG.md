@@ -12,6 +12,13 @@
 - Added consent-gated Microsoft Clarity instrumentation to the landing site
   and CRM application.
 
+## [0.10.21] - 2026-08-12
+
+- Hardened the protected Development E2E promotion gate to wait for Hexclave
+  authentication to settle before authenticated navigation begins.
+- Updated the Stripe Checkout journey to open the current card-payment form
+  before filling its secure payment fields.
+
 ## [0.10.20] - 2026-08-12
 
 - Reconciled the legacy Production branch ancestry into Development through the

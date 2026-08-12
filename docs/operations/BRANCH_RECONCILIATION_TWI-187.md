@@ -54,6 +54,12 @@ After the merge, the exact Development commit must pass
 Production promotion pull request must originate from `development` and pass
 the repository's `production / development-source` check.
 
+The first exact-commit run exposed two existing test-harness assumptions: the
+authenticated fixture did not wait for Hexclave sign-in completion, and Stripe
+Checkout began collapsing its card fields behind a payment-method button. The
+`0.10.21` test-only hardening makes those states explicit; it must pass on the
+new exact Development commit before promotion continues.
+
 ## Deployment and rollback boundary
 
 The reconciliation pull request changes repository history and documentation;
