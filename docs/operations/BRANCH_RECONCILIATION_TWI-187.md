@@ -78,6 +78,11 @@ received non-archive responses from the pinned Gitleaks release URL. Version
 `0.10.24` downloads with bounded retries and verifies the upstream SHA-256
 checksum before extraction; scanner failures and findings remain blocking.
 
+The exact `0.10.24` Development run confirmed that CI exposes Card as a visible
+payment-method radio while Stripe's similarly named helper button remains
+hidden. Version `0.10.25` selects the visible radio only when card fields are
+collapsed and retains the full billing journey.
+
 ## Deployment and rollback boundary
 
 The reconciliation pull request changes repository history and documentation;

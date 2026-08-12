@@ -12,6 +12,11 @@
 - Added consent-gated Microsoft Clarity instrumentation to the landing site
   and CRM application.
 
+## [0.10.25] - 2026-08-12
+
+- Updated hosted Stripe Checkout E2E to select the visible Card payment-method
+  radio when card fields are collapsed, avoiding Stripe's hidden helper button.
+
 ## [0.10.24] - 2026-08-12
 
 - Hardened the Gitleaks security-gate installer with HTTP retries and upstream
