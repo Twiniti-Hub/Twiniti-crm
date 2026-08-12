@@ -125,7 +125,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
   .brand-loop-logo-light { display: none; }
   .brand-loop-logo-dark { display: block; }
 }
-@media (max-width: 850px) { .sidebar { width: 70px; padding: 20px 10px; }.brand { justify-content: center; padding: 0 0 36px; }.sidebar .brand-loop-logo { width: 50px; height: 50px; flex-basis: 50px; } nav a { display: none; height: 42px; position: relative; } nav a:before { content: "•"; display: block; font-size: 20px; position: absolute; left: 26px; top: 7px; }.sidebar-footer { font-size: 0; }.content { padding: 26px 18px 50px; }.hero-orbit { display: none; }.split, .metrics, .property-grid { grid-template-columns: 1fr; }.table-heading-text, .table-cell-text { max-width: 160px; } }
+@media (max-width: 850px) { .shell { flex-direction: column; }.sidebar { width: 100%; padding: 14px 16px 12px; }.brand { justify-content: flex-start; padding: 0 0 12px; }.sidebar .brand-loop-logo { width: 50px; height: 50px; flex-basis: 50px; }.company-chip { margin: 0 0 10px; } nav { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; } nav a { display: block; flex: 0 0 auto; padding: 10px 12px; white-space: nowrap; }.sidebar-footer { margin-top: 8px; padding: 8px 0 0; }.account-block { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }.sign-out { width: auto; }.content { width: 100%; padding: 26px 18px 50px; }.hero-orbit { display: none; }.split, .metrics, .property-grid { grid-template-columns: 1fr; }.table-heading-text, .table-cell-text { max-width: 160px; } }
  .metric-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));

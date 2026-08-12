@@ -12,6 +12,15 @@
 - Added consent-gated Microsoft Clarity instrumentation to the landing site
   and CRM application.
 
+## [0.10.32] - 2026-08-12
+
+- Added a forward-only RLS enforcement migration so databases with the legacy
+  billing migration ledger cannot skip tenant-isolation policies.
+- Allowed protected regional migrations to resume a partially completed
+  rollout while rejecting divergent ledgers and same-level schema drift.
+- Preserved all CRM navigation links in a horizontally scrollable mobile
+  navigation bar.
+
 ## [0.10.31] - 2026-08-12
 
 - Recorded the protected release approval chain for TWI-187 so the final

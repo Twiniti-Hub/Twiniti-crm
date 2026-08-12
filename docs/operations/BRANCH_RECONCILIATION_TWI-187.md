@@ -119,6 +119,13 @@ makes the final reviewable Development push, the CODEOWNER approves that exact
 commit, and the bot performs the merge. Production promotion then requires a
 new exact-commit deployment and E2E receipt before approval.
 
+The refreshed Production review also identified three legacy blockers now
+covered by version `0.10.32`: a newer forward migration enforces organization
+RLS even when an older billing migration occupied the previous ledger slot;
+regional preflight accepts a valid prefix during partial-rollout recovery while
+still rejecting divergent ledgers and same-level drift; and mobile layouts keep
+the complete CRM route list available through horizontal navigation.
+
 ## Deployment and rollback boundary
 
 The reconciliation pull request changes repository history and documentation;
