@@ -21,7 +21,8 @@ test("new user can create an account and reach authenticated billing", async ({ 
   const cardNumber = page.getByRole("textbox", { name: "Card number", exact: true });
   await expect.poll(async () => (await cardMethod.isVisible()) || (await cardNumber.isVisible())).toBe(true);
   if (!(await cardNumber.isVisible())) {
-    await cardMethod.click();
+    await cardMethod.check({ force: true });
+    await expect(cardMethod).toBeChecked();
   }
   await cardNumber.fill("4242 4242 4242 4242");
   await page.getByRole("textbox", { name: "Expiration", exact: true }).fill("12 / 34");
