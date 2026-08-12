@@ -12,6 +12,11 @@
 - Added consent-gated Microsoft Clarity instrumentation to the landing site
   and CRM application.
 
+## [0.10.34] - 2026-08-12
+
+- Restored the Windows command shell only for `pnpm.cmd` regional migration
+  calls while keeping direct Node and Linux execution shell-free.
+
 ## [0.10.33] - 2026-08-12
 
 - Replaced Drizzle Kit's opaque migration subprocess with the application
