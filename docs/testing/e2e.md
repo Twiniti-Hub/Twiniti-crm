@@ -30,3 +30,9 @@ Use a dedicated test organization. A trialing or active billing state is require
 - Contact creation with unique test data and verification in the contacts table.
 
 CI can run the suite repeatedly with `E2E_LANDING_URL`, `E2E_BASE_URL`, `E2E_EMAIL`, and `E2E_PASSWORD` supplied as persistent protected repository secrets. The landing URL is the public development entry point; the base URL is the regional CRM app used after region selection. The signup test does not require a per-run credential: it generates a unique identity in Playwright. `E2E_SIGNUP_EMAIL_DOMAIN` is optional and defaults to `example.test`.
+
+Authenticated fixtures wait for Hexclave to leave the sign-in route and render
+an authenticated workspace, onboarding, billing, or Super Admin state before a
+test navigates to CRM routes. Stripe Checkout may initially collapse secure
+card inputs behind **Pay with card**; the signup journey opens that payment
+method before locating Stripe's card fields.

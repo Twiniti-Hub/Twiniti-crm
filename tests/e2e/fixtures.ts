@@ -11,7 +11,11 @@ export const test = base.extend<{ signedInPage: Page }>({
     await page.getByLabel(/email/i).fill(email);
     await page.getByRole("textbox", { name: /password/i }).fill(password);
     await page.getByRole("button", { name: "Sign In", exact: true }).click();
-    await page.waitForLoadState("domcontentloaded");
+    await expect(page).not.toHaveURL(/\/sign-in(?:[/?#]|$)/, { timeout: 30_000 });
+    await expect(page.locator("body")).toContainText(
+      /Sign out|Name your company|Activate your client workspace|Billing is active|Super Admin/i,
+      { timeout: 30_000 }
+    );
     await use(page);
   }
 });
