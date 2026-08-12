@@ -13,6 +13,7 @@ if (!connectionString) throw new Error("DATABASE_URL is required");
 const pool = new Pool({ connectionString, max: 1 });
 try {
   const db = drizzle(pool);
+  // Legacy reconciliation can insert ledger IDs without advancing the serial sequence.
   await pool.query(`SELECT setval(
     pg_get_serial_sequence('drizzle.__drizzle_migrations', 'id'),
     COALESCE((SELECT MAX(id) FROM drizzle.__drizzle_migrations), 1),
