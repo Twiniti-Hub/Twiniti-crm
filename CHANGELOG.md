@@ -18,6 +18,7 @@
   migrator so protected regional runs preserve actionable PostgreSQL errors.
 - Disabled unnecessary shell invocation in the regional runner, including the
   Windows path-splitting failure observed during local validation.
+- Preserved the documented root `.env` loading behavior for local migrations.
 
 ## [0.10.32] - 2026-08-12
 

@@ -1,9 +1,12 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "@neondatabase/serverless";
+import { config as loadDotenv } from "dotenv";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import { migrate } from "drizzle-orm/neon-serverless/migrator";
 
+const packageDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+loadDotenv({ path: path.resolve(packageDir, "../..", ".env") });
 const connectionString = process.env.DATABASE_URL?.trim();
 if (!connectionString) throw new Error("DATABASE_URL is required");
 
@@ -11,7 +14,7 @@ const pool = new Pool({ connectionString, max: 1 });
 try {
   const db = drizzle(pool);
   await migrate(db, {
-    migrationsFolder: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../drizzle")
+    migrationsFolder: path.resolve(packageDir, "drizzle")
   });
   console.log("Database migrations applied successfully");
 } catch (error) {
