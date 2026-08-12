@@ -5,6 +5,7 @@ import "./analytics-consent.css";
 import {
   getAnalyticsConsent,
   initializeGoogleAnalytics,
+  initializeMicrosoftClarity,
   mountAnalyticsConsentBanner,
   trackPageView
 } from "@twiniti/analytics";
@@ -29,8 +30,10 @@ const regions = [
 const environmentLabel = import.meta.env.VITE_ENVIRONMENT_LABEL || "Preview";
 const googleAnalyticsId =
   import.meta.env.VITE_GOOGLE_ANALYTICS_ID?.trim() || import.meta.env.Google_Analytics?.trim() || "";
-const darkLogoPath = "/branding/Twiniti_Logo_Square_Dark.png";
-const lightLogoPath = "/branding/Twiniti_Logo_Square_Light.png";
+const microsoftClarityId = import.meta.env.VITE_MICROSOFT_CLARITY_ID?.trim() || "xyd0gcl234";
+const analyticsConfigured = Boolean(googleAnalyticsId || microsoftClarityId);
+const darkLogoPath = "/branding/loop-logo-dark.png";
+const lightLogoPath = "/branding/loop-logo-light.png";
 
 function link(region: keyof typeof regionalAppUrls, path: string) {
   return `${regionalAppUrls[region]}${path}`;
@@ -57,8 +60,7 @@ document.querySelector<HTMLDivElement>("#root")!.innerHTML = `
   <div class="site-shell">
     <nav class="nav container" aria-label="Primary navigation">
       <a class="brand" href="#top" aria-label="Twiniti Loop home">
-        <img class="brand-logo brand-logo-dark" src="${darkLogoPath}" alt="Twiniti" />
-        <span><strong>Loop</strong></span>
+        <img class="brand-logo" src="${darkLogoPath}" alt="" aria-hidden="true" />
       </a>
       <div class="nav-links">
         <a href="#product">Product</a>
@@ -105,12 +107,12 @@ document.querySelector<HTMLDivElement>("#root")!.innerHTML = `
         </div>
       </section>
 
-      <section id="why-loop" class="why-section"><div class="container why-inner"><div><img class="section-logo section-logo-light" src="${lightLogoPath}" alt="Twiniti" /><p class="eyebrow">Built for trust</p><h2>Your customer data should work <em>with</em> your team.</h2></div><div class="why-points"><div><strong>01</strong><p><b>Clarity by default</b><br />A focused workspace that makes the next useful action easier to see.</p></div><div><strong>02</strong><p><b>Human approval where it matters</b><br />Automate the busywork while keeping important outbound decisions accountable.</p></div><div><strong>03</strong><p><b>Regional by design</b><br />Country-based workspace placement keeps your data boundary explicit from day one.</p></div></div></div></section>
+      <section id="why-loop" class="why-section"><div class="container why-inner"><div><img class="section-logo" src="${lightLogoPath}" alt="" aria-hidden="true" /><p class="eyebrow">Built for trust</p><h2>Your customer data should work <em>with</em> your team.</h2></div><div class="why-points"><div><strong>01</strong><p><b>Clarity by default</b><br />A focused workspace that makes the next useful action easier to see.</p></div><div><strong>02</strong><p><b>Human approval where it matters</b><br />Automate the busywork while keeping important outbound decisions accountable.</p></div><div><strong>03</strong><p><b>Regional by design</b><br />Country-based workspace placement keeps your data boundary explicit from day one.</p></div></div></div></section>
 
       <section class="closing-cta container"><div class="cta-panel"><div><p class="eyebrow">Start your next loop</p><h2>Give your team a clearer way forward.</h2><p>Set up your workspace, invite your team, and make the next customer conversation count.</p></div>${regionalMenu('Create your workspace <span aria-hidden="true">→</span>', "/sign-up", "region-menu-cta button button-light")}</div></section>
     </main>
 
-    <footer class="footer container"><a class="brand" href="#top"><img class="brand-logo brand-logo-dark" src="${darkLogoPath}" alt="Twiniti" /><span><strong>Loop</strong></span></a><div>${regionalMenu("Sign in", "/sign-in", "region-menu-footer")} ${regionalMenu("Sign up", "/sign-up", "region-menu-footer")}<span>© 2026 Twiniti Loop</span></div></footer>
+    <footer class="footer container"><a class="brand" href="#top" aria-label="Twiniti Loop home"><img class="brand-logo" src="${darkLogoPath}" alt="" aria-hidden="true" /></a><div>${regionalMenu("Sign in", "/sign-in", "region-menu-footer")} ${regionalMenu("Sign up", "/sign-up", "region-menu-footer")}<span>© 2026 Twiniti Loop</span></div></footer>
   </div>
 `;
 
@@ -118,14 +120,23 @@ function trackCurrentPage(): void {
   trackPageView(`${window.location.pathname}${window.location.search}${window.location.hash}`);
 }
 
-if (googleAnalyticsId) {
-  if (getAnalyticsConsent() === "granted") {
+function initializeOptionalAnalytics(): void {
+  if (googleAnalyticsId) {
     initializeGoogleAnalytics(googleAnalyticsId);
+  }
+  if (microsoftClarityId) {
+    initializeMicrosoftClarity(microsoftClarityId);
+  }
+}
+
+if (analyticsConfigured) {
+  if (getAnalyticsConsent() === "granted") {
+    initializeOptionalAnalytics();
     trackCurrentPage();
   } else if (getAnalyticsConsent() === null) {
     mountAnalyticsConsentBanner({
       onAccept: () => {
-        initializeGoogleAnalytics(googleAnalyticsId);
+        initializeOptionalAnalytics();
         trackCurrentPage();
       }
     });

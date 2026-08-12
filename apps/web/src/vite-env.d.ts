@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_HEXCLAVE_PROJECT_ID?: string;
   readonly VITE_HEXCLAVE_PUBLISHABLE_CLIENT_KEY?: string;
   readonly VITE_GOOGLE_ANALYTICS_ID?: string;
+  readonly VITE_MICROSOFT_CLARITY_ID?: string;
   readonly Google_Analytics?: string;
 }
 

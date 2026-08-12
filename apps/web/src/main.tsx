@@ -8,17 +8,29 @@ import "./analytics-consent.css";
 import {
   getAnalyticsConsent,
   initializeGoogleAnalytics,
+  initializeMicrosoftClarity,
   mountAnalyticsConsentBanner
 } from "@twiniti/analytics";
 
 const googleAnalyticsId =
   import.meta.env.VITE_GOOGLE_ANALYTICS_ID?.trim() || import.meta.env.Google_Analytics?.trim() || "";
+const microsoftClarityId = import.meta.env.VITE_MICROSOFT_CLARITY_ID?.trim() || "xyd0gcl234";
+const analyticsConfigured = Boolean(googleAnalyticsId || microsoftClarityId);
 
-if (googleAnalyticsId) {
-  if (getAnalyticsConsent() === "granted") {
+function initializeOptionalAnalytics(): void {
+  if (googleAnalyticsId) {
     initializeGoogleAnalytics(googleAnalyticsId);
+  }
+  if (microsoftClarityId) {
+    initializeMicrosoftClarity(microsoftClarityId);
+  }
+}
+
+if (analyticsConfigured) {
+  if (getAnalyticsConsent() === "granted") {
+    initializeOptionalAnalytics();
   } else if (getAnalyticsConsent() === null) {
-    mountAnalyticsConsentBanner({ onAccept: () => initializeGoogleAnalytics(googleAnalyticsId) });
+    mountAnalyticsConsentBanner({ onAccept: initializeOptionalAnalytics });
   }
 }
 

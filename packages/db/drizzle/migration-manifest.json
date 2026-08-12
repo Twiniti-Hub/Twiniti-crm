@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "reconciliationIssue": "TWI-186",
+  "entries": [
+    {"file":"0000_foundation.sql","status":"journaled","sha256":"0410c4d60b0a778f6389a911ad72d12b40d89216d3d32f7dac21abc1312fab4d"},
+    {"file":"0001_multi_tenant.sql","status":"journaled","sha256":"2939fc28b5243a55f6b228dc51fa6c8395e56e6c26120bd343ddaf5759ce6a85"},
+    {"file":"0002_email_tracking.sql","status":"journaled","sha256":"8e6122373bbafc13a72224d910ec44eb967da64012e628387fd6221e4e7d9894"},
+    {"file":"0003_contact_identity_history.sql","status":"journaled","sha256":"903247b2a7f157c8ec2c61ec67a29543f92ffae1f3319dfa3bede9d2e2c657bc"},
+    {"file":"0004_organization_billing.sql","status":"journaled","sha256":"9d52cb09207c201d85676f67d6d266e5d50f44ea54308a382176a5f56db3cbd2"},
+    {"file":"0005_license_integration.sql","status":"journaled","sha256":"ac75573ae646c1698dfe9ad87616e559cf117ce0efc397806b08923a42b51010"},
+    {"file":"0006_organization_provisioning_key.sql","status":"journaled","sha256":"1ea43efb807153364d19f873e7f45c66ad2fd5c186850f9c9e9122d6bc1d997a"},
+    {"file":"0007_regional_residency.sql","status":"journaled","sha256":"b320cbb91c9e0358d444dc5286a33e48ff220cbc1a1b6c63f04e03931d42bccd"},
+    {"file":"0008_billing_trials.sql","status":"retired-folded","sha256":"589b73605db276e717f6f28f65797272eaa18c53becbd38a1eefac6d405a4549"},
+    {"file":"0008_organization_rls.sql","status":"journaled","sha256":"340a7a91967dea8c1362bd2a9823201185a758c692bc4ce42a679d9042addf48"},
+    {"file":"0009_billing_trial_dashboard.sql","status":"retired-folded","sha256":"d7a70073b7c76113f29c8c9f1550855aca33c93a424f19c9749eb84fd8192adb"},
+    {"file":"0009_rls_runtime_role.sql","status":"journaled","sha256":"5cf8e79c5ca795e4c178640505763793555c51b72c25d7b78a9cd93b3aaf794f"},
+    {"file":"0010_billing_and_rls_runtime_role.sql","status":"journaled","sha256":"3adc4621ff004f3ea62b91c418c551e72511fa6f08d5c118ef09f6ea1688b56d"},
+    {"file":"0011_organization_resend_domains.sql","status":"journaled","sha256":"2e21dec3b958b4d56dca5df4619b4e75b0f6bdaeba451514482f28f8dbc709b0"},
+    {"file":"0012_reconcile_resend_domain_verification.sql","status":"journaled","sha256":"6a3f8674eaf2cd04b16215186264cde88738ef55b5d4ac0f631aae40d374eedf"},
+    {"file":"0013_enforce_organization_rls.sql","status":"journaled","sha256":"a8177d2d427e6291d5683d10d3e7bbb4289c93b8d82dd89eb45d03b2ae3b0ba1"}
+  ]
+}

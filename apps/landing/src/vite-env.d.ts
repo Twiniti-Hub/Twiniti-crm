@@ -6,6 +6,7 @@ interface ImportMetaEnv {
   readonly VITE_APP_URL_UK?: string;
   readonly VITE_ENVIRONMENT_LABEL?: string;
   readonly VITE_GOOGLE_ANALYTICS_ID?: string;
+  readonly VITE_MICROSOFT_CLARITY_ID?: string;
   readonly Google_Analytics?: string;
 }
 

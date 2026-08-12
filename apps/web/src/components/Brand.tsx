@@ -6,10 +6,18 @@ type BrandProps = {
 
 function BrandContent() {
   return (
-    <>
-      <img className="brand-logo" src="/twiniti-loop-icon-light.png" alt="" aria-hidden="true" />
-      <span>Twiniti Loop</span>
-    </>
+    <span className="brand-loop-logo" aria-hidden="true">
+      <img
+        className="brand-loop-logo-image brand-loop-logo-light"
+        src="/branding/loop-logo-light.png"
+        alt=""
+      />
+      <img
+        className="brand-loop-logo-image brand-loop-logo-dark"
+        src="/branding/loop-logo-dark.png"
+        alt=""
+      />
+    </span>
   );
 }
 

@@ -1,34 +1,26 @@
 .brand-logo {
   display: block;
-  height: 46px;
+  height: 72px;
   object-fit: contain;
-  width: 46px;
-}
-
-.brand-logo-dark {
-  mix-blend-mode: screen;
+  width: 72px;
 }
 
 .section-logo {
   display: block;
-  height: 92px;
+  height: 140px;
   margin: 0 0 24px;
   object-fit: contain;
-  width: 92px;
-}
-
-.section-logo-light {
-  mix-blend-mode: multiply;
+  width: 140px;
 }
 
 @media (max-width: 620px) {
   .brand-logo {
-    height: 40px;
-    width: 40px;
+    height: 58px;
+    width: 58px;
   }
 
   .section-logo {
-    height: 76px;
-    width: 76px;
+    height: 112px;
+    width: 112px;
   }
 }

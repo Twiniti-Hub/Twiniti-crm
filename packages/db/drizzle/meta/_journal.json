@@ -61,8 +61,43 @@
     {
       "idx": 8,
       "version": "7",
-      "when": 1785870000000,
-      "tag": "0008_billing_trials",
+      "when": 1785786000000,
+      "tag": "0008_organization_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785786600000,
+      "tag": "0009_rls_runtime_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785963000000,
+      "tag": "0010_billing_and_rls_runtime_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785966000000,
+      "tag": "0011_organization_resend_domains",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786057019021,
+      "tag": "0012_reconcile_resend_domain_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786570200000,
+      "tag": "0013_enforce_organization_rls",
       "breakpoints": true
     }
   ]

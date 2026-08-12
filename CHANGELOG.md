@@ -1,10 +1,125 @@
 # Changelog
 
-## [0.10.15] - 2026-08-06
+## Unreleased
+
+- Added repository-enforced development-first promotion, required PR evidence,
+  CODEOWNERS coverage, and production-source validation.
+- Added migration manifest/checksum validation, regional schema preflight and
+  postflight checks, protected migration execution, and migration receipts.
+- Reconciled all six regional migration ledgers to 13 canonical entries and
+  added an idempotent repair for the missing Production UK Resend verification
+  column.
+- Added consent-gated Microsoft Clarity instrumentation to the landing site
+  and CRM application.
+
+## [0.10.32] - 2026-08-12
+
+- Added a forward-only RLS enforcement migration so databases with the legacy
+  billing migration ledger cannot skip tenant-isolation policies.
+- Allowed protected regional migrations to resume a partially completed
+  rollout while rejecting divergent ledgers and same-level schema drift.
+- Preserved all CRM navigation links in a horizontally scrollable mobile
+  navigation bar.
+
+## [0.10.31] - 2026-08-12
+
+- Recorded the protected release approval chain for TWI-187 so the final
+  Development push, CODEOWNER approval, and merge are performed by distinct
+  policy-compliant identities before Production promotion.
+
+## [0.10.30] - 2026-08-12
+
+- Normalized the hosted CRM base URL before opening Contacts in signup E2E and
+  expanded the test budget to include the full billing-settlement window.
+
+## [0.10.29] - 2026-08-12
+
+- Kept the returned CRM page mounted while waiting for billing settlement so
+  hosted E2E no longer resets application bootstrap with repeated navigation.
+- Extended the mounted billing page's Stripe-confirmation refresh window to
+  cover the full 60-second promotion gate.
+
+## [0.10.28] - 2026-08-12
+
+- Completed Stripe's visible postal-code requirement and disabled optional
+  Link enrollment in hosted checkout E2E before submitting the trial.
+
+## [0.10.27] - 2026-08-12
+
+- Replaced the Stripe post-submit timer with an explicit return transition and
+  hosted billing polling so CI waits for checkout and webhook settlement.
+- Bound each regional Render API to its public browser origin and made hosted
+  startup fail closed when Stripe callbacks would resolve to localhost.
+
+## [0.10.26] - 2026-08-12
+
+- Made Stripe Card selection use verified radio-check semantics when Checkout's
+  styled accordion intercepts pointer clicks on the underlying input.
+
+## [0.10.25] - 2026-08-12
+
+- Updated hosted Stripe Checkout E2E to select the visible Card payment-method
+  radio when card fields are collapsed, avoiding Stripe's hidden helper button.
+
+## [0.10.24] - 2026-08-12
+
+- Hardened the Gitleaks security-gate installer with HTTP retries and upstream
+  checksum verification after repeated release-asset transport failures.
+
+## [0.10.23] - 2026-08-12
+
+- Made hosted Stripe Checkout E2E handle both collapsed and already-expanded
+  card payment states, including delayed UI rendering, without weakening the
+  required signup journey.
+
+## [0.10.22] - 2026-08-12
+
+- Made authenticated route/contact smoke tests report a setup-gated persistent
+  test account as skipped instead of waiting for controls that cannot render.
+- Updated hosted Stripe Checkout automation to address card fields by their
+  accessible names while ignoring duplicate express-payment iframes.
+
+## [0.10.21] - 2026-08-12
+
+- Hardened the protected Development E2E promotion gate to wait for Hexclave
+  authentication to settle before authenticated navigation begins.
+- Updated the Stripe Checkout journey to open the current card-payment form
+  before filling its secure payment fields.
+
+## [0.10.20] - 2026-08-12
+
+- Reconciled the legacy Production branch ancestry into Development through the
+  protected pull-request workflow without changing application behavior or
+  copying environment-specific Development configuration into Production.
+- Documented the branch-divergence cause, conflict resolution, verification
+  gates, promotion sequence, and rollback boundary for TWI-187.
+
+## [0.10.19] - 2026-08-12
+
+- Replaced the visible Twiniti application mark with the supplied Loop logo
+  across the CRM, compact sidebar, landing site, footer, and favicon.
+- Retained automatic light/dark logo selection and documented Loop as the sole
+  visible product lockup.
+
+## [0.10.18] - 2026-08-11
+
+- Added the supplied Loop light- and dark-mode logo lockups alongside the
+  existing Twiniti application mark, with automatic theme selection and a
+  compact mobile sidebar treatment.
+- Clarified the required bot-push and CODEOWNER-approval identity separation
+  for protected pull requests.
+
+## [0.10.17] - 2026-08-06
+
+- Separated landing-page and regional CRM URLs in E2E configuration.
+- Corrected development landing links to point to development regional applications.
+
+## [0.10.16] - 2026-08-06
 
 - Added Playwright end-to-end coverage for login, workspace gates, authenticated CRM routes, and contact creation.
 - Added scheduled and manual GitHub Actions execution with protected environment credentials and failure artifacts.
 - Added the global Stripe billing gateway service and regional webhook forwarding contract.
+- Added repeatable automated new-user signup coverage with generated test identities per run.
 
 ## [0.10.14] - 2026-08-06
 

@@ -19,7 +19,7 @@ services:
       - key: REGION_CODE
         value: us
       - key: WEB_ORIGIN
-        sync: false
+        value: https://twiniti-crm-prod-us.onrender.com
       - key: DATABASE_URL_Prod_US
         sync: false
       - key: REGIONAL_APP_URL
@@ -83,7 +83,7 @@ services:
       - key: REGION_CODE
         value: eu
       - key: WEB_ORIGIN
-        sync: false
+        value: https://twiniti-crm-eu.onrender.com
       - key: DATABASE_URL_Prod_EU
         sync: false
       - key: REGIONAL_APP_URL
@@ -147,7 +147,7 @@ services:
       - key: REGION_CODE
         value: uk
       - key: WEB_ORIGIN
-        sync: false
+        value: https://twiniti-crm-uk.onrender.com
       - key: DATABASE_URL_Prod_UK
         sync: false
       - key: REGIONAL_APP_URL
