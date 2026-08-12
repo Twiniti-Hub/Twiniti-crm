@@ -42,6 +42,10 @@ test intentionally does not use that implementation detail. Because Stripe's
 styled accordion can intercept pointer clicks, the test checks the radio and
 verifies its selected state before continuing.
 
+The Stripe form is treated as a visible hosted contract: the test fills the
+postal code when Stripe displays it and opts out of optional Link enrollment,
+which otherwise introduces a required phone field unrelated to CRM billing.
+
 After submission, the signup test waits for Stripe to return to the application
 before checking hosted billing. It observes the URL transition and then polls
 the hosted billing page for webhook settlement. It does not use a fixed delay

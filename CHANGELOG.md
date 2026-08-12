@@ -12,6 +12,11 @@
 - Added consent-gated Microsoft Clarity instrumentation to the landing site
   and CRM application.
 
+## [0.10.28] - 2026-08-12
+
+- Completed Stripe's visible postal-code requirement and disabled optional
+  Link enrollment in hosted checkout E2E before submitting the trial.
+
 ## [0.10.27] - 2026-08-12
 
 - Replaced the Stripe post-submit timer with an explicit return transition and
