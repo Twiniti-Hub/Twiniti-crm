@@ -95,6 +95,11 @@ same run exposed that regional `WEB_ORIGIN` values were manual and could fall
 back to localhost; the Render manifests now bind each API to its public origin,
 and hosted startup rejects local callback origins.
 
+The exact `0.10.27` run confirmed the callback repair was present, then remained
+on Stripe because the current hosted form required a postal code and optional
+Link enrollment had introduced a required phone field. Version `0.10.28`
+satisfies the visible postal-code contract and opts out of Link before submit.
+
 ## Deployment and rollback boundary
 
 The reconciliation pull request changes repository history and documentation;

@@ -29,6 +29,12 @@ test("new user can create an account and reach authenticated billing", async ({ 
   await page.getByRole("textbox", { name: "Expiration", exact: true }).fill("12 / 34");
   await page.getByRole("textbox", { name: "CVC", exact: true }).fill("123");
   await page.getByRole("textbox", { name: "Cardholder name", exact: true }).fill("Twiniti E2E Test");
+  const postalCode = page.getByRole("textbox", { name: /ZIP|Postal code/i });
+  if (await postalCode.isVisible()) await postalCode.fill("10001");
+  const savePaymentDetails = page.getByRole("checkbox", { name: /Save my information/i });
+  if (await savePaymentDetails.isVisible() && await savePaymentDetails.isChecked()) {
+    await savePaymentDetails.uncheck();
+  }
   await page.getByRole("button", { name: /start trial|subscribe|complete order/i }).last().click();
   await expect.poll(() => page.url(), { timeout: 60_000 }).not.toMatch(/checkout\.stripe\.com/);
   const billingUrl = `${baseURL ?? ""}/billing?success=1`;
