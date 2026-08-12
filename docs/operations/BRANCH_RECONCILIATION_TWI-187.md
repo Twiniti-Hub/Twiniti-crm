@@ -60,6 +60,13 @@ Checkout began collapsing its card fields behind a payment-method button. The
 `0.10.21` test-only hardening makes those states explicit; it must pass on the
 new exact Development commit before promotion continues.
 
+The follow-up run confirmed that the persistent account was authenticated but
+required onboarding, and that hosted Checkout keeps its selected-card button
+hidden while rendering card fields in the top-level checkout page alongside
+duplicate express-payment iframes. Version `0.10.22` records those hosted-state
+corrections. The generated signup test must still complete billing and contact
+creation before Production promotion.
+
 ## Deployment and rollback boundary
 
 The reconciliation pull request changes repository history and documentation;

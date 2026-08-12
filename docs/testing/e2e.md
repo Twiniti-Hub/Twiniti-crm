@@ -33,6 +33,11 @@ CI can run the suite repeatedly with `E2E_LANDING_URL`, `E2E_BASE_URL`, `E2E_EMA
 
 Authenticated fixtures wait for Hexclave to leave the sign-in route and render
 an authenticated workspace, onboarding, billing, or Super Admin state before a
-test navigates to CRM routes. Stripe Checkout may initially collapse secure
-card inputs behind **Pay with card**; the signup journey opens that payment
-method before locating Stripe's card fields.
+test navigates to CRM routes. Stripe Checkout renders the selected card fields
+in the hosted checkout page, so the signup journey uses their accessible names
+and ignores duplicate secure-payment iframes belonging to express controls.
+
+If the persistent authenticated test account is onboarding- or billing-gated,
+route and contact tests report the unavailable scenarios as skipped. The
+generated signup journey remains required and covers workspace creation,
+Stripe test-mode billing, authenticated CRM access, and contact creation.
