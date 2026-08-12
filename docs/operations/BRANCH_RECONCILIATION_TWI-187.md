@@ -137,8 +137,9 @@ directly.
 
 The diagnostic Production run identified the precise metadata failure: the
 ledger contained row ID 13 but its serial sequence still generated 13. Version
-`0.10.35` aligns the sequence with the highest recorded ID before Drizzle runs;
-the migration transaction itself remained unapplied during the failed attempt.
+`0.10.36` aligns the sequence with the highest recorded ID before Drizzle runs
+when the ledger already exists, while preserving first-run setup. The migration
+transaction itself remained unapplied during the failed attempt.
 
 ## Deployment and rollback boundary
 
