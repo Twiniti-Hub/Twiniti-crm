@@ -111,6 +111,14 @@ licensing, but a trailing slash in the hosted base URL produced `//contacts`
 for the final CRUD check. Version `0.10.30` normalizes the base URL and gives the
 complete journey enough time for the full billing-settlement window.
 
+The first Production promotion review exposed an identity-ordering issue in
+the release chain: the CODEOWNER had also performed the most recent merge into
+`development`, so GitHub correctly refused to count that identity as the
+last-push approver. Version `0.10.31` records the corrected sequence: the bot
+makes the final reviewable Development push, the CODEOWNER approves that exact
+commit, and the bot performs the merge. Production promotion then requires a
+new exact-commit deployment and E2E receipt before approval.
+
 ## Deployment and rollback boundary
 
 The reconciliation pull request changes repository history and documentation;
