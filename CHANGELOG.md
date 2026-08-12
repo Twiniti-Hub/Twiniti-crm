@@ -12,6 +12,13 @@
 - Added consent-gated Microsoft Clarity instrumentation to the landing site
   and CRM application.
 
+## [0.10.19] - 2026-08-12
+
+- Replaced the visible Twiniti application mark with the supplied Loop logo
+  across the CRM, compact sidebar, landing site, footer, and favicon.
+- Retained automatic light/dark logo selection and documented Loop as the sole
+  visible product lockup.
+
 ## [0.10.18] - 2026-08-11
 
 - Added the supplied Loop light- and dark-mode logo lockups alongside the

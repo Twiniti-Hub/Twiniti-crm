@@ -5,8 +5,7 @@ button, a { font: inherit; }
 .shell { display: flex; min-height: 100vh; }
 .sidebar { width: 248px; background: #102b31; color: #dcece7; padding: 28px 18px 22px; display: flex; flex-direction: column; }
 .brand { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 750; letter-spacing: -.03em; font-size: 18px; padding: 0 12px 44px; }
-.brand-logo { display: block; width: 30px; height: 30px; flex: 0 0 30px; object-fit: contain; padding: 5px; border-radius: 9px; background: #102b31; }
-.brand-loop-logo { display: block; width: 52px; height: 52px; flex: 0 0 52px; overflow: hidden; border-radius: 9px; }
+.brand-loop-logo { display: block; width: 72px; height: 72px; flex: 0 0 72px; overflow: hidden; border-radius: 9px; }
 .brand-loop-logo-image { display: block; width: 100%; height: 100%; object-fit: contain; }
 .brand-loop-logo-dark { display: none; }
 .sidebar .brand-loop-logo-light { display: none; }
@@ -126,7 +125,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
   .brand-loop-logo-light { display: none; }
   .brand-loop-logo-dark { display: block; }
 }
-@media (max-width: 850px) { .sidebar { width: 70px; padding: 20px 10px; }.brand { padding: 0 10px 36px; }.sidebar .brand-loop-logo, nav a { display: none; }.brand-logo { flex: 0 0 30px; } nav a { height: 42px; position: relative; } nav a:before { content: "•"; display: block; font-size: 20px; position: absolute; left: 26px; top: 7px; }.sidebar-footer { font-size: 0; }.content { padding: 26px 18px 50px; }.hero-orbit { display: none; }.split, .metrics, .property-grid { grid-template-columns: 1fr; }.table-heading-text, .table-cell-text { max-width: 160px; } }
+@media (max-width: 850px) { .sidebar { width: 70px; padding: 20px 10px; }.brand { justify-content: center; padding: 0 0 36px; }.sidebar .brand-loop-logo { width: 50px; height: 50px; flex-basis: 50px; } nav a { display: none; height: 42px; position: relative; } nav a:before { content: "•"; display: block; font-size: 20px; position: absolute; left: 26px; top: 7px; }.sidebar-footer { font-size: 0; }.content { padding: 26px 18px 50px; }.hero-orbit { display: none; }.split, .metrics, .property-grid { grid-template-columns: 1fr; }.table-heading-text, .table-cell-text { max-width: 160px; } }
  .metric-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
