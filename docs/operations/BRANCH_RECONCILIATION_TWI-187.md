@@ -73,6 +73,11 @@ local hosted validation rendered Card already expanded. Version `0.10.23`
 conditionally expands Card and preserves the required field, billing, and
 contact assertions in both states.
 
+During protected review of `0.10.23`, duplicate security jobs intermittently
+received non-archive responses from the pinned Gitleaks release URL. Version
+`0.10.24` downloads with bounded retries and verifies the upstream SHA-256
+checksum before extraction; scanner failures and findings remain blocking.
+
 ## Deployment and rollback boundary
 
 The reconciliation pull request changes repository history and documentation;
