@@ -31,11 +31,43 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm e2e:install
-      - run: pnpm e2e
+      # Promotion evidence is the authenticated CRM smoke only. Signup/Stripe is a
+      # longer journey tracked separately so a Checkout flake cannot block release.
+      - run: pnpm e2e -- tests/e2e/crm.spec.ts
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-smoke
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+
+  signup:
+    name: E2E / development-signup
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      E2E_LANDING_URL: ${{ secrets.E2E_LANDING_URL }}
+      E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
+      E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+      E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm e2e:install
+      - run: pnpm e2e -- tests/e2e/signup.spec.ts
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-signup
           path: |
             playwright-report/
             test-results/

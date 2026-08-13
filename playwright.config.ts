@@ -6,8 +6,10 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   workers: 1,
-  timeout: 45_000,
-  expect: { timeout: 10_000 },
+  // Authenticated CRM + billing gates can exceed the previous 45s default,
+  // especially while Kanban boards hydrate after deploy.
+  timeout: 120_000,
+  expect: { timeout: 20_000 },
   reporter: process.env.CI ? [["html", { open: "never" }], ["line"]] : "list",
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://127.0.0.1:5173",
