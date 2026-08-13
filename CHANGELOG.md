@@ -7,6 +7,8 @@
   “Loading workspace…”).
 - Smoke navigates CRM routes through the sidebar when possible and waits for
   Development `/health` before Playwright starts.
+- Recorded Production tip ancestry into Development for the promotion
+  up-to-date gate (`docs/operations/BRANCH_RECONCILIATION_TWI-335.md`).
 
 ## [0.10.45] - 2026-08-13
 
