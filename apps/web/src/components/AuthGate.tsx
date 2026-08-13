@@ -22,14 +22,22 @@ export function AuthGate() {
   const [me, setMe] = useState<Me | null>(null);
   const [loadingMe, setLoadingMe] = useState(false);
   const [meError, setMeError] = useState<string | null>(null);
+  const userId = user && typeof user === "object" && "id" in user ? String((user as { id: unknown }).id) : user ? "signed-in" : null;
 
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       setMe(null);
       setLoadingMe(false);
       setMeError(null);
       return;
     }
+    // Hexclave can expose `user` before the bearer token is ready. Fetching
+    // /me without Authorization leaves the gate stuck on Loading workspace.
+    if (!authorizationHeader) {
+      setLoadingMe((current) => current || !me);
+      return;
+    }
+
     let cancelled = false;
     // Only block the shell when we have no session payload yet. Path changes
     // soft-refresh /me without tearing down the CRM UI.
@@ -52,9 +60,11 @@ export function AuthGate() {
     return () => {
       cancelled = true;
     };
-    // Refresh when the Hexclave user changes or the route changes (billing/setup gates).
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- me is only used to avoid blanking an existing shell
-  }, [user, location.pathname]);
+    // Refresh when the Hexclave identity/token changes or the route changes
+    // (billing/setup gates). `me` is intentionally omitted so an existing shell
+    // is not blanked during soft refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- me gates loading UI only
+  }, [userId, authorizationHeader, location.pathname]);
 
   if (!user) {
     return (
@@ -69,7 +79,7 @@ export function AuthGate() {
     );
   }
 
-  if (loadingMe && !me) {
+  if ((loadingMe || !authorizationHeader) && !me) {
     return (
       <div className="auth-page">
         <div className="auth-form-wrap">

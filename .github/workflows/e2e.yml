@@ -33,7 +33,9 @@ jobs:
       - run: pnpm e2e:install
       # Promotion evidence is the authenticated CRM smoke only. Signup/Stripe is a
       # longer journey tracked separately so a Checkout flake cannot block release.
-      - run: pnpm e2e -- tests/e2e/crm.spec.ts
+      # Do not pass a bare `--` before the file path: Playwright treats args after
+      # `--` as Node args and would run the whole testDir (including signup).
+      - run: pnpm exec playwright test tests/e2e/crm.spec.ts
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -63,7 +65,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm e2e:install
-      - run: pnpm e2e -- tests/e2e/signup.spec.ts
+      - run: pnpm exec playwright test tests/e2e/signup.spec.ts
       - if: always()
         uses: actions/upload-artifact@v4
         with:
