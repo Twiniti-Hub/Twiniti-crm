@@ -1,6 +1,6 @@
 import { and, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
-import { contacts } from "./schema.js";
+import { companies, contacts } from "./schema.js";
 
 export const filterNodeSchema: z.ZodType<FilterNode> = z.lazy(() =>
   z.union([
@@ -28,7 +28,17 @@ const contactFieldMap: Record<string, typeof contacts.email | typeof contacts.fi
   lifecycle_stage: contacts.lifecycleStage
 };
 
-function compileLeaf(node: Extract<FilterNode, { field: string }>): SQL | undefined {
+const companyFieldMap: Record<string, typeof companies.name | typeof companies.domain | typeof companies.industry | typeof companies.lifecycleStage> = {
+  name: companies.name,
+  domain: companies.domain,
+  industry: companies.industry,
+  lifecycle_stage: companies.lifecycleStage
+};
+
+function compileLeaf(
+  node: Extract<FilterNode, { field: string }>,
+  objectType: "contact" | "company"
+): SQL | undefined {
   if (node.field.startsWith("properties.")) {
     const key = node.field.slice("properties.".length);
     const path = sql`properties->>${key}`;
@@ -54,7 +64,7 @@ function compileLeaf(node: Extract<FilterNode, { field: string }>): SQL | undefi
     }
   }
 
-  const column = contactFieldMap[node.field];
+  const column = objectType === "contact" ? contactFieldMap[node.field] : companyFieldMap[node.field];
   if (!column) {
     throw new Error(`Unsupported filter field: ${node.field}`);
   }
@@ -84,16 +94,16 @@ function isGroup(node: FilterNode): node is { op: "and" | "or"; children: Filter
   return node.op === "and" || node.op === "or";
 }
 
-export function compileFilterAst(node: FilterNode): SQL {
+export function compileFilterAst(node: FilterNode, objectType: "contact" | "company" = "contact"): SQL {
   if (isGroup(node)) {
-    const parts = node.children.map(compileFilterAst);
+    const parts = node.children.map((child) => compileFilterAst(child, objectType));
     if (node.op === "and") {
       return and(...parts)!;
     }
     return or(...parts)!;
   }
 
-  const leaf = compileLeaf(node);
+  const leaf = compileLeaf(node, objectType);
   if (!leaf) {
     throw new Error("Failed to compile filter leaf");
   }

@@ -1,5 +1,79 @@
 # Changelog
 
+## [0.10.47] - 2026-08-13
+
+- Soft `/api/v1/me` refresh no longer tears down a loaded CRM shell on timeout.
+- Slimmed Development E2E smoke to login + Contacts/Companies for a reliable
+  promotion gate (full route matrix and contact-create stay out of the gate).
+
+## [0.10.46] - 2026-08-13
+
+- AuthGate loads `/api/v1/me` immediately via cookie session instead of waiting
+  forever for a Hexclave bearer header (which left Development E2E stuck on
+  “Loading workspace…”).
+- Smoke navigates CRM routes through the sidebar when possible and waits for
+  Development `/health` before Playwright starts.
+- Recorded Production tip ancestry into Development for the promotion
+  up-to-date gate (`docs/operations/BRANCH_RECONCILIATION_TWI-335.md`).
+
+## [0.10.45] - 2026-08-13
+
+- AuthGate waits for the Hexclave authorization header before calling `/api/v1/me`,
+  so full reloads no longer stick on “Loading workspace…”.
+- Development E2E smoke now runs only `crm.spec.ts` (Playwright no longer receives
+  a bare `--` that ignored the file filter and also executed signup).
+
+## [0.10.44] - 2026-08-13
+
+- Hardened Development E2E smoke for Kanban: longer timeouts, shell readiness
+  waits, and split signup/Stripe into a separate non-promotion job so release
+  evidence tracks authenticated CRM coverage.
+
+## [0.10.43] - 2026-08-13
+
+- Updated Development E2E smoke for Kanban-default Contacts/Companies so route
+  coverage no longer waits on `networkidle` and created contacts are asserted on
+  the board after dialog close.
+
+## [0.10.42] - 2026-08-13
+
+- Fixed Contacts list/company search failing with ambiguous SQL in the
+  association exists-subquery (Companies list was unaffected).
+- Stopped Contacts Kanban from eagerly loading the property manager; fields load
+  only for list columns, create, or Manage fields.
+
+## [0.10.41] - 2026-08-13
+
+- Kept the CRM shell visible while soft-refreshing `/api/v1/me` on route changes
+  instead of flashing “Loading workspace…”.
+- Split Contacts property loading from list loading and added list busy states for
+  Contacts and Companies.
+- Fixed Kanban search so aborted reloads clear Loading, contact boards match
+  company names, and Clear resets the applied filter.
+
+## [0.10.40] - 2026-08-13
+
+- Stopped Companies/Contacts Kanban from reloading twice when the default system
+  board view is selected, aborted stale loads, and batched lane counts /
+  company contact counts for faster first paint.
+
+## [0.10.39] - 2026-08-13
+
+- Allowed system default board view ids (`system-contact-board`,
+  `system-company-board`) on Kanban counts, cards, and move request validation.
+
+## [0.10.38] - 2026-08-13
+
+- Fixed Companies Kanban lane queries failing when counting associated contacts
+  because Drizzle dropped table qualifiers inside the `contactCount` subquery.
+
+## [0.10.37] - 2026-08-13
+
+- Made Kanban the default Contacts and Companies experience, with tables retained at `?view=list`.
+- Added company `lifecycle_stage`, board/view preference APIs, cursor-paged lane cards, and versioned board moves that merge a single property when grouping on JSON fields.
+- Added `PATCH /api/v1/companies/:id` with optimistic concurrency and property history.
+- Moved contact and company creation into accessible dialogs and added pointer/keyboard drag plus Move to… on cards.
+
 ## Unreleased
 
 - Added repository-enforced development-first promotion, required PR evidence,

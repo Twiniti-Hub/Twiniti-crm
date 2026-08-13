@@ -16,6 +16,7 @@ type CompanyDetail = {
   name: string;
   domain: string | null;
   industry: string | null;
+  lifecycleStage?: string | null;
   properties: Record<string, unknown>;
   contacts: CompanyContact[];
 };
@@ -66,6 +67,10 @@ export function CompanyDetailPage() {
                   <tr>
                     <th>Industry</th>
                     <td>{company.industry ?? "—"}</td>
+                  </tr>
+                  <tr>
+                    <th>Lifecycle stage</th>
+                    <td>{company.lifecycleStage ?? "—"}</td>
                   </tr>
                   {Object.entries(company.properties ?? {}).map(([key, value]) => (
                     <tr key={key}>

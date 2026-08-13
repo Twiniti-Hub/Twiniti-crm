@@ -1,6 +1,6 @@
 import { useUser } from "@hexclave/react";
 import { HexclaveHandler } from "@hexclave/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router";
 import { api, setBrowserAuthorizationHeader } from "../lib/api";
 import type { Me } from "../lib/me";
@@ -20,37 +20,63 @@ export function AuthGate() {
   setBrowserAuthorizationHeader(authorizationHeader);
   const location = useLocation();
   const [me, setMe] = useState<Me | null>(null);
-  const [loadingMe, setLoadingMe] = useState(false);
   const [meError, setMeError] = useState<string | null>(null);
+  const meRef = useRef<Me | null>(null);
+  meRef.current = me;
+  const userId =
+    user && typeof user === "object" && "id" in user
+      ? String((user as { id: unknown }).id)
+      : user
+        ? "signed-in"
+        : null;
 
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       setMe(null);
-      setLoadingMe(false);
       setMeError(null);
       return;
     }
+
     let cancelled = false;
-    setLoadingMe(true);
+    let settled = false;
+
+    // Cookie-backed Hexclave sessions can authenticate /me without a bearer
+    // header. Fetch immediately; retry when the header later appears.
     api("/api/v1/me")
       .then((res) => {
-        if (!cancelled) {
-          setMe(res.data as Me);
-          setMeError(null);
-        }
+        if (cancelled) return;
+        settled = true;
+        setMe(res.data as Me);
+        setMeError(null);
       })
       .catch((err) => {
-        if (!cancelled) {
-          setMeError(err instanceof Error ? err.message : "Failed to load session");
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : "Failed to load session";
+        if (!authorizationHeader && /unauthorized|authentication required/i.test(message)) {
+          return;
         }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingMe(false);
+        // Soft-refresh failures must not tear down an already-loaded shell.
+        if (meRef.current) {
+          settled = true;
+          return;
+        }
+        settled = true;
+        setMeError(message);
       });
+
+    const timeoutId = window.setTimeout(() => {
+      if (cancelled || settled) return;
+      settled = true;
+      // Never blank a working CRM shell because a background /me refresh stalled.
+      if (meRef.current) return;
+      setMeError("Timed out loading workspace");
+    }, 20_000);
+
     return () => {
       cancelled = true;
+      window.clearTimeout(timeoutId);
     };
-  }, [user, location.pathname]);
+  }, [userId, authorizationHeader, location.pathname]);
 
   if (!user) {
     return (
@@ -65,7 +91,7 @@ export function AuthGate() {
     );
   }
 
-  if (loadingMe && !me) {
+  if (!me && !meError) {
     return (
       <div className="auth-page">
         <div className="auth-form-wrap">

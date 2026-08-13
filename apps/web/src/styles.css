@@ -150,3 +150,36 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
   margin-top: 5px;
   font-size: 1.55rem;
 }
+
+.view-toggle { display: inline-flex; gap: 6px; }
+.view-toggle .secondary.is-active { background: #173b3b; color: #fff; }
+.board-view-toolbar { margin-bottom: 16px; }
+.board-view-toolbar .toolbar-actions { margin-top: 12px; }
+.app-dialog { border: 1px solid #e4ece8; border-radius: 17px; padding: 0; max-width: min(920px, 94vw); width: 100%; background: #f5f8f6; color: #192a38; }
+.app-dialog::backdrop { background: rgba(16, 43, 49, .45); }
+.dialog-form { margin: 0; box-shadow: none; }
+.kanban-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 16px; }
+.kanban-board-wrap { display: grid; gap: 12px; }
+.kanban-board { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; align-items: stretch; }
+.kanban-lane { flex: 0 0 min(280px, 82vw); display: flex; flex-direction: column; gap: 10px; background: #fff; border: 1px solid #e4ece8; border-radius: 17px; padding: 14px; min-height: 360px; }
+.kanban-lane.is-over { border-color: #1c856d; background: #f3faf7; }
+.kanban-lane-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.kanban-lane-header h3 { margin: 0; font-size: 15px; }
+.kanban-lane-cards { display: grid; gap: 8px; flex: 1; }
+.kanban-card { display: grid; gap: 8px; padding: 12px; border-radius: 12px; border: 1px solid #e4ece8; background: #f8fbf9; cursor: grab; touch-action: none; }
+.kanban-card.is-dragging { box-shadow: none; border-color: #1c856d; background: #fff; }
+.kanban-card-body a { display: grid; gap: 4px; color: inherit; text-decoration: none; }
+.kanban-card-body strong { font-size: 13px; }
+.kanban-card-body small { color: #6c8781; font-size: 12px; line-height: 1.35; }
+.kanban-move { display: grid; gap: 4px; font-size: 11px; }
+.kanban-empty { margin: 0; }
+.kanban-hint { margin: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .kanban-card { transition: none; }
+}
+@media (prefers-color-scheme: dark) {
+  .app-dialog { background: #102b31; color: #dcece7; border-color: #21464b; }
+  .kanban-lane, .kanban-card { background: #14353b; border-color: #21464b; color: #dcece7; }
+  .kanban-lane.is-over, .kanban-card.is-dragging { background: #1a4349; }
+  .kanban-card-body small, .kanban-hint, .kanban-empty { color: #8ba9a5; }
+}
