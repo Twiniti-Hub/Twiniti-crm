@@ -194,6 +194,7 @@ export function ContactsPage() {
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
   const [boardViewId, setBoardViewId] = useState<string | null>(null);
   const [canManageShared, setCanManageShared] = useState(false);
+  const [listLoading, setListLoading] = useState(false);
   const [propertySearch, setPropertySearch] = useState("");
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [propertyEditor, setPropertyEditor] = useState<PropertyEditorState | null>(null);
@@ -247,10 +248,6 @@ export function ContactsPage() {
     () => customDefinitions.find((definition) => definition.id === selectedPropertyId) ?? null,
     [customDefinitions, selectedPropertyId]
   );
-
-  const [boardViewId, setBoardViewId] = useState<string | null>(null);
-  const [canManageShared, setCanManageShared] = useState(false);
-  const [listLoading, setListLoading] = useState(false);
 
   async function loadProperties() {
     const propsRes = await api("/api/v1/properties?objectType=contact");
