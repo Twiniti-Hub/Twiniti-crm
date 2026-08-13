@@ -641,14 +641,18 @@ export async function listBoardCards(
     properties: companies.properties,
     version: companies.version,
     updatedAt: companies.updatedAt,
+    // Use explicit aliases: interpolating Drizzle columns inside sql`` drops
+    // table qualifiers and makes company_id = id / id = contact_id ambiguous.
+    // Correlate with the outer companies row via bare companies.id (not ${companies.id}).
     contactCount: sql<number>`(
-      select count(*)::int from ${contactCompanyAssociations}
-      inner join ${contacts} on ${contacts.id} = ${contactCompanyAssociations.contactId}
-      where ${contactCompanyAssociations.companyId} = ${companies.id}
-        and ${contactCompanyAssociations.organizationId} = ${organizationId}
-        and ${contacts.organizationId} = ${organizationId}
-        and ${contacts.archivedAt} is null
-        and ${contacts.mergedIntoContactId} is null
+      select count(*)::int
+      from contact_company_associations cca
+      inner join contacts ct on ct.id = cca.contact_id
+      where cca.company_id = companies.id
+        and cca.organization_id = ${organizationId}
+        and ct.organization_id = ${organizationId}
+        and ct.archived_at is null
+        and ct.merged_into_contact_id is null
     )`
   }).from(companies)
     .where(and(...filters))
