@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.10.44] - 2026-08-13
+
+- Hardened Development E2E smoke for Kanban: longer timeouts, shell readiness
+  waits, and split signup/Stripe into a separate non-promotion job so release
+  evidence tracks authenticated CRM coverage.
+
 ## [0.10.43] - 2026-08-13
 
 - Updated Development E2E smoke for Kanban-default Contacts/Companies so route

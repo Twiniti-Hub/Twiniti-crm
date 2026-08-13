@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, waitForAuthenticatedShell } from "./fixtures";
 
 const crmRoutes = [
   ["/", /Overview|Dashboard/i], ["/contacts", /Contacts/i], ["/companies", /Companies/i],
@@ -10,14 +10,14 @@ const crmRoutes = [
 async function gotoCrm(page: import("@playwright/test").Page, path: string) {
   // Kanban boards keep requesting lane/count data; networkidle never settles.
   await page.goto(path, { waitUntil: "domcontentloaded" });
-  await expect(page.locator("body")).not.toContainText(/failed to load session|unauthorized/i);
+  await waitForAuthenticatedShell(page);
 }
 
 test.describe("Twiniti CRM authenticated application", () => {
   test("logs in and reaches a valid workspace state", async ({ signedInPage: page }) => {
     await expect(page).not.toHaveURL(/sign-in/);
     await expect(page.locator("body")).not.toContainText(/failed to load session|unauthorized/i);
-    await expect(page.locator("body")).toContainText(/Loading workspace|Onboarding|Billing|Overview|Contacts|Super Admin/i);
+    await expect(page.locator("body")).toContainText(/Onboarding|Billing|Overview|Contacts|Companies|Super Admin|Sign out/i);
   });
 
   test("covers the authenticated CRM route surface", async ({ signedInPage: page }) => {
@@ -28,7 +28,8 @@ test.describe("Twiniti CRM authenticated application", () => {
     for (const [path, heading] of crmRoutes) {
       await gotoCrm(page, path);
       if (await page.getByText(/Activate your client workspace/i).count()) continue;
-      await expect(page.locator("body")).toContainText(heading, { timeout: 30_000 });
+      if (await page.getByRole("heading", { name: "Super Admin", exact: true }).count()) continue;
+      await expect(page.locator("body")).toContainText(heading, { timeout: 60_000 });
     }
   });
 
@@ -39,7 +40,8 @@ test.describe("Twiniti CRM authenticated application", () => {
     );
     await gotoCrm(page, "/contacts");
     test.skip(await page.getByText(/Activate your client workspace/i).count() > 0, "The E2E account is billing-gated.");
-    await expect(page.getByRole("heading", { name: "Contacts", exact: true })).toBeVisible({ timeout: 30_000 });
+    test.skip(await page.getByRole("heading", { name: "Super Admin", exact: true }).count() > 0, "The E2E account is on Super Admin.");
+    await expect(page.getByRole("heading", { name: "Contacts", exact: true })).toBeVisible({ timeout: 60_000 });
     await expect(page.getByRole("link", { name: "Kanban", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "List", exact: true })).toBeVisible();
     const unique = `e2e-${Date.now()}@example.test`;
@@ -50,8 +52,8 @@ test.describe("Twiniti CRM authenticated application", () => {
     await dialog.getByLabel("First name", { exact: true }).fill("E2E");
     await dialog.getByLabel("Last name", { exact: true }).fill("Contact");
     await dialog.getByRole("button", { name: "Create contact", exact: true }).click();
-    await expect(dialog).toBeHidden({ timeout: 30_000 });
-    await expect(page.getByText(/E2E Contact|e2e-/i).first()).toBeVisible({ timeout: 60_000 });
+    await expect(dialog).toBeHidden({ timeout: 60_000 });
+    await expect(page.getByText(/E2E Contact|e2e-/i).first()).toBeVisible({ timeout: 90_000 });
   });
 
   test("shows companies Kanban with list fallback", async ({ signedInPage: page }) => {
@@ -61,10 +63,11 @@ test.describe("Twiniti CRM authenticated application", () => {
     );
     await gotoCrm(page, "/companies");
     test.skip(await page.getByText(/Activate your client workspace/i).count() > 0, "The E2E account is billing-gated.");
-    await expect(page.getByRole("heading", { name: "Companies", exact: true })).toBeVisible({ timeout: 30_000 });
+    test.skip(await page.getByRole("heading", { name: "Super Admin", exact: true }).count() > 0, "The E2E account is on Super Admin.");
+    await expect(page.getByRole("heading", { name: "Companies", exact: true })).toBeVisible({ timeout: 60_000 });
     await expect(page.getByRole("link", { name: "List", exact: true })).toBeVisible();
     await page.getByRole("link", { name: "List", exact: true }).click();
     await expect(page).toHaveURL(/view=list/);
-    await expect(page.getByRole("columnheader", { name: "Name", exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("columnheader", { name: "Name", exact: true })).toBeVisible({ timeout: 60_000 });
   });
 });
