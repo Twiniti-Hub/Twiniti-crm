@@ -167,6 +167,9 @@ function LaneColumn({
 
 export function KanbanBoard({ objectType, detailPath, searchQuery, refreshKey = 0, viewId = null }: Props) {
   const lanes = useMemo(() => defaultLanes(objectType), [objectType]);
+  // System defaults are equivalent to omitting viewId on the API; treating them
+  // as null avoids a full second board reload when the toolbar selects the default.
+  const resolvedViewId = !viewId || viewId.startsWith("system-") ? null : viewId;
   const [laneState, setLaneState] = useState<Record<string, LaneState>>(() =>
     Object.fromEntries(lanes.map((lane) => [lane.id, { cards: [], nextCursor: null, loading: false, count: 0 }]))
   );
@@ -177,11 +180,12 @@ export function KanbanBoard({ objectType, detailPath, searchQuery, refreshKey = 
     useSensor(KeyboardSensor)
   );
 
-  async function loadCounts() {
+  async function loadCounts(signal?: AbortSignal) {
     const params = new URLSearchParams({ objectType });
     if (searchQuery.trim()) params.set("query", searchQuery.trim());
-    if (viewId) params.set("viewId", viewId);
-    const res = await api(`/api/v1/boards/counts?${params.toString()}`);
+    if (resolvedViewId) params.set("viewId", resolvedViewId);
+    const res = await api(`/api/v1/boards/counts?${params.toString()}`, signal ? { signal } : undefined);
+    if (signal?.aborted) return;
     const counts = (res.data ?? []) as { laneId: string; count: number }[];
     const metaLanes = (res.meta?.lanes as BoardLane[] | undefined) ?? lanes;
     setLaneState((current) => {
@@ -194,7 +198,7 @@ export function KanbanBoard({ objectType, detailPath, searchQuery, refreshKey = 
     });
   }
 
-  async function loadLane(laneId: string, cursor?: string | null, append = false) {
+  async function loadLane(laneId: string, cursor?: string | null, append = false, signal?: AbortSignal) {
     setLaneState((current) => ({
       ...current,
       [laneId]: { ...current[laneId], loading: true }
@@ -206,9 +210,10 @@ export function KanbanBoard({ objectType, detailPath, searchQuery, refreshKey = 
         limit: "25"
       });
       if (searchQuery.trim()) params.set("query", searchQuery.trim());
-      if (viewId) params.set("viewId", viewId);
+      if (resolvedViewId) params.set("viewId", resolvedViewId);
       if (cursor) params.set("cursor", cursor);
-      const res = await api(`/api/v1/boards/cards?${params.toString()}`);
+      const res = await api(`/api/v1/boards/cards?${params.toString()}`, signal ? { signal } : undefined);
+      if (signal?.aborted) return;
       const cards = (res.data ?? []) as BoardCard[];
       const nextCursor = (res.meta?.nextCursor as string | null | undefined) ?? null;
       setLaneState((current) => ({
@@ -221,6 +226,7 @@ export function KanbanBoard({ objectType, detailPath, searchQuery, refreshKey = 
         }
       }));
     } catch (err) {
+      if (signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
       setLaneState((current) => ({
         ...current,
         [laneId]: { ...current[laneId], loading: false }
@@ -229,19 +235,29 @@ export function KanbanBoard({ objectType, detailPath, searchQuery, refreshKey = 
     }
   }
 
-  async function reloadBoard() {
+  async function reloadBoard(signal?: AbortSignal) {
     setError(null);
     try {
-      await loadCounts();
-      await Promise.all(lanes.map((lane) => loadLane(lane.id)));
+      await loadCounts(signal);
+      if (signal?.aborted) return;
+      // Load a few lanes at a time so a cold API/DB does not queue every lane at once.
+      const concurrency = 3;
+      for (let index = 0; index < lanes.length; index += concurrency) {
+        if (signal?.aborted) return;
+        const batch = lanes.slice(index, index + concurrency);
+        await Promise.all(batch.map((lane) => loadLane(lane.id, null, false, signal)));
+      }
     } catch (err) {
+      if (signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
       setError(err instanceof Error ? err.message : "Failed to load board");
     }
   }
 
   useEffect(() => {
-    void reloadBoard();
-  }, [objectType, searchQuery, refreshKey, viewId]);
+    const controller = new AbortController();
+    void reloadBoard(controller.signal);
+    return () => controller.abort();
+  }, [objectType, searchQuery, refreshKey, resolvedViewId]);
 
   async function moveCard(card: BoardCard, laneId: string) {
     setError(null);
@@ -272,7 +288,7 @@ export function KanbanBoard({ objectType, detailPath, searchQuery, refreshKey = 
           recordId: card.id,
           laneId,
           version: card.version,
-          viewId: viewId || undefined
+          ...(resolvedViewId ? { viewId: resolvedViewId } : {})
         })
       });
       await reloadBoard();
