@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.10.43] - 2026-08-13
+
+- Updated Development E2E smoke for Kanban-default Contacts/Companies so route
+  coverage no longer waits on `networkidle` and created contacts are asserted on
+  the board after dialog close.
+
 ## [0.10.42] - 2026-08-13
 
 - Fixed Contacts list/company search failing with ambiguous SQL in the
