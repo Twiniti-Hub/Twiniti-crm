@@ -43,6 +43,7 @@ export function CompaniesPage() {
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
   const [boardViewId, setBoardViewId] = useState<string | null>(null);
   const [canManageShared, setCanManageShared] = useState(false);
+  const [listLoading, setListLoading] = useState(false);
 
   async function load(nextPage = page, nextPageSize = pageSize, nextQuery = searchQuery) {
     if (!isListView) return;
@@ -57,7 +58,19 @@ export function CompaniesPage() {
   }
 
   useEffect(() => {
-    load().catch((err) => setError(err instanceof Error ? err.message : "Failed to load companies"));
+    if (!isListView) return;
+    let cancelled = false;
+    setListLoading(true);
+    load()
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load companies");
+      })
+      .finally(() => {
+        if (!cancelled) setListLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [page, pageSize, searchQuery, isListView]);
 
   useEffect(() => {
@@ -178,6 +191,7 @@ export function CompaniesPage() {
           />
           <BoardSearchBar
             value={boardSearchInput}
+            appliedValue={boardSearchQuery}
             onChange={setBoardSearchInput}
             onApply={() => setBoardSearchQuery(boardSearchInput.trim())}
             onClear={() => {
@@ -195,6 +209,7 @@ export function CompaniesPage() {
         </>
       ) : (
         <div className="table-wrap">
+          {listLoading ? <div className="banner info">Loading companies…</div> : null}
           <div className="topbar">
             <label style={{ flex: 1 }}>
               Filter by company name
