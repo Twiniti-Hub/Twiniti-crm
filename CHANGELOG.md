@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.46] - 2026-08-13
+
+- AuthGate loads `/api/v1/me` immediately via cookie session instead of waiting
+  forever for a Hexclave bearer header (which left Development E2E stuck on
+  “Loading workspace…”).
+- Smoke navigates CRM routes through the sidebar when possible and waits for
+  Development `/health` before Playwright starts.
+
 ## [0.10.45] - 2026-08-13
 
 - AuthGate waits for the Hexclave authorization header before calling `/api/v1/me`,

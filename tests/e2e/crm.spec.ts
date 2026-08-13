@@ -1,22 +1,52 @@
 import { test, expect, waitForAuthenticatedShell } from "./fixtures";
 
 const crmRoutes = [
-  ["/", /Overview|Dashboard/i], ["/contacts", /Contacts/i], ["/companies", /Companies/i],
-  ["/segments", /Segments/i], ["/campaigns", /Campaigns/i], ["/forms", /Forms/i],
-  ["/workflows", /Workflows/i], ["/agents", /Agents/i], ["/deliverability", /Deliverability/i],
-  ["/settings", /Settings/i], ["/billing", /Billing|Activate your client workspace/i], ["/help", /Help/i]
+  ["/", /Overview|Dashboard/i],
+  ["/contacts", /Contacts/i],
+  ["/companies", /Companies/i],
+  ["/segments", /Segments/i],
+  ["/campaigns", /Campaigns/i],
+  ["/forms", /Forms/i],
+  ["/workflows", /Workflows/i],
+  ["/agents", /Agents/i],
+  ["/deliverability", /Deliverability/i],
+  ["/settings", /Settings/i],
+  ["/billing", /Billing|Activate your client workspace/i],
+  ["/help", /Help/i]
 ] as const;
 
+const routeNavLabel: Record<string, string> = {
+  "/": "Overview",
+  "/contacts": "Contacts",
+  "/companies": "Companies",
+  "/segments": "Segments",
+  "/campaigns": "Campaigns",
+  "/forms": "Forms",
+  "/workflows": "Workflows",
+  "/agents": "Agents",
+  "/deliverability": "Deliverability",
+  "/settings": "Settings",
+  "/billing": "Billing",
+  "/help": "Help"
+};
+
 async function gotoCrm(page: import("@playwright/test").Page, path: string) {
-  // Kanban boards keep requesting lane/count data; networkidle never settles.
-  await page.goto(path, { waitUntil: "domcontentloaded" });
+  // Prefer in-app nav so AuthGate stays mounted across routes. Full reloads
+  // re-race Hexclave token hydration and are what stuck on Loading workspace.
+  const label = routeNavLabel[path];
+  const nav = label ? page.getByRole("navigation").getByRole("link", { name: label, exact: true }) : null;
+  if (nav && (await nav.count()) > 0) {
+    await nav.click();
+  } else {
+    await page.goto(path, { waitUntil: "domcontentloaded" });
+  }
   await waitForAuthenticatedShell(page);
 }
 
 test.describe("Twiniti CRM authenticated application", () => {
   test("logs in and reaches a valid workspace state", async ({ signedInPage: page }) => {
     await expect(page).not.toHaveURL(/sign-in/);
-    await expect(page.locator("body")).not.toContainText(/failed to load session|unauthorized/i);
+    await expect(page.locator("body")).not.toContainText(/failed to load session|unauthorized|Timed out loading workspace/i);
     await expect(page.locator("body")).toContainText(/Onboarding|Billing|Overview|Contacts|Companies|Super Admin|Sign out/i);
   });
 

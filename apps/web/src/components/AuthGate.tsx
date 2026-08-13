@@ -20,45 +20,55 @@ export function AuthGate() {
   setBrowserAuthorizationHeader(authorizationHeader);
   const location = useLocation();
   const [me, setMe] = useState<Me | null>(null);
-  const [loadingMe, setLoadingMe] = useState(false);
   const [meError, setMeError] = useState<string | null>(null);
-  const userId = user && typeof user === "object" && "id" in user ? String((user as { id: unknown }).id) : user ? "signed-in" : null;
+  const userId =
+    user && typeof user === "object" && "id" in user
+      ? String((user as { id: unknown }).id)
+      : user
+        ? "signed-in"
+        : null;
 
   useEffect(() => {
     if (!userId) {
       setMe(null);
-      setLoadingMe(false);
       setMeError(null);
-      return;
-    }
-    // Hexclave can expose `user` before the bearer token is ready. Fetching
-    // /me without Authorization leaves the gate stuck on Loading workspace.
-    if (!authorizationHeader) {
-      setLoadingMe((current) => current || !me);
       return;
     }
 
     let cancelled = false;
-    // Only block the shell when we have no session payload yet. Path changes
-    // soft-refresh /me without tearing down the CRM UI.
-    setLoadingMe((current) => current || !me);
+    let settled = false;
+
+    // Cookie-backed Hexclave sessions can authenticate /me without a bearer
+    // header. Fetch immediately; retry when the header later appears. Never
+    // block forever waiting for useAuthorizationHeader().
     api("/api/v1/me")
       .then((res) => {
-        if (!cancelled) {
-          setMe(res.data as Me);
-          setMeError(null);
-        }
+        if (cancelled) return;
+        settled = true;
+        setMe(res.data as Me);
+        setMeError(null);
       })
       .catch((err) => {
-        if (!cancelled) {
-          setMeError(err instanceof Error ? err.message : "Failed to load session");
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : "Failed to load session";
+        if (!authorizationHeader && /unauthorized|authentication required/i.test(message)) {
+          // Token still hydrating — stay on loading until header arrives and
+          // this effect re-runs, or the timeout below fires.
+          return;
         }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingMe(false);
+        settled = true;
+        setMeError(message);
       });
+
+    const timeoutId = window.setTimeout(() => {
+      if (cancelled || settled) return;
+      settled = true;
+      setMeError("Timed out loading workspace");
+    }, 20_000);
+
     return () => {
       cancelled = true;
+      window.clearTimeout(timeoutId);
     };
     // Refresh when the Hexclave identity/token changes or the route changes
     // (billing/setup gates). `me` is intentionally omitted so an existing shell
@@ -79,7 +89,7 @@ export function AuthGate() {
     );
   }
 
-  if ((loadingMe || !authorizationHeader) && !me) {
+  if (!me && !meError) {
     return (
       <div className="auth-page">
         <div className="auth-form-wrap">

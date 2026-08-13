@@ -31,6 +31,23 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm e2e:install
+      # Wait for the regional app that E2E hits so smoke does not race Render deploy.
+      - name: Wait for Development US health
+        env:
+          E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
+        run: |
+          set -euo pipefail
+          base="${E2E_BASE_URL%/}"
+          for i in $(seq 1 36); do
+            if curl -fsS "$base/health" | grep -q '"status":"ok"'; then
+              echo "Development health ok"
+              exit 0
+            fi
+            echo "waiting for health ($i/36)"
+            sleep 5
+          done
+          echo "::error::Development US health did not become ready in time"
+          exit 1
       # Promotion evidence is the authenticated CRM smoke only. Signup/Stripe is a
       # longer journey tracked separately so a Checkout flake cannot block release.
       # Do not pass a bare `--` before the file path: Playwright treats args after
