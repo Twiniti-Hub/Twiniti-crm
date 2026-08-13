@@ -1,0 +1,50 @@
+---
+description: Strict Twiniti CRM release, promotion, and DB policy adherence
+alwaysApply: true
+---
+
+# Strict policy adherence (Twiniti CRM)
+
+Canonical policies (read and follow; do not invent process):
+- `docs/RELEASE_POLICY.md`
+- `docs/DATABASE_CHANGE_POLICY.md`
+- `docs/REGIONAL_DATA.md`
+
+## Identity (non-negotiable)
+
+- Before every GitHub mutation: `gh api user --jq .login` must be `twiniti-code-bot`.
+- Never operate as `George-Twiniti`.
+- Bot: push reviewable commits on `codex/<linear-id>-<slug>` and open PRs.
+- George: CODEOWNER **Approve** and **Merge**. Do not merge for George unless he explicitly asks the bot to merge that PR.
+- Never suggest disabling, weakening, or bypassing rulesets, CODEOWNERS, last-push separation, required checks, or protected environments.
+
+## Branches
+
+- Feature work → PR into `development` only.
+- Production only via PR `development` → `production` after exact-SHA Dev verification.
+- No direct pushes / force pushes to protected branches; no Production-first work.
+- Canonical checkout only: `C:\Users\George\Source\Twiniti-CRM` (no extra worktrees unless George asks).
+
+## Promotion (strict sequence)
+
+1. Bot feature PR → George approves/merges to `development`.
+2. Dev deploy of that SHA; verify US/EU/UK health + schema.
+3. Successful **`E2E / development-smoke` on that exact SHA** (required). Signup is not the promotion gate unless policy says otherwise.
+4. Open clean `development` → `production` PR with full evidence (Linear, health, smoke URL, DB classification, rollback SHA).
+5. George approves/merges production PR.
+6. Production regional migrate (protected workflow / `MIGRATION_APPROVED`) **before or coordinated with** deploy: US → EU → UK; stop on first failure; keep receipt.
+7. Verify Prod health/schema; record receipts in Linear.
+
+If blocked by ruleset (e.g. last-push), **stop and explain**. Do not paper over with tip/handoff/empty PRs, fake ancestry commits, or ruleset workarounds.
+
+## Hard prohibitions (learned)
+
+- No “bot tip”, “handoff”, or empty PRs to game `require_last_push_approval`.
+- No empty merge-only PRs that leave CODEOWNER review unsatisfiable.
+- No asking George to click Update branch when that would attribute the push to him incorrectly for last-push rules—follow policy identity instead.
+- No manual Production SQL; use the regional migration workflow with change id.
+- Do not open a production promotion PR until smoke is green on the exact tip SHA.
+
+## Evidence on every PR
+
+Linear id, impact, validation results, security impact, rollback, docs/changelog/version impact, deferred risks. DB PRs: classification + compatibility with currently deployed app.
