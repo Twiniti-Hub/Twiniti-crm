@@ -35,6 +35,7 @@ type Props = {
   detailPath: (id: string) => string;
   searchQuery: string;
   refreshKey?: number;
+  viewId?: string | null;
 };
 
 function CardBody({ card, objectType }: { card: BoardCard; objectType: BoardObjectType }) {
@@ -164,7 +165,7 @@ function LaneColumn({
   );
 }
 
-export function KanbanBoard({ objectType, detailPath, searchQuery, refreshKey = 0 }: Props) {
+export function KanbanBoard({ objectType, detailPath, searchQuery, refreshKey = 0, viewId = null }: Props) {
   const lanes = useMemo(() => defaultLanes(objectType), [objectType]);
   const [laneState, setLaneState] = useState<Record<string, LaneState>>(() =>
     Object.fromEntries(lanes.map((lane) => [lane.id, { cards: [], nextCursor: null, loading: false, count: 0 }]))
@@ -179,11 +180,13 @@ export function KanbanBoard({ objectType, detailPath, searchQuery, refreshKey = 
   async function loadCounts() {
     const params = new URLSearchParams({ objectType });
     if (searchQuery.trim()) params.set("query", searchQuery.trim());
+    if (viewId) params.set("viewId", viewId);
     const res = await api(`/api/v1/boards/counts?${params.toString()}`);
     const counts = (res.data ?? []) as { laneId: string; count: number }[];
+    const metaLanes = (res.meta?.lanes as BoardLane[] | undefined) ?? lanes;
     setLaneState((current) => {
       const next = { ...current };
-      for (const lane of lanes) {
+      for (const lane of metaLanes) {
         const count = counts.find((item) => item.laneId === lane.id)?.count ?? 0;
         next[lane.id] = { ...(next[lane.id] ?? { cards: [], nextCursor: null, loading: false, count: 0 }), count };
       }
@@ -203,6 +206,7 @@ export function KanbanBoard({ objectType, detailPath, searchQuery, refreshKey = 
         limit: "25"
       });
       if (searchQuery.trim()) params.set("query", searchQuery.trim());
+      if (viewId) params.set("viewId", viewId);
       if (cursor) params.set("cursor", cursor);
       const res = await api(`/api/v1/boards/cards?${params.toString()}`);
       const cards = (res.data ?? []) as BoardCard[];
@@ -237,7 +241,7 @@ export function KanbanBoard({ objectType, detailPath, searchQuery, refreshKey = 
 
   useEffect(() => {
     void reloadBoard();
-  }, [objectType, searchQuery, refreshKey]);
+  }, [objectType, searchQuery, refreshKey, viewId]);
 
   async function moveCard(card: BoardCard, laneId: string) {
     setError(null);
@@ -267,7 +271,8 @@ export function KanbanBoard({ objectType, detailPath, searchQuery, refreshKey = 
           objectType,
           recordId: card.id,
           laneId,
-          version: card.version
+          version: card.version,
+          viewId: viewId || undefined
         })
       });
       await reloadBoard();

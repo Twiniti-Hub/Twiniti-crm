@@ -153,6 +153,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 
 .view-toggle { display: inline-flex; gap: 6px; }
 .view-toggle .secondary.is-active { background: #173b3b; color: #fff; }
+.board-view-toolbar { margin-bottom: 16px; }
+.board-view-toolbar .toolbar-actions { margin-top: 12px; }
 .app-dialog { border: 1px solid #e4ece8; border-radius: 17px; padding: 0; max-width: min(920px, 94vw); width: 100%; background: #f5f8f6; color: #192a38; }
 .app-dialog::backdrop { background: rgba(16, 43, 49, .45); }
 .dialog-form { margin: 0; box-shadow: none; }

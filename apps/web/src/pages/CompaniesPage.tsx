@@ -1,7 +1,9 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { BoardSearchBar, KanbanBoard } from "../components/KanbanBoard";
+import { BoardViewToolbar } from "../components/BoardViewToolbar";
 import { api } from "../lib/api";
+import type { Me } from "../lib/me";
 
 type Company = {
   id: string;
@@ -39,6 +41,8 @@ export function CompaniesPage() {
   const [boardSearchInput, setBoardSearchInput] = useState("");
   const [boardSearchQuery, setBoardSearchQuery] = useState("");
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
+  const [boardViewId, setBoardViewId] = useState<string | null>(null);
+  const [canManageShared, setCanManageShared] = useState(false);
 
   async function load(nextPage = page, nextPageSize = pageSize, nextQuery = searchQuery) {
     if (!isListView) return;
@@ -55,6 +59,15 @@ export function CompaniesPage() {
   useEffect(() => {
     load().catch((err) => setError(err instanceof Error ? err.message : "Failed to load companies"));
   }, [page, pageSize, searchQuery, isListView]);
+
+  useEffect(() => {
+    api("/api/v1/me")
+      .then((res) => {
+        const me = res.data as Me;
+        setCanManageShared(me.role === "admin" || me.isSuperAdmin === true);
+      })
+      .catch(() => setCanManageShared(false));
+  }, []);
 
   async function onCreate(event: FormEvent) {
     event.preventDefault();
@@ -157,6 +170,12 @@ export function CompaniesPage() {
 
       {!isListView ? (
         <>
+          <BoardViewToolbar
+            objectType="company"
+            selectedViewId={boardViewId}
+            onViewChange={setBoardViewId}
+            canManageShared={canManageShared}
+          />
           <BoardSearchBar
             value={boardSearchInput}
             onChange={setBoardSearchInput}
@@ -171,6 +190,7 @@ export function CompaniesPage() {
             detailPath={(id) => `/companies/${id}`}
             searchQuery={boardSearchQuery}
             refreshKey={boardRefreshKey}
+            viewId={boardViewId}
           />
         </>
       ) : (

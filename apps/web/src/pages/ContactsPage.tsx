@@ -1,7 +1,9 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { BoardSearchBar, KanbanBoard } from "../components/KanbanBoard";
+import { BoardViewToolbar } from "../components/BoardViewToolbar";
 import { api } from "../lib/api";
+import type { Me } from "../lib/me";
 
 type PropertyDefinition = {
   id: string;
@@ -190,6 +192,8 @@ export function ContactsPage() {
   const [boardSearchInput, setBoardSearchInput] = useState("");
   const [boardSearchQuery, setBoardSearchQuery] = useState("");
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
+  const [boardViewId, setBoardViewId] = useState<string | null>(null);
+  const [canManageShared, setCanManageShared] = useState(false);
   const [propertySearch, setPropertySearch] = useState("");
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [propertyEditor, setPropertyEditor] = useState<PropertyEditorState | null>(null);
@@ -268,6 +272,15 @@ export function ContactsPage() {
   useEffect(() => {
     load().catch((err) => setError(err instanceof Error ? err.message : "Failed to load contacts"));
   }, [page, pageSize, searchQuery, isListView]);
+
+  useEffect(() => {
+    api("/api/v1/me")
+      .then((res) => {
+        const me = res.data as Me;
+        setCanManageShared(me.role === "admin" || me.isSuperAdmin === true);
+      })
+      .catch(() => setCanManageShared(false));
+  }, []);
 
   useEffect(() => {
     if (selectedProperty) {
@@ -535,6 +548,12 @@ export function ContactsPage() {
 
       {!isListView ? (
         <>
+          <BoardViewToolbar
+            objectType="contact"
+            selectedViewId={boardViewId}
+            onViewChange={setBoardViewId}
+            canManageShared={canManageShared}
+          />
           <BoardSearchBar
             value={boardSearchInput}
             onChange={setBoardSearchInput}
@@ -549,6 +568,7 @@ export function ContactsPage() {
             detailPath={(id) => `/contacts/${id}`}
             searchQuery={boardSearchQuery}
             refreshKey={boardRefreshKey}
+            viewId={boardViewId}
           />
         </>
       ) : null}
