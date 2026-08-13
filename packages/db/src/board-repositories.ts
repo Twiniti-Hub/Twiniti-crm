@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, ilike, isNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, ilike, inArray, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import {
   decodeBoardCursor,
@@ -505,8 +505,7 @@ export async function countBoardLanes(
   boardConfig: BoardConfigShape,
   query?: string
 ) {
-  const results: { laneId: string; count: number }[] = [];
-  for (const lane of boardConfig.lanes) {
+  return Promise.all(boardConfig.lanes.map(async (lane) => {
     const laneFilter = laneMatchSql(objectType, boardConfig.groupingField, lane, boardConfig.lanes);
     if (objectType === "contact") {
       const filters = [...contactSearchFilters(organizationId, query), laneFilter];
@@ -518,21 +517,19 @@ export async function countBoardLanes(
         }
       }
       const rows = await db.select({ value: count() }).from(contacts).where(and(...filters));
-      results.push({ laneId: lane.id, count: Number(rows[0]?.value ?? 0) });
-    } else {
-      const filters = [...companySearchFilters(organizationId, query), laneFilter];
-      if (boardConfig.filters && Object.keys(boardConfig.filters).length) {
-        try {
-          filters.push(compileFilterAst(parseFilterAst(boardConfig.filters), "company"));
-        } catch {
-          // ignore invalid stored filters
-        }
-      }
-      const rows = await db.select({ value: count() }).from(companies).where(and(...filters));
-      results.push({ laneId: lane.id, count: Number(rows[0]?.value ?? 0) });
+      return { laneId: lane.id, count: Number(rows[0]?.value ?? 0) };
     }
-  }
-  return results;
+    const filters = [...companySearchFilters(organizationId, query), laneFilter];
+    if (boardConfig.filters && Object.keys(boardConfig.filters).length) {
+      try {
+        filters.push(compileFilterAst(parseFilterAst(boardConfig.filters), "company"));
+      } catch {
+        // ignore invalid stored filters
+      }
+    }
+    const rows = await db.select({ value: count() }).from(companies).where(and(...filters));
+    return { laneId: lane.id, count: Number(rows[0]?.value ?? 0) };
+  }));
 }
 
 export async function listBoardCards(
@@ -640,20 +637,7 @@ export async function listBoardCards(
     lifecycleStage: companies.lifecycleStage,
     properties: companies.properties,
     version: companies.version,
-    updatedAt: companies.updatedAt,
-    // Use explicit aliases: interpolating Drizzle columns inside sql`` drops
-    // table qualifiers and makes company_id = id / id = contact_id ambiguous.
-    // Correlate with the outer companies row via bare companies.id (not ${companies.id}).
-    contactCount: sql<number>`(
-      select count(*)::int
-      from contact_company_associations cca
-      inner join contacts ct on ct.id = cca.contact_id
-      where cca.company_id = companies.id
-        and cca.organization_id = ${organizationId}
-        and ct.organization_id = ${organizationId}
-        and ct.archived_at is null
-        and ct.merged_into_contact_id is null
-    )`
+    updatedAt: companies.updatedAt
   }).from(companies)
     .where(and(...filters))
     .orderBy(sortDesc ? desc(companies.updatedAt) : asc(companies.updatedAt), sortDesc ? desc(companies.id) : asc(companies.id))
@@ -661,13 +645,34 @@ export async function listBoardCards(
 
   const page = rows.slice(0, limit);
   const next = rows.length > limit ? rows[limit] : null;
+  const contactCountByCompany = new Map<string, number>();
+  if (page.length) {
+    const countRows = await db.select({
+      companyId: contactCompanyAssociations.companyId,
+      value: count()
+    }).from(contactCompanyAssociations)
+      .innerJoin(contacts, and(
+        eq(contacts.id, contactCompanyAssociations.contactId),
+        eq(contacts.organizationId, organizationId),
+        isNull(contacts.archivedAt),
+        isNull(contacts.mergedIntoContactId)
+      ))
+      .where(and(
+        eq(contactCompanyAssociations.organizationId, organizationId),
+        inArray(contactCompanyAssociations.companyId, page.map((row) => row.id))
+      ))
+      .groupBy(contactCompanyAssociations.companyId);
+    for (const row of countRows) {
+      contactCountByCompany.set(row.companyId, Number(row.value ?? 0));
+    }
+  }
   return {
     data: page.map((row) => ({
       id: row.id,
       name: row.name,
       domain: row.domain,
       industry: row.industry,
-      contactCount: Number(row.contactCount ?? 0),
+      contactCount: contactCountByCompany.get(row.id) ?? 0,
       lifecycleStage: row.lifecycleStage,
       updatedAt: row.updatedAt.toISOString(),
       version: row.version,

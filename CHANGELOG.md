@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.10.40] - 2026-08-13
+
+- Stopped Companies/Contacts Kanban from reloading twice when the default system
+  board view is selected, aborted stale loads, and batched lane counts /
+  company contact counts for faster first paint.
+
 ## [0.10.39] - 2026-08-13
 
 - Allowed system default board view ids (`system-contact-board`,
