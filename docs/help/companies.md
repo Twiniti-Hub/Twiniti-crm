@@ -1,8 +1,7 @@
-# Companies
+# Companies and Kanban boards
 
-Open **Companies** to create, search, and browse company records. A company requires a name; domain and industry are optional.
+Open **Companies** to work relationship stages on a Kanban board. Existing companies without a stage appear in **Unassigned**. New companies default to **Prospect**.
 
-Use the search field for a company name or domain, select **Apply filter**, and use **Clear** to return to the full list. Change the page-size selector when reviewing larger workspaces. Select a company name to view its detail page and associated contacts.
+Use **Kanban** / **List** links to switch presentations. List keeps dense search across name and domain. Choose **New company** to create a record from a dialog. Select a company name (or card) to view its detail page, lifecycle stage, and associated contacts.
 
-When importing contacts, a company name can be matched to an existing company. If no match exists, Loop creates the company and stores the relationship as a contact-to-company association.
-
+On the board, drag cards between stages or use **Move to…**. Moves use optimistic concurrency and write property history. CSV import remains available from the header; imported company names continue to match or create associations during contact import.

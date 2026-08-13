@@ -4,8 +4,10 @@
   "version": "0.1.0",
   "type": "module",
   "dependencies": {
-    "@twiniti/analytics": "workspace:*",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/utilities": "^3.2.2",
     "@hexclave/react": "^1.0.70",
+    "@twiniti/analytics": "workspace:*",
     "@twiniti/contracts": "workspace:*",
     "@twiniti/ui": "workspace:*",
     "@vitejs/plugin-react": "^5.2.0",
@@ -17,7 +19,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "tsx --test src/lib/csv.test.ts",
+    "test": "tsx --test src/lib/csv.test.ts src/lib/board.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit"
   },

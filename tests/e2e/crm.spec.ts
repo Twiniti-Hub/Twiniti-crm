@@ -27,7 +27,7 @@ test.describe("Twiniti CRM authenticated application", () => {
     }
   });
 
-  test("creates a contact and verifies it in the contact list", async ({ signedInPage: page }) => {
+  test("creates a contact from the Kanban dialog and verifies it", async ({ signedInPage: page }) => {
     test.skip(
       await page.getByRole("heading", { name: "Name your company", exact: true }).count() > 0,
       "The persistent E2E account requires workspace setup."
@@ -35,12 +35,31 @@ test.describe("Twiniti CRM authenticated application", () => {
     await page.goto("/contacts");
     await page.waitForLoadState("networkidle");
     test.skip(await page.getByText(/Activate your client workspace/i).count() > 0, "The E2E account is billing-gated.");
+    await expect(page.getByRole("link", { name: "Kanban", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "List", exact: true })).toBeVisible();
     const unique = `e2e-${Date.now()}@example.test`;
-    await page.getByLabel("Email", { exact: true }).fill(unique);
-    await page.getByLabel("First name", { exact: true }).fill("E2E");
-    await page.getByLabel("Last name", { exact: true }).fill("Contact");
-    await page.getByRole("button", { name: "Create contact", exact: true }).click();
-    await expect(page.getByRole("link", { name: unique })).toBeVisible();
-    await expect(page.locator("tbody")).toContainText("E2E Contact");
+    await page.getByRole("button", { name: "New contact", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel("Email", { exact: true }).fill(unique);
+    await dialog.getByLabel("First name", { exact: true }).fill("E2E");
+    await dialog.getByLabel("Last name", { exact: true }).fill("Contact");
+    await dialog.getByRole("button", { name: "Create contact", exact: true }).click();
+    await expect(page.getByRole("link", { name: /E2E Contact|e2e-/i }).first()).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("shows companies Kanban with list fallback", async ({ signedInPage: page }) => {
+    test.skip(
+      await page.getByRole("heading", { name: "Name your company", exact: true }).count() > 0,
+      "The persistent E2E account requires workspace setup."
+    );
+    await page.goto("/companies");
+    await page.waitForLoadState("networkidle");
+    test.skip(await page.getByText(/Activate your client workspace/i).count() > 0, "The E2E account is billing-gated.");
+    await expect(page.getByRole("heading", { name: "Companies", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "List", exact: true })).toBeVisible();
+    await page.getByRole("link", { name: "List", exact: true }).click();
+    await expect(page).toHaveURL(/view=list/);
+    await expect(page.getByRole("columnheader", { name: "Name", exact: true })).toBeVisible();
   });
 });

@@ -17,6 +17,7 @@
     {"file":"0010_billing_and_rls_runtime_role.sql","status":"journaled","sha256":"3adc4621ff004f3ea62b91c418c551e72511fa6f08d5c118ef09f6ea1688b56d"},
     {"file":"0011_organization_resend_domains.sql","status":"journaled","sha256":"2e21dec3b958b4d56dca5df4619b4e75b0f6bdaeba451514482f28f8dbc709b0"},
     {"file":"0012_reconcile_resend_domain_verification.sql","status":"journaled","sha256":"6a3f8674eaf2cd04b16215186264cde88738ef55b5d4ac0f631aae40d374eedf"},
-    {"file":"0013_enforce_organization_rls.sql","status":"journaled","sha256":"a8177d2d427e6291d5683d10d3e7bbb4289c93b8d82dd89eb45d03b2ae3b0ba1"}
+    {"file":"0013_enforce_organization_rls.sql","status":"journaled","sha256":"a8177d2d427e6291d5683d10d3e7bbb4289c93b8d82dd89eb45d03b2ae3b0ba1"},
+    {"file":"0014_contacts_companies_kanban.sql","status":"journaled","sha256":"a3b0f5c34bef146b80367d792befda0c37bc3790a2e6a0beaf2657b18bad4702"}
   ]
 }

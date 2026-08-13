@@ -147,7 +147,13 @@ export const contacts = pgTable("contacts", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => ({
   emailIndex: uniqueIndex("contacts_org_email_idx").on(table.organizationId, table.emailNormalized),
-  searchIndex: index("contacts_org_updated_idx").on(table.organizationId, table.updatedAt)
+  searchIndex: index("contacts_org_updated_idx").on(table.organizationId, table.updatedAt),
+  lifecycleBoardIndex: index("contacts_org_lifecycle_updated_idx").on(
+    table.organizationId,
+    table.lifecycleStage,
+    table.updatedAt,
+    table.id
+  )
 }));
 
 export const contactIdentities = pgTable("contact_identities", {
@@ -180,6 +186,7 @@ export const companies = pgTable("companies", {
   domain: varchar("domain", { length: 255 }),
   domainNormalized: varchar("domain_normalized", { length: 255 }),
   industry: varchar("industry", { length: 120 }),
+  lifecycleStage: varchar("lifecycle_stage", { length: 80 }),
   properties: jsonb("properties").notNull().default({}),
   version: integer("version").notNull().default(1),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
@@ -187,7 +194,13 @@ export const companies = pgTable("companies", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => ({
   domainIndex: uniqueIndex("companies_org_domain_idx").on(table.organizationId, table.domainNormalized),
-  nameIndex: index("companies_org_name_idx").on(table.organizationId, table.name)
+  nameIndex: index("companies_org_name_idx").on(table.organizationId, table.name),
+  lifecycleBoardIndex: index("companies_org_lifecycle_updated_idx").on(
+    table.organizationId,
+    table.lifecycleStage,
+    table.updatedAt,
+    table.id
+  )
 }));
 
 export const contactCompanyAssociations = pgTable("contact_company_associations", {
@@ -592,11 +605,40 @@ export const savedViews = pgTable("saved_views", {
   organizationId: uuid("organization_id").notNull().references(() => organizations.id),
   name: varchar("name", { length: 160 }).notNull(),
   objectType: varchar("object_type", { length: 50 }).notNull(),
+  presentation: varchar("presentation", { length: 40 }).notNull().default("list"),
+  visibility: varchar("visibility", { length: 40 }).notNull().default("private"),
   filterAst: jsonb("filter_ast").notNull().default({}),
   columns: jsonb("columns").notNull().default([]),
+  boardConfig: jsonb("board_config").notNull().default({}),
   createdBy: varchar("created_by", { length: 255 }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
-});
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  visibilityIndex: index("saved_views_org_object_visibility_creator_idx").on(
+    table.organizationId,
+    table.objectType,
+    table.visibility,
+    table.createdBy
+  )
+}));
+
+export const viewPreferences = pgTable("view_preferences", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  userId: uuid("user_id").notNull().references(() => crmUsers.id),
+  objectType: varchar("object_type", { length: 50 }).notNull(),
+  presentation: varchar("presentation", { length: 40 }).notNull(),
+  viewId: uuid("view_id").references(() => savedViews.id),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  preferenceIndex: uniqueIndex("view_preferences_org_user_object_presentation_idx").on(
+    table.organizationId,
+    table.userId,
+    table.objectType,
+    table.presentation
+  )
+}));
 
 export const auditEvents = pgTable("audit_events", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -688,6 +730,7 @@ export const schema = {
   importJobs,
   importRows,
   savedViews,
+  viewPreferences,
   auditEvents,
   jobs,
   outboxEvents,
