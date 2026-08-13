@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.37] - 2026-08-13
+
+- Made Kanban the default Contacts and Companies experience, with tables retained at `?view=list`.
+- Added company `lifecycle_stage`, board/view preference APIs, cursor-paged lane cards, and versioned board moves that merge a single property when grouping on JSON fields.
+- Added `PATCH /api/v1/companies/:id` with optimistic concurrency and property history.
+- Moved contact and company creation into accessible dialogs and added pointer/keyboard drag plus Move to… on cards.
+
 ## Unreleased
 
 - Added repository-enforced development-first promotion, required PR evidence,

@@ -1,5 +1,6 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router";
+import { BoardSearchBar, KanbanBoard } from "../components/KanbanBoard";
 import { api } from "../lib/api";
 
 type PropertyDefinition = {
@@ -167,6 +168,9 @@ function renderPropertyInput(
 }
 
 export function ContactsPage() {
+  const [searchParams] = useSearchParams();
+  const isListView = searchParams.get("view") === "list";
+  const createDialogRef = useRef<HTMLDialogElement>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [definitions, setDefinitions] = useState<PropertyDefinition[]>([]);
   const [email, setEmail] = useState("");
@@ -183,6 +187,9 @@ export function ContactsPage() {
   const [meta, setMeta] = useState<ContactsMeta | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [boardSearchInput, setBoardSearchInput] = useState("");
+  const [boardSearchQuery, setBoardSearchQuery] = useState("");
+  const [boardRefreshKey, setBoardRefreshKey] = useState(0);
   const [propertySearch, setPropertySearch] = useState("");
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [propertyEditor, setPropertyEditor] = useState<PropertyEditorState | null>(null);
@@ -237,19 +244,9 @@ export function ContactsPage() {
     [customDefinitions, selectedPropertyId]
   );
 
-  async function load(nextPage = page, nextPageSize = pageSize, nextQuery = searchQuery) {
-    const params = new URLSearchParams({
-      limit: String(nextPageSize),
-      page: String(nextPage)
-    });
-    if (nextQuery.trim()) params.set("query", nextQuery.trim());
-    const [contactsRes, propsRes] = await Promise.all([
-      api(`/api/v1/contacts?${params.toString()}`),
-      api("/api/v1/properties?objectType=contact")
-    ]);
+  async function load(nextPage = page, nextPageSize = pageSize, nextQuery = searchQuery, listMode = isListView) {
+    const propsRes = await api("/api/v1/properties?objectType=contact");
     const nextDefinitions = (propsRes.data ?? []) as PropertyDefinition[];
-    setContacts((contactsRes.data ?? []) as Contact[]);
-    setMeta((contactsRes.meta ?? null) as ContactsMeta | null);
     setDefinitions(nextDefinitions);
     setSelectedPropertyId((current) => {
       const available = nextDefinitions.filter((definition) => !CORE_NAMES.has(definition.internalName));
@@ -257,11 +254,20 @@ export function ContactsPage() {
       if (current && available.some((definition) => definition.id === current)) return current;
       return available[0].id;
     });
+    if (!listMode) return;
+    const params = new URLSearchParams({
+      limit: String(nextPageSize),
+      page: String(nextPage)
+    });
+    if (nextQuery.trim()) params.set("query", nextQuery.trim());
+    const contactsRes = await api(`/api/v1/contacts?${params.toString()}`);
+    setContacts((contactsRes.data ?? []) as Contact[]);
+    setMeta((contactsRes.meta ?? null) as ContactsMeta | null);
   }
 
   useEffect(() => {
     load().catch((err) => setError(err instanceof Error ? err.message : "Failed to load contacts"));
-  }, [page, pageSize, searchQuery]);
+  }, [page, pageSize, searchQuery, isListView]);
 
   useEffect(() => {
     if (selectedProperty) {
@@ -299,6 +305,8 @@ export function ContactsPage() {
       setLastName("");
       setLifecycleStage("");
       setCustomValues({});
+      createDialogRef.current?.close();
+      setBoardRefreshKey((current) => current + 1);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
@@ -417,11 +425,21 @@ export function ContactsPage() {
           <p className="eyebrow">CRM</p>
           <h1>Contacts</h1>
           <p className="muted page-intro">
-            Keep the core identity fields tight, then manage custom fields separately so long labels
-            do not crowd the entry form.
+            Kanban is the default board for lifecycle work. Switch to List when you need dense tabular browsing.
           </p>
         </div>
         <div className="topbar-actions">
+          <div className="view-toggle" role="group" aria-label="Contacts view">
+            <Link className={`secondary${!isListView ? " is-active" : ""}`} to="/contacts">
+              Kanban
+            </Link>
+            <Link className={`secondary${isListView ? " is-active" : ""}`} to="/contacts?view=list">
+              List
+            </Link>
+          </div>
+          <button className="primary" type="button" onClick={() => createDialogRef.current?.showModal()}>
+            New contact
+          </button>
           <a className="secondary" href="#contact-property-manager">
             Manage fields
           </a>
@@ -433,85 +451,109 @@ export function ContactsPage() {
       {error ? <div className="banner error">{error}</div> : null}
       {propertyMessage ? <div className="banner info">{propertyMessage}</div> : null}
 
-      <form className="stack-form" onSubmit={onCreate}>
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">Create</p>
-            <h3>New contact</h3>
+      <dialog ref={createDialogRef} className="app-dialog">
+        <form className="stack-form dialog-form" onSubmit={onCreate}>
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Create</p>
+              <h3>New contact</h3>
+            </div>
+            <button className="secondary" type="button" onClick={() => createDialogRef.current?.close()}>
+              Close
+            </button>
           </div>
-          <span className="muted">Core fields stay visible. Custom fields are organized below.</span>
-        </div>
-        <div className="form-row">
-          <label>
-            Email
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </label>
-          <label>
-            Phone
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </label>
-          <label>
-            First name
-            <input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-          </label>
-          <label>
-            Last name
-            <input value={lastName} onChange={(e) => setLastName(e.target.value)} />
-          </label>
-          <label>
-            Lifecycle stage
-            <input value={lifecycleStage} onChange={(e) => setLifecycleStage(e.target.value)} />
-          </label>
-        </div>
+          <div className="form-row">
+            <label>
+              Email
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </label>
+            <label>
+              Phone
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </label>
+            <label>
+              First name
+              <input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+            </label>
+            <label>
+              Last name
+              <input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+            </label>
+            <label>
+              Lifecycle stage
+              <input value={lifecycleStage} onChange={(e) => setLifecycleStage(e.target.value)} placeholder="lead" />
+            </label>
+          </div>
 
-        {createFields.length > 0 ? (
-          <section className="property-section">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Custom fields</p>
-                <h3>Selected properties for quick entry</h3>
+          {createFields.length > 0 ? (
+            <section className="property-section">
+              <div className="panel-heading">
+                <div>
+                  <p className="eyebrow">Custom fields</p>
+                  <h3>Selected properties for quick entry</h3>
+                </div>
+                {createFields.length > 4 ? (
+                  <button
+                    className="secondary"
+                    type="button"
+                    onClick={() => setShowAllCreateFields((current) => !current)}
+                  >
+                    {showAllCreateFields ? "Show fewer" : `Show all ${createFields.length}`}
+                  </button>
+                ) : null}
               </div>
-              {createFields.length > 4 ? (
-                <button
-                  className="secondary"
-                  type="button"
-                  onClick={() => setShowAllCreateFields((current) => !current)}
-                >
-                  {showAllCreateFields ? "Show fewer" : `Show all ${createFields.length}`}
-                </button>
-              ) : null}
-            </div>
-            <div className="property-grid">
-              {visibleCreateFields.map((field) => (
-                <label key={field.id} className="property-input-card">
-                  <span className="property-input-head">
-                    <span className="property-input-title">{field.label}</span>
-                    <span className="property-code">{field.internalName}</span>
-                  </span>
-                  <span className="property-badges">
-                    {getBadgeText(field).map((badge) => (
-                      <span key={`${field.id}-${badge}`} className="property-badge">
-                        {badge}
-                      </span>
-                    ))}
-                  </span>
-                  {renderPropertyInput(field, customValues[field.internalName] ?? "", (nextValue) =>
-                    setCustomValues((prev) => ({ ...prev, [field.internalName]: nextValue }))
-                  )}
-                </label>
-              ))}
-            </div>
-          </section>
-        ) : (
-          <div className="banner info">No custom contact fields yet. Create one below when you are ready.</div>
-        )}
+              <div className="property-grid">
+                {visibleCreateFields.map((field) => (
+                  <label key={field.id} className="property-input-card">
+                    <span className="property-input-head">
+                      <span className="property-input-title">{field.label}</span>
+                      <span className="property-code">{field.internalName}</span>
+                    </span>
+                    <span className="property-badges">
+                      {getBadgeText(field).map((badge) => (
+                        <span key={`${field.id}-${badge}`} className="property-badge">
+                          {badge}
+                        </span>
+                      ))}
+                    </span>
+                    {renderPropertyInput(field, customValues[field.internalName] ?? "", (nextValue) =>
+                      setCustomValues((prev) => ({ ...prev, [field.internalName]: nextValue }))
+                    )}
+                  </label>
+                ))}
+              </div>
+            </section>
+          ) : (
+            <div className="banner info">No custom contact fields yet. Create one below when you are ready.</div>
+          )}
 
-        <button className="primary" type="submit" disabled={busy}>
-          {busy ? "Creating…" : "Create contact"}
-        </button>
-      </form>
+          <button className="primary" type="submit" disabled={busy}>
+            {busy ? "Creating…" : "Create contact"}
+          </button>
+        </form>
+      </dialog>
 
-      <div className="table-wrap">
+      {!isListView ? (
+        <>
+          <BoardSearchBar
+            value={boardSearchInput}
+            onChange={setBoardSearchInput}
+            onApply={() => setBoardSearchQuery(boardSearchInput.trim())}
+            onClear={() => {
+              setBoardSearchInput("");
+              setBoardSearchQuery("");
+            }}
+          />
+          <KanbanBoard
+            objectType="contact"
+            detailPath={(id) => `/contacts/${id}`}
+            searchQuery={boardSearchQuery}
+            refreshKey={boardRefreshKey}
+          />
+        </>
+      ) : null}
+
+      {isListView ? <div className="table-wrap">
         <div className="topbar topbar-wrap">
           <label className="filter-field">
             Filter by contact or company
@@ -626,7 +668,7 @@ export function ContactsPage() {
             Next
           </button>
         </div>
-      </div>
+      </div> : null}
 
       <section id="contact-property-manager" className="panel" style={{ marginTop: 18 }}>
         <div className="panel-heading">

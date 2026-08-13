@@ -7,7 +7,7 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/hubspot.test.ts src/email-tracking.test.ts src/contact-identities.test.ts src/regional-policy.test.ts",
+    "test": "tsx --test src/hubspot.test.ts src/email-tracking.test.ts src/contact-identities.test.ts src/regional-policy.test.ts src/board.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:verify:regional": "tsx scripts/verify-regional-schemas.ts"

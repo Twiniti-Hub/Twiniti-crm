@@ -45,10 +45,12 @@ test("new user can create an account and reach authenticated billing", async ({ 
   await page.goto(`${appOrigin}/contacts`);
   await expect(page.locator("body")).toContainText(/Contacts/i, { timeout: 30_000 });
   const contactEmail = `e2e-contact-${runId}@example.test`;
-  await page.getByLabel("Email", { exact: true }).fill(contactEmail);
-  await page.getByLabel("First name", { exact: true }).fill("E2E");
-  await page.getByLabel("Last name", { exact: true }).fill("Contact");
-  await page.getByRole("button", { name: "Create contact", exact: true }).click();
-  await expect(page.getByRole("link", { name: contactEmail })).toBeVisible();
-  await expect(page.locator("tbody")).toContainText("E2E Contact");
+  await page.getByRole("button", { name: "New contact", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("Email", { exact: true }).fill(contactEmail);
+  await dialog.getByLabel("First name", { exact: true }).fill("E2E");
+  await dialog.getByLabel("Last name", { exact: true }).fill("Contact");
+  await dialog.getByRole("button", { name: "Create contact", exact: true }).click();
+  await expect(page.getByRole("link", { name: /E2E Contact|e2e-contact-/i }).first()).toBeVisible({ timeout: 15_000 });
 });

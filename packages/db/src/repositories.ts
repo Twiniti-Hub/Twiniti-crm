@@ -1268,6 +1268,7 @@ export async function upsertCompanyByName(
       domain: input.domain ?? null,
       domainNormalized: normalizeDomain(input.domain),
       industry: input.industry ?? null,
+      lifecycleStage: "prospect",
       properties: input.properties ?? {}
     }).returning();
     return { row, created: true as const };
@@ -1531,6 +1532,8 @@ export async function getContactPropertyDeletionImpact(
       sql`(
         coalesce(${savedViews.filterAst}::text, '') ilike ${directReferencePattern} escape '\\'
         or coalesce(${savedViews.columns}::text, '') ilike ${plainReferencePattern} escape '\\'
+        or coalesce(${savedViews.boardConfig}::text, '') ilike ${plainReferencePattern} escape '\\'
+        or coalesce(${savedViews.boardConfig}::text, '') ilike ${directReferencePattern} escape '\\'
       )`
     ))
   ]);

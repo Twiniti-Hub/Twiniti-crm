@@ -6,6 +6,7 @@ import {
   createCompanySchema,
   companySearchSchema,
   type ContactSearch,
+  updateCompanySchema,
   updateContactSchema,
   upsertContactSchema
 } from "@twiniti/contracts";
@@ -15,6 +16,7 @@ import {
   countContacts,
   contactCompanyAssociations,
   contacts as contactsTable,
+  createCompanyRecord,
   createContact,
   customerEvents,
   findContactByEmail,
@@ -22,10 +24,10 @@ import {
   getContactPropertyHistory,
   getContactTimeline,
   listCompanies,
-  normalizeDomain,
   normalizeEmail,
   searchContacts,
   suppressionEntries,
+  updateCompanyRecord,
   updateContact,
   type Db
 } from "@twiniti/db";
@@ -60,16 +62,20 @@ function mapCompany(row: {
   name: string;
   domain: string | null;
   industry: string | null;
+  lifecycleStage?: string | null;
   properties: unknown;
   version: number;
+  updatedAt?: Date;
 }) {
   return {
     id: row.id,
     name: row.name,
     domain: row.domain,
     industry: row.industry,
+    lifecycleStage: row.lifecycleStage ?? null,
     properties: (row.properties ?? {}) as Record<string, unknown>,
-    version: row.version
+    version: row.version,
+    updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : undefined
   };
 }
 
@@ -255,7 +261,7 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
         countCompanies(db, requireOrgId(actor), { query: query.query })
       ]);
       return {
-        data,
+        data: data.map(mapCompany),
         meta: {
           limit: query.limit,
           page: query.page,
@@ -309,17 +315,41 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
       const actor = requireActor(request);
       requireUserRole(actor, "member");
       const input = createCompanySchema.parse(request.body);
-      const [row] = await db.insert(companies).values({
+      const row = await createCompanyRecord(db, {
         organizationId: requireOrgId(actor),
         name: input.name,
         domain: input.domain ?? null,
-        domainNormalized: normalizeDomain(input.domain),
         industry: input.industry ?? null,
-        properties: input.properties ?? {}
-      }).returning();
+        lifecycleStage: input.lifecycleStage,
+        properties: input.properties ?? {},
+        change: { actorType: actor.type, actorId: actor.id, source: "api.company.create" }
+      });
       await audit(db, actor, "company.create", "company", row.id);
       reply.code(201);
-      return { data: row };
+      return { data: mapCompany(row) };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.patch("/api/v1/companies/:id", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireUserRole(actor, "member");
+      const { id } = request.params as { id: string };
+      const input = updateCompanySchema.parse(request.body);
+      const result = await updateCompanyRecord(db, requireOrgId(actor), id, {
+        ...input,
+        change: { actorType: actor.type, actorId: actor.id, source: "api.company.update" }
+      });
+      if (!result) return reply.code(404).send({ error: { code: "not_found", message: "Company not found" } });
+      if (result.conflict) {
+        return reply.code(409).send({
+          error: { code: "version_conflict", message: "Company version conflict", details: { current: mapCompany(result.current) } }
+        });
+      }
+      await audit(db, actor, "company.update", "company", result.row.id);
+      return { data: mapCompany(result.row) };
     } catch (error) {
       return sendError(reply, error);
     }

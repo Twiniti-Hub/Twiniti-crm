@@ -147,6 +147,7 @@ export const companySchema = z.object({
   name: z.string(),
   domain: z.string().nullable(),
   industry: z.string().nullable(),
+  lifecycleStage: z.string().nullable(),
   properties: z.record(propertyValueSchema)
 });
 
@@ -154,11 +155,123 @@ export const createCompanySchema = z.object({
   name: z.string().trim().min(1).max(200),
   domain: z.string().trim().max(255).optional(),
   industry: z.string().trim().max(120).optional(),
+  lifecycleStage: z.string().trim().max(80).optional(),
   properties: z.record(propertyValueSchema).default({})
 });
 
 export const updateCompanySchema = createCompanySchema.partial().extend({
   version: z.number().int().nonnegative().optional()
+});
+
+export const boardPresentationSchema = z.enum(["board", "list"]);
+export const boardVisibilitySchema = z.enum(["private", "shared"]);
+export const boardObjectTypeSchema = z.enum(["contact", "company"]);
+
+export const boardLaneSchema = z.object({
+  id: z.string().trim().min(1).max(80),
+  label: z.string().trim().min(1).max(120),
+  value: z.string().trim().max(80).nullable(),
+  kind: z.enum(["unassigned", "value", "other"])
+});
+
+export const boardSortSchema = z.object({
+  field: z.string().trim().min(1).max(80).default("updated_at"),
+  direction: z.enum(["asc", "desc"]).default("desc")
+});
+
+export const boardConfigSchema = z.object({
+  groupingField: z.string().trim().min(1).max(120).default("lifecycle_stage"),
+  lanes: z.array(boardLaneSchema).min(1).max(12),
+  cardFields: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
+  sort: boardSortSchema.default({ field: "updated_at", direction: "desc" }),
+  filters: z.record(z.unknown()).default({})
+});
+
+export const boardViewSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  objectType: boardObjectTypeSchema,
+  presentation: boardPresentationSchema,
+  visibility: boardVisibilitySchema,
+  boardConfig: boardConfigSchema,
+  filterAst: z.record(z.unknown()).default({}),
+  columns: z.array(z.unknown()).default([]),
+  createdBy: z.string(),
+  version: z.number().int().nonnegative(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  systemDefault: z.boolean().optional()
+});
+
+export const createBoardViewSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  objectType: boardObjectTypeSchema,
+  presentation: boardPresentationSchema.default("board"),
+  visibility: boardVisibilitySchema.default("private"),
+  boardConfig: boardConfigSchema,
+  filterAst: z.record(z.unknown()).default({}),
+  columns: z.array(z.unknown()).default([])
+});
+
+export const updateBoardViewSchema = z.object({
+  name: z.string().trim().min(1).max(160).optional(),
+  visibility: boardVisibilitySchema.optional(),
+  boardConfig: boardConfigSchema.optional(),
+  filterAst: z.record(z.unknown()).optional(),
+  columns: z.array(z.unknown()).optional(),
+  version: z.number().int().nonnegative().optional()
+});
+
+export const boardPreferenceSchema = z.object({
+  objectType: boardObjectTypeSchema,
+  presentation: boardPresentationSchema.default("board"),
+  viewId: z.string().uuid().nullable()
+});
+
+export const boardCardsQuerySchema = z.object({
+  objectType: boardObjectTypeSchema,
+  viewId: z.string().uuid().optional(),
+  laneId: z.string().trim().min(1).max(80),
+  query: z.string().trim().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  cursor: z.string().optional()
+});
+
+export const boardCountsQuerySchema = z.object({
+  objectType: boardObjectTypeSchema,
+  viewId: z.string().uuid().optional(),
+  query: z.string().trim().max(200).optional()
+});
+
+export const boardMoveSchema = z.object({
+  objectType: boardObjectTypeSchema,
+  recordId: z.string().uuid(),
+  laneId: z.string().trim().min(1).max(80),
+  version: z.number().int().nonnegative(),
+  viewId: z.string().uuid().optional()
+});
+
+export const contactBoardCardSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  email: z.string().email(),
+  primaryCompany: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
+  lifecycleStage: z.string().nullable(),
+  updatedAt: z.string(),
+  version: z.number().int().nonnegative(),
+  fields: z.record(z.unknown()).default({})
+});
+
+export const companyBoardCardSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  domain: z.string().nullable(),
+  industry: z.string().nullable(),
+  contactCount: z.number().int().nonnegative(),
+  lifecycleStage: z.string().nullable(),
+  updatedAt: z.string(),
+  version: z.number().int().nonnegative(),
+  fields: z.record(z.unknown()).default({})
 });
 
 export const companySearchSchema = z.object({
@@ -537,6 +650,17 @@ export type Company = z.infer<typeof companySchema>;
 export type CreateCompany = z.infer<typeof createCompanySchema>;
 export type UpdateCompany = z.infer<typeof updateCompanySchema>;
 export type CompanySearch = z.infer<typeof companySearchSchema>;
+export type BoardView = z.infer<typeof boardViewSchema>;
+export type CreateBoardView = z.infer<typeof createBoardViewSchema>;
+export type UpdateBoardView = z.infer<typeof updateBoardViewSchema>;
+export type BoardPreference = z.infer<typeof boardPreferenceSchema>;
+export type BoardCardsQuery = z.infer<typeof boardCardsQuerySchema>;
+export type BoardCountsQuery = z.infer<typeof boardCountsQuerySchema>;
+export type BoardMove = z.infer<typeof boardMoveSchema>;
+export type ContactBoardCard = z.infer<typeof contactBoardCardSchema>;
+export type CompanyBoardCard = z.infer<typeof companyBoardCardSchema>;
+export type BoardConfig = z.infer<typeof boardConfigSchema>;
+export type BoardLane = z.infer<typeof boardLaneSchema>;
 export type PropertyDefinition = z.infer<typeof propertyDefinitionSchema>;
 export type CreatePropertyDefinition = z.infer<typeof createPropertyDefinitionSchema>;
 export type UpdatePropertyDefinition = z.infer<typeof updatePropertyDefinitionSchema>;

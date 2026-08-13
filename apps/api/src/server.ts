@@ -11,6 +11,7 @@ import { ensureBootstrapOrg, getDb, getPool, scopedDb } from "@twiniti/db";
 import { registerAuthHook, requireActor, requireSuperAdmin } from "./auth-hook.js";
 import { registerMcpRoutes } from "./mcp.js";
 import { registerBillingRoutes } from "./routes/billing.js";
+import { registerBoardRoutes } from "./routes/boards.js";
 import { registerCrmRoutes } from "./routes/crm.js";
 import { registerMarketingRoutes } from "./routes/marketing.js";
 import { registerOrganizationRoutes } from "./routes/organizations.js";
@@ -74,6 +75,7 @@ app.get("/api/v1/bootstrap", async (request, reply) => {
 await registerOrganizationRoutes(app, db, env);
 await registerBillingRoutes(app, db, env);
 await registerCrmRoutes(app, db);
+await registerBoardRoutes(app, db);
 await registerMarketingRoutes(app, db, env);
 await registerMcpRoutes(app, db, env, pool);
 

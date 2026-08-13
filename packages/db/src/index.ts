@@ -3,6 +3,8 @@ export * from "./schema.js";
 export * from "./repositories.js";
 export * from "./rls.js";
 export * from "./filters.js";
+export * from "./board.js";
+export * from "./board-repositories.js";
 export * from "./jobs.js";
 export * from "./hubspot.js";
 export * from "./email-tracking.js";

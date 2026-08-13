@@ -48,6 +48,8 @@ Grant only the scopes required by the integration. Examples include:
 - `campaigns:request_approval` — request campaign approval
 - `reports:read` — read reports
 
+Board and saved-view endpoints introduced for Contacts/Companies Kanban are **user-only** in this release. Agent credentials do not receive board-view scopes; continue using contact create/update/read for record changes.
+
 The credential is organization-bound. An agent does not choose an organization
 with a header or query parameter, and it cannot cross the organization or
 regional boundary of its credential. Revoke it from the Agents page if it is
