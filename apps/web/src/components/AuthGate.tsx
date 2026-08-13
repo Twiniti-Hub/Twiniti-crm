@@ -1,6 +1,6 @@
 import { useUser } from "@hexclave/react";
 import { HexclaveHandler } from "@hexclave/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router";
 import { api, setBrowserAuthorizationHeader } from "../lib/api";
 import type { Me } from "../lib/me";
@@ -21,6 +21,8 @@ export function AuthGate() {
   const location = useLocation();
   const [me, setMe] = useState<Me | null>(null);
   const [meError, setMeError] = useState<string | null>(null);
+  const meRef = useRef<Me | null>(null);
+  meRef.current = me;
   const userId =
     user && typeof user === "object" && "id" in user
       ? String((user as { id: unknown }).id)
@@ -39,8 +41,7 @@ export function AuthGate() {
     let settled = false;
 
     // Cookie-backed Hexclave sessions can authenticate /me without a bearer
-    // header. Fetch immediately; retry when the header later appears. Never
-    // block forever waiting for useAuthorizationHeader().
+    // header. Fetch immediately; retry when the header later appears.
     api("/api/v1/me")
       .then((res) => {
         if (cancelled) return;
@@ -52,8 +53,11 @@ export function AuthGate() {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : "Failed to load session";
         if (!authorizationHeader && /unauthorized|authentication required/i.test(message)) {
-          // Token still hydrating — stay on loading until header arrives and
-          // this effect re-runs, or the timeout below fires.
+          return;
+        }
+        // Soft-refresh failures must not tear down an already-loaded shell.
+        if (meRef.current) {
+          settled = true;
           return;
         }
         settled = true;
@@ -63,6 +67,8 @@ export function AuthGate() {
     const timeoutId = window.setTimeout(() => {
       if (cancelled || settled) return;
       settled = true;
+      // Never blank a working CRM shell because a background /me refresh stalled.
+      if (meRef.current) return;
       setMeError("Timed out loading workspace");
     }, 20_000);
 
@@ -70,10 +76,6 @@ export function AuthGate() {
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-    // Refresh when the Hexclave identity/token changes or the route changes
-    // (billing/setup gates). `me` is intentionally omitted so an existing shell
-    // is not blanked during soft refresh.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- me gates loading UI only
   }, [userId, authorizationHeader, location.pathname]);
 
   if (!user) {

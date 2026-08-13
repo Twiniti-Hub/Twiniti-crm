@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.10.47] - 2026-08-13
+
+- Soft `/api/v1/me` refresh no longer tears down a loaded CRM shell on timeout.
+- Slimmed Development E2E smoke to login + Contacts/Companies for a reliable
+  promotion gate (full route matrix and contact-create stay out of the gate).
+
 ## [0.10.46] - 2026-08-13
 
 - AuthGate loads `/api/v1/me` immediately via cookie session instead of waiting
