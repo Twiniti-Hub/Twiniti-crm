@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.10.38] - 2026-08-13
+
+- Fixed Companies Kanban lane queries failing when counting associated contacts
+  because Drizzle dropped table qualifiers inside the `contactCount` subquery.
+
 ## [0.10.37] - 2026-08-13
 
 - Made Kanban the default Contacts and Companies experience, with tables retained at `?view=list`.
