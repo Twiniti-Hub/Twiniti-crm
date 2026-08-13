@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.10.39] - 2026-08-13
+
+- Allowed system default board view ids (`system-contact-board`,
+  `system-company-board`) on Kanban counts, cards, and move request validation.
+
 ## [0.10.38] - 2026-08-13
 
 - Fixed Companies Kanban lane queries failing when counting associated contacts

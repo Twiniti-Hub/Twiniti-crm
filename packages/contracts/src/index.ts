@@ -187,8 +187,15 @@ export const boardConfigSchema = z.object({
   filters: z.record(z.unknown()).default({})
 });
 
+/** Persisted saved-view UUIDs, or synthetic system default board ids. */
+export const boardViewIdSchema = z.union([
+  z.string().uuid(),
+  z.literal("system-contact-board"),
+  z.literal("system-company-board")
+]);
+
 export const boardViewSchema = z.object({
-  id: z.string().uuid(),
+  id: boardViewIdSchema,
   name: z.string(),
   objectType: boardObjectTypeSchema,
   presentation: boardPresentationSchema,
@@ -225,12 +232,13 @@ export const updateBoardViewSchema = z.object({
 export const boardPreferenceSchema = z.object({
   objectType: boardObjectTypeSchema,
   presentation: boardPresentationSchema.default("board"),
+  // System default preference is stored as null (DB column is uuid).
   viewId: z.string().uuid().nullable()
 });
 
 export const boardCardsQuerySchema = z.object({
   objectType: boardObjectTypeSchema,
-  viewId: z.string().uuid().optional(),
+  viewId: boardViewIdSchema.optional(),
   laneId: z.string().trim().min(1).max(80),
   query: z.string().trim().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
@@ -239,7 +247,7 @@ export const boardCardsQuerySchema = z.object({
 
 export const boardCountsQuerySchema = z.object({
   objectType: boardObjectTypeSchema,
-  viewId: z.string().uuid().optional(),
+  viewId: boardViewIdSchema.optional(),
   query: z.string().trim().max(200).optional()
 });
 
@@ -248,7 +256,7 @@ export const boardMoveSchema = z.object({
   recordId: z.string().uuid(),
   laneId: z.string().trim().min(1).max(80),
   version: z.number().int().nonnegative(),
-  viewId: z.string().uuid().optional()
+  viewId: boardViewIdSchema.optional()
 });
 
 export const contactBoardCardSchema = z.object({
