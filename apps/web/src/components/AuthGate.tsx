@@ -31,7 +31,9 @@ export function AuthGate() {
       return;
     }
     let cancelled = false;
-    setLoadingMe(true);
+    // Only block the shell when we have no session payload yet. Path changes
+    // soft-refresh /me without tearing down the CRM UI.
+    setLoadingMe((current) => current || !me);
     api("/api/v1/me")
       .then((res) => {
         if (!cancelled) {
@@ -50,6 +52,8 @@ export function AuthGate() {
     return () => {
       cancelled = true;
     };
+    // Refresh when the Hexclave user changes or the route changes (billing/setup gates).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- me is only used to avoid blanking an existing shell
   }, [user, location.pathname]);
 
   if (!user) {

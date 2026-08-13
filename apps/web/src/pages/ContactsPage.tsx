@@ -194,6 +194,7 @@ export function ContactsPage() {
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
   const [boardViewId, setBoardViewId] = useState<string | null>(null);
   const [canManageShared, setCanManageShared] = useState(false);
+  const [listLoading, setListLoading] = useState(false);
   const [propertySearch, setPropertySearch] = useState("");
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [propertyEditor, setPropertyEditor] = useState<PropertyEditorState | null>(null);
@@ -248,7 +249,7 @@ export function ContactsPage() {
     [customDefinitions, selectedPropertyId]
   );
 
-  async function load(nextPage = page, nextPageSize = pageSize, nextQuery = searchQuery, listMode = isListView) {
+  async function loadProperties() {
     const propsRes = await api("/api/v1/properties?objectType=contact");
     const nextDefinitions = (propsRes.data ?? []) as PropertyDefinition[];
     setDefinitions(nextDefinitions);
@@ -258,7 +259,9 @@ export function ContactsPage() {
       if (current && available.some((definition) => definition.id === current)) return current;
       return available[0].id;
     });
-    if (!listMode) return;
+  }
+
+  async function loadContacts(nextPage = page, nextPageSize = pageSize, nextQuery = searchQuery) {
     const params = new URLSearchParams({
       limit: String(nextPageSize),
       page: String(nextPage)
@@ -269,8 +272,29 @@ export function ContactsPage() {
     setMeta((contactsRes.meta ?? null) as ContactsMeta | null);
   }
 
+  async function refreshAfterMutation(nextPage = page, nextPageSize = pageSize, nextQuery = searchQuery) {
+    await loadProperties();
+    if (isListView) await loadContacts(nextPage, nextPageSize, nextQuery);
+  }
+
   useEffect(() => {
-    load().catch((err) => setError(err instanceof Error ? err.message : "Failed to load contacts"));
+    loadProperties().catch((err) => setError(err instanceof Error ? err.message : "Failed to load properties"));
+  }, []);
+
+  useEffect(() => {
+    if (!isListView) return;
+    let cancelled = false;
+    setListLoading(true);
+    loadContacts()
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load contacts");
+      })
+      .finally(() => {
+        if (!cancelled) setListLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [page, pageSize, searchQuery, isListView]);
 
   useEffect(() => {
@@ -320,7 +344,7 @@ export function ContactsPage() {
       setCustomValues({});
       createDialogRef.current?.close();
       setBoardRefreshKey((current) => current + 1);
-      await load();
+      await refreshAfterMutation();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
     } finally {
@@ -358,7 +382,7 @@ export function ContactsPage() {
         optionsText: ""
       });
       setPropertyMessage(`Created ${created.label}.`);
-      await load(1, pageSize, searchQuery);
+      await refreshAfterMutation(1, pageSize, searchQuery);
       setSelectedPropertyId(created.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Property create failed");
@@ -387,7 +411,7 @@ export function ContactsPage() {
         })
       });
       setPropertyMessage(`Updated ${propertyEditor.label}.`);
-      await load(page, pageSize, searchQuery);
+      await refreshAfterMutation(page, pageSize, searchQuery);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Property update failed");
     } finally {
@@ -423,7 +447,7 @@ export function ContactsPage() {
         `Deleted ${deleteImpact.property.label} and removed values from ${deleteImpact.contactsWithValue} contacts.`
       );
       setDeleteImpact(null);
-      await load(page, pageSize, searchQuery);
+      await refreshAfterMutation(page, pageSize, searchQuery);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Property delete failed");
     } finally {
@@ -556,6 +580,7 @@ export function ContactsPage() {
           />
           <BoardSearchBar
             value={boardSearchInput}
+            appliedValue={boardSearchQuery}
             onChange={setBoardSearchInput}
             onApply={() => setBoardSearchQuery(boardSearchInput.trim())}
             onClear={() => {
@@ -574,6 +599,7 @@ export function ContactsPage() {
       ) : null}
 
       {isListView ? <div className="table-wrap">
+        {listLoading ? <div className="banner info">Loading contacts…</div> : null}
         <div className="topbar topbar-wrap">
           <label className="filter-field">
             Filter by contact or company

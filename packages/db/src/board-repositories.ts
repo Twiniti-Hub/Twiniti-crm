@@ -480,7 +480,18 @@ function contactSearchFilters(organizationId: string, query?: string): SQL[] {
       ilike(contacts.email, q),
       ilike(contacts.phone, q),
       ilike(contacts.firstName, q),
-      ilike(contacts.lastName, q)
+      ilike(contacts.lastName, q),
+      // Bare contacts.id avoids Drizzle dropping table qualifiers inside sql``.
+      sql`exists (
+        select 1
+        from contact_company_associations cca
+        inner join companies co on co.id = cca.company_id
+        where cca.contact_id = contacts.id
+          and cca.organization_id = ${organizationId}
+          and co.organization_id = ${organizationId}
+          and co.archived_at is null
+          and co.name ilike ${q}
+      )`
     )!);
   }
   return filters;

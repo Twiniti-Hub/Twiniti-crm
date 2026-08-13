@@ -201,7 +201,11 @@ export function KanbanBoard({ objectType, detailPath, searchQuery, refreshKey = 
   async function loadLane(laneId: string, cursor?: string | null, append = false, signal?: AbortSignal) {
     setLaneState((current) => ({
       ...current,
-      [laneId]: { ...current[laneId], loading: true }
+      [laneId]: {
+        ...(current[laneId] ?? { cards: [], nextCursor: null, loading: false, count: 0 }),
+        loading: true,
+        ...(append ? {} : { cards: [], nextCursor: null })
+      }
     }));
     try {
       const params = new URLSearchParams({
@@ -213,7 +217,13 @@ export function KanbanBoard({ objectType, detailPath, searchQuery, refreshKey = 
       if (resolvedViewId) params.set("viewId", resolvedViewId);
       if (cursor) params.set("cursor", cursor);
       const res = await api(`/api/v1/boards/cards?${params.toString()}`, signal ? { signal } : undefined);
-      if (signal?.aborted) return;
+      if (signal?.aborted) {
+        setLaneState((current) => ({
+          ...current,
+          [laneId]: { ...current[laneId], loading: false }
+        }));
+        return;
+      }
       const cards = (res.data ?? []) as BoardCard[];
       const nextCursor = (res.meta?.nextCursor as string | null | undefined) ?? null;
       setLaneState((current) => ({
@@ -226,21 +236,33 @@ export function KanbanBoard({ objectType, detailPath, searchQuery, refreshKey = 
         }
       }));
     } catch (err) {
-      if (signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
       setLaneState((current) => ({
         ...current,
         [laneId]: { ...current[laneId], loading: false }
       }));
+      if (signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
       throw err;
     }
   }
 
   async function reloadBoard(signal?: AbortSignal) {
     setError(null);
+    setLaneState((current) =>
+      Object.fromEntries(
+        lanes.map((lane) => [
+          lane.id,
+          {
+            cards: [],
+            nextCursor: null,
+            loading: true,
+            count: current[lane.id]?.count ?? 0
+          }
+        ])
+      )
+    );
     try {
       await loadCounts(signal);
       if (signal?.aborted) return;
-      // Load a few lanes at a time so a cold API/DB does not queue every lane at once.
       const concurrency = 3;
       for (let index = 0; index < lanes.length; index += concurrency) {
         if (signal?.aborted) return;
@@ -250,6 +272,11 @@ export function KanbanBoard({ objectType, detailPath, searchQuery, refreshKey = 
     } catch (err) {
       if (signal?.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
       setError(err instanceof Error ? err.message : "Failed to load board");
+      setLaneState((current) =>
+        Object.fromEntries(
+          Object.entries(current).map(([laneId, state]) => [laneId, { ...state, loading: false }])
+        )
+      );
     }
   }
 
@@ -360,11 +387,13 @@ export function KanbanBoard({ objectType, detailPath, searchQuery, refreshKey = 
 
 export function BoardSearchBar({
   value,
+  appliedValue = "",
   onChange,
   onApply,
   onClear
 }: {
   value: string;
+  appliedValue?: string;
   onChange: (value: string) => void;
   onApply: () => void;
   onClear: () => void;
@@ -373,6 +402,7 @@ export function BoardSearchBar({
     event.preventDefault();
     onApply();
   }
+  const canClear = Boolean(value.trim() || appliedValue.trim());
   return (
     <form className="kanban-toolbar" onSubmit={onSubmit}>
       <label className="filter-field">
@@ -380,15 +410,16 @@ export function BoardSearchBar({
         <input
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          placeholder="Filter cards"
+          placeholder="Filter by name, email, phone, company, or domain"
         />
       </label>
       <button className="secondary" type="submit">
         Apply
       </button>
-      <button className="secondary" type="button" onClick={onClear} disabled={!value}>
+      <button className="secondary" type="button" onClick={onClear} disabled={!canClear}>
         Clear
       </button>
+      {appliedValue.trim() ? <span className="muted">Filtered by “{appliedValue.trim()}”</span> : null}
     </form>
   );
 }

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.10.41] - 2026-08-13
+
+- Kept the CRM shell visible while soft-refreshing `/api/v1/me` on route changes
+  instead of flashing “Loading workspace…”.
+- Split Contacts property loading from list loading and added list busy states for
+  Contacts and Companies.
+- Fixed Kanban search so aborted reloads clear Loading, contact boards match
+  company names, and Clear resets the applied filter.
+
 ## [0.10.40] - 2026-08-13
 
 - Stopped Companies/Contacts Kanban from reloading twice when the default system
