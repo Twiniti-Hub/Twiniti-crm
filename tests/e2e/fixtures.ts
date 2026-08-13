@@ -2,6 +2,10 @@ import { test as base, expect, type Page } from "@playwright/test";
 
 async function waitForAuthenticatedShell(page: Page) {
   await expect(page).not.toHaveURL(/\/sign-in(?:[/?#]|$)/, { timeout: 60_000 });
+  const analyticsAllow = page.getByRole("button", { name: /Allow analytics|Decline/i });
+  if (await analyticsAllow.first().isVisible().catch(() => false)) {
+    await analyticsAllow.filter({ hasText: /Decline/i }).click().catch(() => undefined);
+  }
   await expect(page.locator("body")).toContainText(
     /Sign out|Name your company|Activate your client workspace|Billing is active|Super Admin|Contacts|Overview|Companies/i,
     { timeout: 90_000 }

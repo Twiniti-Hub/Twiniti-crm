@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.45] - 2026-08-13
+
+- AuthGate waits for the Hexclave authorization header before calling `/api/v1/me`,
+  so full reloads no longer stick on “Loading workspace…”.
+- Development E2E smoke now runs only `crm.spec.ts` (Playwright no longer receives
+  a bare `--` that ignored the file filter and also executed signup).
+
 ## [0.10.44] - 2026-08-13
 
 - Hardened Development E2E smoke for Kanban: longer timeouts, shell readiness
