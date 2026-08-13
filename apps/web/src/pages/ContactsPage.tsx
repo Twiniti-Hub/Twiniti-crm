@@ -195,6 +195,9 @@ export function ContactsPage() {
   const [boardViewId, setBoardViewId] = useState<string | null>(null);
   const [canManageShared, setCanManageShared] = useState(false);
   const [listLoading, setListLoading] = useState(false);
+  const [showPropertyManager, setShowPropertyManager] = useState(
+    () => typeof window !== "undefined" && window.location.hash === "#contact-property-manager"
+  );
   const [propertySearch, setPropertySearch] = useState("");
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [propertyEditor, setPropertyEditor] = useState<PropertyEditorState | null>(null);
@@ -278,8 +281,11 @@ export function ContactsPage() {
   }
 
   useEffect(() => {
+    // Keep Contacts Kanban as light as Companies: only fetch property definitions
+    // when the list needs columns, create dialog needs fields, or the manager is open.
+    if (!isListView && !showPropertyManager) return;
     loadProperties().catch((err) => setError(err instanceof Error ? err.message : "Failed to load properties"));
-  }, []);
+  }, [isListView, showPropertyManager]);
 
   useEffect(() => {
     if (!isListView) return;
@@ -474,12 +480,27 @@ export function ContactsPage() {
               List
             </Link>
           </div>
-          <button className="primary" type="button" onClick={() => createDialogRef.current?.showModal()}>
+          <button
+            className="primary"
+            type="button"
+            onClick={() => {
+              void loadProperties()
+                .catch((err) => setError(err instanceof Error ? err.message : "Failed to load properties"))
+                .finally(() => createDialogRef.current?.showModal());
+            }}
+          >
             New contact
           </button>
-          <a className="secondary" href="#contact-property-manager">
+          <button
+            className="secondary"
+            type="button"
+            onClick={() => {
+              setShowPropertyManager(true);
+              window.location.hash = "contact-property-manager";
+            }}
+          >
             Manage fields
-          </a>
+          </button>
           <Link className="secondary" to="/import">
             CSV import
           </Link>
@@ -716,14 +737,20 @@ export function ContactsPage() {
         </div>
       </div> : null}
 
+      {showPropertyManager ? (
       <section id="contact-property-manager" className="panel" style={{ marginTop: 18 }}>
         <div className="panel-heading">
           <div>
             <p className="eyebrow">Property manager</p>
             <h3>Refine contact field definitions</h3>
           </div>
-          <span className="muted">Edit labels, groups, field types, and archive stale fields without touching contact records.</span>
+          <button className="secondary" type="button" onClick={() => setShowPropertyManager(false)}>
+            Hide
+          </button>
         </div>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Edit labels, groups, field types, and archive stale fields without touching contact records.
+        </p>
         <div className="manager-layout">
           <div className="manager-list">
             <label>
@@ -961,6 +988,7 @@ export function ContactsPage() {
           </div>
         </div>
       </section>
+      ) : null}
     </>
   );
 }

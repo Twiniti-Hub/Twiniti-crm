@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.42] - 2026-08-13
+
+- Fixed Contacts list/company search failing with ambiguous SQL in the
+  association exists-subquery (Companies list was unaffected).
+- Stopped Contacts Kanban from eagerly loading the property manager; fields load
+  only for list columns, create, or Manage fields.
+
 ## [0.10.41] - 2026-08-13
 
 - Kept the CRM shell visible while soft-refreshing `/api/v1/me` on route changes
