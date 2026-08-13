@@ -1194,15 +1194,16 @@ function buildContactSearchFilters(
       ilike(contacts.phone, q),
       ilike(contacts.firstName, q),
       ilike(contacts.lastName, q),
+      // Bare contacts.id / table aliases: Drizzle column refs inside sql`` drop qualifiers.
       sql`exists (
         select 1
-        from ${contactCompanyAssociations}
-        inner join ${companies} on ${companies.id} = ${contactCompanyAssociations.companyId}
-        where ${contactCompanyAssociations.contactId} = ${contacts.id}
-          and ${contactCompanyAssociations.organizationId} = ${organizationId}
-          and ${companies.organizationId} = ${organizationId}
-          and ${companies.archivedAt} is null
-          and ${companies.name} ilike ${q}
+        from contact_company_associations cca
+        inner join companies co on co.id = cca.company_id
+        where cca.contact_id = contacts.id
+          and cca.organization_id = ${organizationId}
+          and co.organization_id = ${organizationId}
+          and co.archived_at is null
+          and co.name ilike ${q}
       )`
     )!);
   }
