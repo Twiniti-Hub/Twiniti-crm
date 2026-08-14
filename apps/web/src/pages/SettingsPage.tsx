@@ -53,6 +53,7 @@ export function SettingsPage() {
   const [editFromName, setEditFromName] = useState("");
   const [editApiKey, setEditApiKey] = useState("");
   const [editWebhookSecret, setEditWebhookSecret] = useState("");
+  const [pendingDeleteResendId, setPendingDeleteResendId] = useState<string | null>(null);
 
   const isAdmin = me?.role === "admin" || me?.isSuperAdmin === true;
 
@@ -142,26 +143,37 @@ export function SettingsPage() {
   }
 
   async function deleteResendDomain(id: string, domain: string) {
-    if (!window.confirm(`Remove Resend domain ${domain}? Select another default first if this is the only domain.`)) return;
-    setError(null); setMessage(null);
+    setError(null);
+    setMessage(null);
+    setBusy(true);
     try {
       await api(`/api/v1/organization/integrations/resend/domains/${id}`, { method: "DELETE" });
       if (editingResendId === id) cancelEditResendDomain();
+      if (pendingDeleteResendId === id) setPendingDeleteResendId(null);
       setMessage(`Removed ${domain}.`);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not remove Resend domain");
+    } finally {
+      setBusy(false);
     }
   }
 
   async function makeDefaultResendDomain(id: string) {
-    setError(null); setMessage(null);
+    setError(null);
+    setMessage(null);
+    setBusy(true);
     try {
-      await api(`/api/v1/organization/integrations/resend/domains/${id}/default`, { method: "POST" });
+      await api(`/api/v1/organization/integrations/resend/domains/${id}/default`, {
+        method: "POST",
+        body: "{}"
+      });
       setMessage("Default Resend domain updated. BCC tracking uses the default domain.");
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not select default domain");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -337,12 +349,23 @@ export function SettingsPage() {
                         <code style={{ fontSize: 12 }}>{resendWebhookUrl(domain.domain)}</code>
                       </td>
                       <td className="row-actions">
-                        <button className="secondary" type="button" onClick={() => startEditResendDomain(domain)}>Edit</button>
+                        <button className="secondary" type="button" disabled={busy} onClick={() => startEditResendDomain(domain)}>Edit</button>
                         {!domain.isDefault ? (
-                          <button className="secondary" type="button" onClick={() => void makeDefaultResendDomain(domain.id)}>Make default</button>
+                          <button className="secondary" type="button" disabled={busy} onClick={() => void makeDefaultResendDomain(domain.id)}>
+                            {busy ? "Updating…" : "Make default"}
+                          </button>
                         ) : null}
                         {!domain.isDefault ? (
-                          <button className="secondary" type="button" onClick={() => void deleteResendDomain(domain.id, domain.domain)}>Remove</button>
+                          pendingDeleteResendId === domain.id ? (
+                            <>
+                              <button className="primary" type="button" disabled={busy} onClick={() => void deleteResendDomain(domain.id, domain.domain)}>
+                                {busy ? "Removing…" : "Confirm remove"}
+                              </button>
+                              <button className="secondary" type="button" disabled={busy} onClick={() => setPendingDeleteResendId(null)}>Cancel</button>
+                            </>
+                          ) : (
+                            <button className="secondary" type="button" disabled={busy} onClick={() => setPendingDeleteResendId(domain.id)}>Remove</button>
+                          )
                         ) : null}
                       </td>
                     </tr>
