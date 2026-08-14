@@ -149,7 +149,84 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
   });
 
   app.post("/api/v1/organization/integrations/resend/domains/:id/default", async (request, reply) => {
-    try { const actor = requireActor(request); requireUserRole(actor, "admin"); if (!actor.organizationId) throw new Error("Organization required"); const domain = await getOrganizationResendDomain(db, actor.organizationId, (request.params as { id: string }).id); if (!domain || !domain.active || domain.verificationStatus !== "verified") return reply.code(409).send({ error: { code: "invalid_default_domain", message: "Only active verified domains can be default" } }); await db.update(organizationResendDomains).set({ isDefault: false, updatedAt: new Date() }).where(eq(organizationResendDomains.organizationId, actor.organizationId)); await db.update(organizationResendDomains).set({ isDefault: true, updatedAt: new Date() }).where(and(eq(organizationResendDomains.id, domain.id), eq(organizationResendDomains.organizationId, actor.organizationId))); return { data: { id: domain.id, isDefault: true } }; } catch (error) { return sendError(reply, error); }
+    try { const actor = requireActor(request); requireUserRole(actor, "admin"); if (!actor.organizationId) throw new Error("Organization required"); const domain = await getOrganizationResendDomain(db, actor.organizationId, (request.params as { id: string }).id); if (!domain || !domain.active || domain.verificationStatus !== "verified") return reply.code(409).send({ error: { code: "invalid_default_domain", message: "Only active verified domains can be default" } }); await db.update(organizationResendDomains).set({ isDefault: false, updatedAt: new Date() }).where(eq(organizationResendDomains.organizationId, actor.organizationId)); await db.update(organizationResendDomains).set({ isDefault: true, updatedAt: new Date() }).where(and(eq(organizationResendDomains.id, domain.id), eq(organizationResendDomains.organizationId, actor.organizationId))); await writeAudit(db, { organizationId: actor.organizationId, actorType: actor.type, actorId: actor.id, action: "resend.domain.default", entityType: "resend_domain", entityId: domain.id, metadata: { domain: domain.domain } }); return { data: { id: domain.id, isDefault: true } }; } catch (error) { return sendError(reply, error); }
+  });
+
+  app.patch("/api/v1/organization/integrations/resend/domains/:id", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireUserRole(actor, "admin");
+      if (!actor.organizationId || !env.RESEND_CREDENTIAL_ENCRYPTION_KEY) throw new Error("Resend credential encryption is not configured");
+      const id = (request.params as { id: string }).id;
+      const current = await getOrganizationResendDomain(db, actor.organizationId, id);
+      if (!current || !current.active) return reply.code(404).send({ error: { code: "not_found", message: "Resend domain not found" } });
+      const body = request.body as { fromEmail?: string; fromName?: string | null; apiKey?: string; webhookSecret?: string };
+      const fromEmail = body.fromEmail?.trim().toLowerCase();
+      const fromName = body.fromName === undefined ? undefined : (body.fromName?.trim() || null);
+      const apiKey = body.apiKey?.trim();
+      const webhookSecret = body.webhookSecret?.trim();
+      if (fromEmail && !fromEmail.endsWith(`@${current.domain}`)) {
+        return reply.code(400).send({ error: { code: "invalid_resend_domain", message: "Sender address must use the connected domain" } });
+      }
+      if (!fromEmail && fromName === undefined && !apiKey && !webhookSecret) {
+        return reply.code(400).send({ error: { code: "invalid_resend_domain", message: "No updates were provided" } });
+      }
+      const updates: {
+        fromEmail?: string;
+        fromName?: string | null;
+        apiKeyCiphertext?: string;
+        webhookSecretCiphertext?: string | null;
+        resendDomainId?: string | null;
+        verificationStatus?: string;
+        verifiedAt?: Date;
+        lastValidatedAt?: Date;
+        rotatedAt?: Date;
+        updatedAt: Date;
+      } = { updatedAt: new Date() };
+      if (fromEmail) updates.fromEmail = fromEmail;
+      if (fromName !== undefined) updates.fromName = fromName;
+      if (apiKey) {
+        const validation = await validateResendApiKey(apiKey, current.domain);
+        if (!validation.valid || !validation.verified) {
+          return reply.code(422).send({ error: { code: "resend_domain_unverified", message: "Resend credentials are invalid or the domain is not verified" } });
+        }
+        updates.apiKeyCiphertext = encryptResendSecret(apiKey, env.RESEND_CREDENTIAL_ENCRYPTION_KEY);
+        updates.resendDomainId = validation.domainId ?? current.resendDomainId;
+        updates.verificationStatus = "verified";
+        updates.verifiedAt = new Date();
+        updates.lastValidatedAt = new Date();
+        updates.rotatedAt = new Date();
+      }
+      if (webhookSecret) {
+        updates.webhookSecretCiphertext = encryptResendSecret(webhookSecret, env.RESEND_CREDENTIAL_ENCRYPTION_KEY);
+      }
+      await db.update(organizationResendDomains).set(updates).where(and(eq(organizationResendDomains.id, id), eq(organizationResendDomains.organizationId, actor.organizationId)));
+      await writeAudit(db, {
+        organizationId: actor.organizationId,
+        actorType: actor.type,
+        actorId: actor.id,
+        action: "resend.domain.update",
+        entityType: "resend_domain",
+        entityId: id,
+        metadata: {
+          domain: current.domain,
+          fromEmail: fromEmail ?? current.fromEmail,
+          rotatedApiKey: Boolean(apiKey),
+          updatedWebhookSecret: Boolean(webhookSecret)
+        }
+      });
+      return {
+        data: {
+          id,
+          domain: current.domain,
+          fromEmail: fromEmail ?? current.fromEmail,
+          fromName: fromName !== undefined ? fromName : current.fromName,
+          verificationStatus: updates.verificationStatus ?? current.verificationStatus,
+          isDefault: current.isDefault,
+          active: current.active
+        }
+      };
+    } catch (error) { return sendError(reply, error); }
   });
 
   app.post("/api/v1/organization/integrations/resend/domains/:id/rotate", async (request, reply) => {
@@ -171,6 +248,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       if (!current) return reply.code(404).send({ error: { code: "not_found", message: "Resend domain not found" } });
       if (current.isDefault && current.active) return reply.code(409).send({ error: { code: "default_domain_required", message: "Select another default domain before removing this domain" } });
       await db.delete(organizationResendDomains).where(and(eq(organizationResendDomains.id, id), eq(organizationResendDomains.organizationId, actor.organizationId)));
+      await writeAudit(db, { organizationId: actor.organizationId, actorType: actor.type, actorId: actor.id, action: "resend.domain.delete", entityType: "resend_domain", entityId: id, metadata: { domain: current.domain } });
       return { data: { id, deleted: true } };
     } catch (error) { return sendError(reply, error); }
   });
