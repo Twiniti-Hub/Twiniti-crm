@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.10.50] - 2026-08-14
+
+- Fix Resend domain **Make default** and **Remove** actions in Settings (empty POST body and inline remove confirmation).
+- Only send `Content-Type: application/json` when the request has a body so DELETE calls are not rejected with 400.
+
 ## [0.10.49] - 2026-08-14
 
 - Settings Resend domains: list, edit, make default, add, and remove connected domains.
