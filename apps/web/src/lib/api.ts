@@ -24,7 +24,10 @@ export function clearWorkspaceContextId() {
 
 export async function api(path: string, init?: RequestInit) {
   const headers = new Headers(init?.headers);
-  if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  const hasBody = init?.body !== undefined && init?.body !== null && init?.body !== "";
+  if (hasBody && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
   if (!headers.has("Authorization") && browserAuthorizationHeader) {
     headers.set("Authorization", browserAuthorizationHeader);
   }
