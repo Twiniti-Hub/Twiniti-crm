@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.48] - 2026-08-14
+
+- Personal BCC email tracking addresses now use each organization's default
+  verified Resend domain instead of a platform-wide inbound domain.
+- Tracking addresses are created only after an organization connects Resend;
+  Settings explains the requirement for admins and members.
+- Removed `EMAIL_TRACKING_DOMAIN` platform configuration.
+
 ## [0.10.47] - 2026-08-13
 
 - Soft `/api/v1/me` refresh no longer tears down a loaded CRM shell on timeout.

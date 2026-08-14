@@ -20,7 +20,7 @@ type Invitation = {
   sent?: boolean;
 };
 
-type TrackingAddress = { address: string; domain: string };
+type TrackingAddress = { address: string; domain: string; resendDomainId?: string };
 type ResendDomain = { id: string; domain: string; fromEmail: string; fromName: string | null; verificationStatus: string; isDefault: boolean; active: boolean };
 
 export function SettingsPage() {
@@ -33,6 +33,7 @@ export function SettingsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [trackingAddress, setTrackingAddress] = useState<TrackingAddress | null>(null);
+  const [trackingResendRequired, setTrackingResendRequired] = useState(false);
   const [copied, setCopied] = useState(false);
   const [resendDomains, setResendDomains] = useState<ResendDomain[]>([]);
   const [resendDomain, setResendDomain] = useState("");
@@ -51,8 +52,10 @@ export function SettingsPage() {
     try {
       const trackingRes = await api("/api/v1/email/tracking-address");
       setTrackingAddress(trackingRes.data as TrackingAddress);
+      setTrackingResendRequired(false);
     } catch {
       setTrackingAddress(null);
+      setTrackingResendRequired(true);
     }
     const membersRes = await api("/api/v1/organization/members");
     setMembers(membersRes.data as Member[]);
@@ -205,6 +208,12 @@ export function SettingsPage() {
               {copied ? "Copied" : "Copy address"}
             </button>
           </div>
+        ) : trackingResendRequired ? (
+          <p className="muted">
+            {isAdmin
+              ? "Connect a verified Resend domain in Email delivery below to enable your personal BCC tracking address. Configure receiving (MX records) and an email.received webhook for that domain."
+              : "Email tracking is unavailable until a company admin connects a verified Resend domain in Email delivery."}
+          </p>
         ) : (
           <p className="muted">Tracking address unavailable until the email tracking migration is applied.</p>
         )}

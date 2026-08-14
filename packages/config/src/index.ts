@@ -27,7 +27,6 @@ export const envSchema = z.object({
   HEXCLAVE_SECRET_SERVER_KEY: z.string().optional().default(""),
   VITE_HEXCLAVE_PROJECT_ID: z.string().optional().default(""),
   RESEND_CREDENTIAL_ENCRYPTION_KEY: z.string().optional().default(""),
-  EMAIL_TRACKING_DOMAIN: z.string().default("inbound.twiniti.ai"),
   STRIPE_SECRET_KEY: z.string().optional().default(""),
   STRIPE_WEBHOOK_SECRET: z.string().optional().default(""),
   STRIPE_PRICE_ID: z.string().optional().default(""),
