@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.10.50] - 2026-08-14
+
+- Fix Resend domain **Make default** and **Remove** actions in Settings (empty POST body and inline remove confirmation).
+
 ## [0.10.49] - 2026-08-14
 
 - Settings Resend domains: list, edit, make default, add, and remove connected domains.
