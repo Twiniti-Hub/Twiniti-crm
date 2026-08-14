@@ -4,7 +4,10 @@ import {
   classifyEmailActivity,
   getEmailHeader,
   getTrackingToken,
-  parseEmailAddresses
+  getTrackingTokenFromValues,
+  parseEmailAddresses,
+  parseTrackingAddress,
+  parseTrackingAddressFromValues
 } from "./email-tracking.js";
 
 test("parses display-name addresses and tracking tokens", () => {
@@ -12,7 +15,17 @@ test("parses display-name addresses and tracking tokens", () => {
     "george@example.com",
     "other@example.com"
   ]);
-  assert.equal(getTrackingToken(["Loop <log_abc123@inbound.twiniti.ai>"], "inbound.twiniti.ai"), "abc123");
+  assert.deepEqual(parseTrackingAddress("Loop <log_abc123@customer.example.com>"), {
+    token: "abc123",
+    domain: "customer.example.com"
+  });
+  assert.deepEqual(
+    parseTrackingAddressFromValues(["customer@example.com", "log_abc123@customer.example.com"]),
+    { token: "abc123", domain: "customer.example.com" }
+  );
+  assert.equal(getTrackingToken("log_abc123@customer.example.com", "customer.example.com"), "abc123");
+  assert.equal(getTrackingTokenFromValues(["Loop <log_abc123@customer.example.com>"], "customer.example.com"), "abc123");
+  assert.equal(getTrackingToken("log_abc123@customer.example.com", "other.example.com"), null);
 });
 
 test("matches reply metadata and classifies inbound email", () => {

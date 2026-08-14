@@ -28,8 +28,6 @@ services:
         sync: false
       - key: RESEND_CREDENTIAL_ENCRYPTION_KEY
         sync: false
-      - key: EMAIL_TRACKING_DOMAIN
-        sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
@@ -92,8 +90,6 @@ services:
         sync: false
       - key: RESEND_CREDENTIAL_ENCRYPTION_KEY
         sync: false
-      - key: EMAIL_TRACKING_DOMAIN
-        sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
@@ -155,8 +151,6 @@ services:
       - key: VITE_GOOGLE_ANALYTICS_ID
         sync: false
       - key: RESEND_CREDENTIAL_ENCRYPTION_KEY
-        sync: false
-      - key: EMAIL_TRACKING_DOMAIN
         sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
@@ -265,8 +259,6 @@ services:
       - key: DATABASE_URL_Dev_UK
         sync: false
       - key: RESEND_CREDENTIAL_ENCRYPTION_KEY
-        sync: false
-      - key: EMAIL_TRACKING_DOMAIN
         sync: false
       - key: LICENSE_API_URL
         sync: false

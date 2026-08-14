@@ -150,7 +150,7 @@ The companies list now matches the contacts list with `25`, `50`, or `100` row p
 
 ## Email activity tracking
 
-Each signed-in user can copy a personal BCC address from Settings. BCCing that address records the email against matching contacts, including replies, and shows it in the contact timeline. The `EMAIL_TRACKING_DOMAIN` must be a Resend receiving domain with its MX records configured and an `email.received` webhook pointed at `/api/v1/webhooks/resend`. The worker uses Resend's receiving API to retrieve message content after the webhook arrives.
+Each signed-in user can copy a personal BCC address from Settings once the organization has connected a verified Resend domain. The address uses that organization's default Resend domain (`log_{token}@{your-domain}`). BCCing that address records the email against matching contacts, including replies, and shows it in the contact timeline. The Resend domain must have receiving enabled (MX records) and an `email.received` webhook pointed at `/api/v1/webhooks/resend?domain={your-domain}`. The worker uses Resend's receiving API to retrieve message content after the webhook arrives.
 
 ## Security principles
 

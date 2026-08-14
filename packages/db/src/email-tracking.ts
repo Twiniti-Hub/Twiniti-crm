@@ -34,12 +34,37 @@ export function parseMessageReferences(value: unknown): string[] {
   return raw.split(/\s+/).map((part) => part.trim()).filter(Boolean);
 }
 
+export function parseTrackingAddress(value: unknown): { token: string; domain: string } | null {
+  for (const address of parseEmailAddresses(value)) {
+    const at = address.lastIndexOf("@");
+    if (at <= 0) continue;
+    const localPart = address.slice(0, at);
+    const domain = address.slice(at + 1);
+    if (localPart.startsWith("log_") && localPart.length > 4) {
+      return { token: localPart.slice(4), domain };
+    }
+  }
+  return null;
+}
+
+export function parseTrackingAddressFromValues(values: unknown[]): { token: string; domain: string } | null {
+  for (const value of values) {
+    const parsed = parseTrackingAddress(value);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
 export function getTrackingToken(value: unknown, domain: string): string | null {
-  const suffix = `@${domain.trim().toLowerCase()}`;
-  const address = parseEmailAddresses(value).find((item) => item.endsWith(suffix));
-  if (!address) return null;
-  const localPart = address.slice(0, -suffix.length);
-  return localPart.startsWith("log_") ? localPart.slice(4) : null;
+  const parsed = parseTrackingAddress(value);
+  if (!parsed) return null;
+  return parsed.domain === domain.trim().toLowerCase() ? parsed.token : null;
+}
+
+export function getTrackingTokenFromValues(values: unknown[], domain: string): string | null {
+  const parsed = parseTrackingAddressFromValues(values);
+  if (!parsed) return null;
+  return parsed.domain === domain.trim().toLowerCase() ? parsed.token : null;
 }
 
 export function classifyEmailActivity(input: {
