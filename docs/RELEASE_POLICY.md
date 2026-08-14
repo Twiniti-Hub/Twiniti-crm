@@ -35,8 +35,9 @@ Use the canonical repository folder and branches only. Do not create a Git workt
 - `George-Twiniti`, as repository CODEOWNER, reviews and personally approves the exact final bot-pushed commit after required checks have started.
 - A review must be submitted with GitHub's **Approve** decision. An approval statement submitted as a comment does not satisfy the repository ruleset.
 - Any later reviewable push dismisses the effective approval. Required checks must run for the new commit and George must approve that commit.
-- Do not weaken or bypass independent approval, CODEOWNER review, last-push separation, required-thread resolution, or mandatory status checks.
-- Merge only under the repository's stated merge authority after the current head is approved and all required checks pass.
+- George-Twiniti **Approve** and **Merge** bot-owned PRs when checks pass. Last-push approval (`require_last_push_approval`) is **disabled** on `development` and `production` (see `docs/operations/RULESET_LAST_PUSH_REMOVAL.md`).
+- Do not weaken or bypass CODEOWNER review, required-thread resolution, or mandatory status checks.
+- Merge only after the current head is approved and all required checks pass.
 
 ## Required evidence
 

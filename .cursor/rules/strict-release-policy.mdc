@@ -15,8 +15,9 @@ Canonical policies (read and follow; do not invent process):
 - Before every GitHub mutation: `gh api user --jq .login` must be `twiniti-code-bot`.
 - Never operate as `George-Twiniti`.
 - Bot: push reviewable commits on `codex/<linear-id>-<slug>` and open PRs.
-- George: CODEOWNER **Approve** and **Merge**. Do not merge for George unless he explicitly asks the bot to merge that PR.
-- Never suggest disabling, weakening, or bypassing rulesets, CODEOWNERS, last-push separation, required checks, or protected environments.
+- George: CODEOWNER **Approve** and **Merge** bot-owned PRs when required checks pass.
+- Do not merge for George unless he explicitly asks the bot to merge that PR.
+- Do not disable CODEOWNERS, required checks, or protected environments. Last-push approval is off; see `docs/operations/RULESET_LAST_PUSH_REMOVAL.md`.
 
 ## Branches
 
@@ -35,13 +36,11 @@ Canonical policies (read and follow; do not invent process):
 6. Production regional migrate (protected workflow / `MIGRATION_APPROVED`) **before or coordinated with** deploy: US → EU → UK; stop on first failure; keep receipt.
 7. Verify Prod health/schema; record receipts in Linear.
 
-If blocked by ruleset (e.g. last-push), **stop and explain**. Do not paper over with tip/handoff/empty PRs, fake ancestry commits, or ruleset workarounds.
+If a promotion PR is out-of-date with `production`, reconcile with a bot-owned merge of `production` into `development` (PR #58 pattern). Do not use bot-tip handoff PRs; last-push approval is disabled.
 
 ## Hard prohibitions (learned)
 
-- No “bot tip”, “handoff”, or empty PRs to game `require_last_push_approval`.
 - No empty merge-only PRs that leave CODEOWNER review unsatisfiable.
-- No asking George to click Update branch when that would attribute the push to him incorrectly for last-push rules—follow policy identity instead.
 - No manual Production SQL; use the regional migration workflow with change id.
 - Do not open a production promotion PR until smoke is green on the exact tip SHA.
 
