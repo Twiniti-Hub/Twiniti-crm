@@ -72,6 +72,17 @@ export async function getDefaultOrganizationResendDomain(db: Db, organizationId:
   )).limit(1);
   return row ?? null;
 }
+
+export async function getOrganizationResendDomainByName(db: Db, organizationId: string, domain: string) {
+  const normalized = domain.trim().toLowerCase();
+  const [row] = await db.select().from(organizationResendDomains).where(and(
+    eq(organizationResendDomains.organizationId, organizationId),
+    eq(organizationResendDomains.domain, normalized),
+    eq(organizationResendDomains.active, true),
+    eq(organizationResendDomains.verificationStatus, "verified")
+  )).limit(1);
+  return row ?? null;
+}
 import { countryCodeSchema, regionForCountry, type RegionCode } from "@twiniti/contracts";
 
 export function normalizeEmail(email: string): string {

@@ -12,6 +12,7 @@ import {
   type SubscriptionStateInput
 } from "@twiniti/license-api";
 import {
+  buildEmailTrackingAddress,
   campaignRecipients,
   campaigns,
   claimJobs,
@@ -24,6 +25,7 @@ import {
   getContactById,
   getOrganizationBilling,
   getDefaultOrganizationResendDomain,
+  getOrganizationResendDomainByName,
   findContactsByEmails,
   findContactByExternalRecordId,
   getDb,
@@ -33,7 +35,7 @@ import {
   importJobs,
   importRows,
   isEmailSuppressed,
-  getTrackingToken,
+  parseTrackingAddressFromValues,
   parseEmailAddresses,
   getEmailHeader,
   parseMessageReferences,
@@ -635,7 +637,7 @@ async function processCompanyImport(payload: {
   }).where(eq(importJobs.id, job.id));
 }
 
-async function processResendWebhook(payload: { webhookEventId: string; organizationId?: string | null }) {
+async function processResendWebhook(payload: { webhookEventId: string; organizationId?: string | null; receivingDomain?: string }) {
   const [event] = await db.select().from(webhookEvents).where(eq(webhookEvents.id, payload.webhookEventId)).limit(1);
   if (!event) return;
   const body = event.payload as Record<string, unknown>;
@@ -644,7 +646,7 @@ async function processResendWebhook(payload: { webhookEventId: string; organizat
   const emailId = typeof data.email_id === "string" ? data.email_id : null;
 
   if (eventType === "email.received") {
-    await processReceivedEmail(body, data, event, emailId);
+    await processReceivedEmail(body, data, event, emailId, payload.receivingDomain);
     return;
   }
 
@@ -691,7 +693,8 @@ async function processReceivedEmail(
   body: Record<string, unknown>,
   data: Record<string, unknown>,
   event: typeof webhookEvents.$inferSelect,
-  emailId: string | null
+  emailId: string | null,
+  receivingDomain?: string
 ) {
   if (!emailId) {
     await db.update(webhookEvents).set({ processedAt: new Date() }).where(eq(webhookEvents.id, event.id));
@@ -699,20 +702,29 @@ async function processReceivedEmail(
   }
 
   if (!event.organizationId || !env.RESEND_CREDENTIAL_ENCRYPTION_KEY) throw new Error("Organization Resend configuration is required for received email processing");
-  const resendConfig = await getDefaultOrganizationResendDomain(db, event.organizationId);
-  if (!resendConfig) throw new Error("Organization Resend default domain is not configured");
+  const normalizedReceivingDomain = receivingDomain?.trim().toLowerCase();
+  const resendConfig = normalizedReceivingDomain
+    ? await getOrganizationResendDomainByName(db, event.organizationId, normalizedReceivingDomain)
+    : await getDefaultOrganizationResendDomain(db, event.organizationId);
+  if (!resendConfig) throw new Error("Organization Resend domain is not configured for received email processing");
   const receivedResult = await getReceivedEmail({ apiKey: decryptResendSecret(resendConfig.apiKeyCiphertext, env.RESEND_CREDENTIAL_ENCRYPTION_KEY), emailId });
   if (receivedResult.error) throw new Error(`Unable to retrieve received email ${emailId}`);
   const message = { ...data, ...(receivedResult.data ?? {}) } as Record<string, unknown>;
-  const addressValues = [message.to, message.received_for, getEmailHeader(message.headers, "to", "delivered-to")];
-  const token = getTrackingToken(addressValues, env.EMAIL_TRACKING_DOMAIN);
-  if (!token) {
+  const addressValues = [
+    message.to,
+    message.bcc,
+    message.received_for,
+    getEmailHeader(message.headers, "to", "delivered-to", "bcc")
+  ];
+  const trackingAddressMatch = parseTrackingAddressFromValues(addressValues);
+  if (!trackingAddressMatch || trackingAddressMatch.domain !== resendConfig.domain) {
     await db.update(webhookEvents).set({ processedAt: new Date() }).where(eq(webhookEvents.id, event.id));
     return;
   }
 
   const [trackingAddress] = await db.select().from(emailTrackingAddresses).where(and(
-    eq(emailTrackingAddresses.token, token),
+    eq(emailTrackingAddresses.token, trackingAddressMatch.token),
+    eq(emailTrackingAddresses.organizationId, event.organizationId),
     eq(emailTrackingAddresses.active, true)
   )).limit(1);
   if (!trackingAddress) {
@@ -721,7 +733,7 @@ async function processReceivedEmail(
   }
 
   const fromEmail = parseEmailAddresses(message.from)[0] ?? null;
-  const trackingEmail = `log_${token}@${env.EMAIL_TRACKING_DOMAIN.trim().toLowerCase()}`;
+  const trackingEmail = buildEmailTrackingAddress(resendConfig.domain, trackingAddressMatch.token);
   const toEmails = parseEmailAddresses(message.to).filter((email) => email !== trackingEmail);
   const ccEmails = parseEmailAddresses(message.cc);
   const bccEmails = parseEmailAddresses(message.bcc);
@@ -996,7 +1008,7 @@ async function handleJob(kind: string, payload: Record<string, unknown>, organiz
       });
       return;
     case "webhook.resend.process":
-      await processResendWebhook(payload as { webhookEventId: string; organizationId?: string | null });
+      await processResendWebhook(payload as { webhookEventId: string; organizationId?: string | null; receivingDomain?: string });
       return;
     case "workflow.trigger.form_submit":
     case "workflow.run_step":

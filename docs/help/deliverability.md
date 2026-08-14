@@ -6,7 +6,7 @@ Open **Deliverability** to review the workspace email health and provider status
 
 ## BCC activity tracking
 
-Open **Settings** and copy your personal BCC tracking address. BCC that address on a customer email. Loop matches the sender or recipients to contacts and adds the message to the contact timeline when receiving is configured.
+Open **Settings** and copy your personal BCC tracking address after a company admin has connected a verified Resend domain. The address uses your organization's Resend domain. BCC that address on a customer email. Loop matches the sender or recipients to contacts and adds the message to the contact timeline when receiving is configured for that domain.
 
-If the address is unavailable, the email-tracking migration or receiving setup is not ready. Contact an administrator rather than exposing or inventing a tracking address.
+If the address is unavailable, connect a verified Resend domain in **Settings → Email delivery** and configure receiving (MX records plus an `email.received` webhook for that domain).
 

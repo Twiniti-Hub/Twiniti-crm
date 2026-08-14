@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.10.49] - 2026-08-14
+
+- Settings Resend domains: list, edit, make default, add, and remove connected domains.
+- PATCH API for sender identity, API key rotation, and webhook secret updates.
+- Webhook URL shown per domain for Resend receiving setup.
+
+## [0.10.48] - 2026-08-14
+
+- Personal BCC email tracking addresses now use each organization's default
+  verified Resend domain instead of a platform-wide inbound domain.
+- Tracking addresses are created only after an organization connects Resend;
+  Settings explains the requirement for admins and members.
+- Removed `EMAIL_TRACKING_DOMAIN` platform configuration.
+
 ## [0.10.47] - 2026-08-13
 
 - Soft `/api/v1/me` refresh no longer tears down a loaded CRM shell on timeout.

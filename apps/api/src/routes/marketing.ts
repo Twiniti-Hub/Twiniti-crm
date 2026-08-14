@@ -38,6 +38,7 @@ import {
   experiments,
   findContactByEmail,
   getEmailTrackingAddress,
+  getDefaultOrganizationResendDomain,
   HUBSPOT_CONTACT_FIELD_ALIASES,
   HUBSPOT_CONTACT_COMPANY_FIELD_ALIASES,
   getContactPropertyDeletionImpact,
@@ -1308,6 +1309,15 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       const actor = requireActor(request);
       requireUserRole(actor, "member");
       const organizationId = requireOrgId(actor);
+      const resendDomain = await getDefaultOrganizationResendDomain(db, organizationId);
+      if (!resendDomain) {
+        return reply.code(409).send({
+          error: {
+            code: "resend_domain_required",
+            message: "Connect a verified Resend domain before using email tracking"
+          }
+        });
+      }
       let address = await getEmailTrackingAddress(db, organizationId, actor.id);
       if (!address) {
         await db.insert(emailTrackingAddresses).values({
@@ -1320,8 +1330,9 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       if (!address) throw new Error("Unable to create email tracking address");
       return {
         data: {
-          address: buildEmailTrackingAddress(env.EMAIL_TRACKING_DOMAIN, address.token),
-          domain: env.EMAIL_TRACKING_DOMAIN
+          address: buildEmailTrackingAddress(resendDomain.domain, address.token),
+          domain: resendDomain.domain,
+          resendDomainId: resendDomain.id
         }
       };
     } catch (error) {
@@ -1355,7 +1366,11 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       await enqueueJob(db, {
         organizationId: domain.organizationId,
         kind: "webhook.resend.process",
-        payload: { webhookEventId: event.id, organizationId: domain.organizationId }
+        payload: {
+          webhookEventId: event.id,
+          organizationId: domain.organizationId,
+          receivingDomain: domainName
+        }
       });
       return { data: { accepted: true, signatureValid: true } };
     } catch (error) {
