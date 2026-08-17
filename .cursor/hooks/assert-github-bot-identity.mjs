@@ -1,0 +1,109 @@
+#!/usr/bin/env node
+/**
+ * beforeShellExecution: Twiniti CRM release policy requires GitHub mutations
+ * to run as twiniti-code-bot. Cloud Agents often inject a Cursor GitHub App
+ * token (ghs_...) as GH_TOKEN; prefer TWINITI_CODE_BOT_GITHUB_TOKEN instead.
+ */
+import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+
+function readStdin() {
+  try {
+    return readFileSync(0, "utf8");
+  } catch {
+    return "";
+  }
+}
+
+function respond(payload) {
+  process.stdout.write(`${JSON.stringify(payload)}\n`);
+}
+
+function isMutatingGhCommand(command) {
+  if (!/\bgh\b/.test(command)) return false;
+  // Allow identity / read-only probes used by this hook and agents.
+  if (/\bgh\s+api\s+user\b/.test(command)) return false;
+  if (/\bgh\s+auth\s+status\b/.test(command)) return false;
+  if (/\bgh\s+pr\s+view\b/.test(command)) return false;
+  if (/\bgh\s+pr\s+checks\b/.test(command)) return false;
+  if (/\bgh\s+pr\s+diff\b/.test(command)) return false;
+  if (/\bgh\s+pr\s+list\b/.test(command)) return false;
+  if (/\bgh\s+issue\s+view\b/.test(command)) return false;
+  if (/\bgh\s+issue\s+list\b/.test(command)) return false;
+  if (/\bgh\s+run\s+view\b/.test(command)) return false;
+  if (/\bgh\s+run\s+list\b/.test(command)) return false;
+  if (/\bgh\s+api\s+repos\/[^ ]+\/pulls\/\d+\b/.test(command) && !/\s-X\s+(POST|PATCH|PUT|DELETE)\b/i.test(command)) {
+    return false;
+  }
+  return true;
+}
+
+function commandUsesBotToken(command) {
+  return /TWINITI_CODE_BOT_GITHUB_TOKEN/.test(command);
+}
+
+function probeLogin(env) {
+  const result = spawnSync("gh", ["api", "user", "--jq", ".login"], {
+    encoding: "utf8",
+    env,
+    shell: false,
+    windowsHide: true
+  });
+  if (result.status !== 0) return null;
+  return String(result.stdout ?? "").trim() || null;
+}
+
+const raw = readStdin();
+let input = {};
+try {
+  input = raw ? JSON.parse(raw) : {};
+} catch {
+  respond({ permission: "allow" });
+  process.exit(0);
+}
+
+const command = String(input.command ?? "");
+if (!isMutatingGhCommand(command)) {
+  respond({ permission: "allow" });
+  process.exit(0);
+}
+
+const botToken = process.env.TWINITI_CODE_BOT_GITHUB_TOKEN?.trim() || "";
+const probeEnv = { ...process.env };
+if (botToken) {
+  probeEnv.GH_TOKEN = botToken;
+  probeEnv.GITHUB_TOKEN = botToken;
+}
+
+const login = probeLogin(probeEnv);
+const currentGhToken = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? "";
+const looksLikeCursorAppToken = currentGhToken.startsWith("ghs_");
+
+if (login !== "twiniti-code-bot") {
+  respond({
+    permission: "deny",
+    user_message: "GitHub mutation blocked: identity is not twiniti-code-bot.",
+    agent_message:
+      "Twiniti RELEASE_POLICY requires GitHub mutations as twiniti-code-bot. " +
+      (botToken
+        ? "TWINITI_CODE_BOT_GITHUB_TOKEN is set but gh api user did not return twiniti-code-bot. Fix the PAT ownership/scopes."
+        : "Set Cloud Agents Runtime Secret TWINITI_CODE_BOT_GITHUB_TOKEN to a PAT owned by twiniti-code-bot, then re-run as: " +
+          'GH_TOKEN="$TWINITI_CODE_BOT_GITHUB_TOKEN" <your gh command>. ' +
+          "Never open PRs as George-Twiniti.")
+  });
+  process.exit(0);
+}
+
+if (botToken && looksLikeCursorAppToken && !commandUsesBotToken(command)) {
+  respond({
+    permission: "deny",
+    user_message: "Prefix GH_TOKEN with the bot Runtime Secret before mutating GitHub.",
+    agent_message:
+      "Cursor injected a GitHub App installation token (ghs_...) as GH_TOKEN. " +
+      "Re-run the mutation with the bot secret so the PR/author is twiniti-code-bot:\n" +
+      `GH_TOKEN="$TWINITI_CODE_BOT_GITHUB_TOKEN" ${command}`
+  });
+  process.exit(0);
+}
+
+respond({ permission: "allow" });
