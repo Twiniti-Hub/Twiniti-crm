@@ -251,7 +251,7 @@ export async function resyncOrganizationBillingFromStripe(
     created: Math.floor(Date.now() / 1000),
     type: "customer.subscription.updated",
     data: { object: subscription }
-  } as Stripe.Event;
+  } as unknown as Stripe.Event;
   const syncedOrganizationId = await applySubscriptionEvent(db, event, subscription as unknown as Record<string, unknown>);
   if (!syncedOrganizationId) {
     const error = new Error("Unable to apply Stripe subscription to organization billing") as Error & { statusCode: number };
