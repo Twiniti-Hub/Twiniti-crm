@@ -13,7 +13,16 @@ In production, the API refuses to start without the first three values and witho
 
 ## Stripe webhook
 
-Configure Stripe to send these events to the global billing gateway at `/api/v1/webhooks/stripe`. The current development Render gateway URL is `https://twiniti-billing-gateway-qx9x.onrender.com`; production must use its separate gateway URL.
+Configure Stripe to send these events to the global billing gateway at `/api/v1/webhooks/stripe`.
+
+| Stripe mode | Gateway URL |
+| --- | --- |
+| Test (Development / E2E) | `https://twiniti-billing-gateway-qx9x.onrender.com/api/v1/webhooks/stripe` |
+| Live (Production) | `https://twiniti-billing-gateway-prod.onrender.com/api/v1/webhooks/stripe` |
+
+Do not point Live mode at the Development gateway, and do not point Test mode at Production. Regional CRM APIs must share the signing secret for the gateway endpoint that forwards to them.
+
+Required events:
 
 - `checkout.session.completed`
 - `customer.subscription.created`
@@ -22,7 +31,13 @@ Configure Stripe to send these events to the global billing gateway at `/api/v1/
 - `invoice.paid`
 - `invoice.payment_failed`
 
+Checkout and subscription metadata must include `organizationId` and `regionCode` (`us` | `eu` | `uk`) so the gateway can forward to one region. Events without `regionCode` fan out to all regions; the gateway acknowledges the delivery when any region accepts it.
+
 The API verifies the Stripe signature against the raw request body, records event IDs for idempotency, and activates or locks the organization from subscription state. Apply migration `0004_organization_billing.sql` before enabling self-serve registration.
+
+Super Admins can force a Stripe → CRM → License_API refresh with:
+
+`POST /api/v1/super-admin/organizations/:organizationId/billing/resync`
 
 ## Registration flow
 
