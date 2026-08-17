@@ -11,7 +11,7 @@ import {
   updateOrganizationBilling,
   type Db
 } from "@twiniti/db";
-import { audit, requireActor, requireOrgId, requireUserRole, sendError } from "../auth-hook.js";
+import { audit, requireActor, requireOrgId, requireSuperAdmin, requireUserRole, sendError } from "../auth-hook.js";
 import { buildSubscriptionState, enqueueLicenseSubscriptionSync } from "../license-jobs.js";
 import type { TrialKind } from "@twiniti/license-api";
 
@@ -22,7 +22,7 @@ function configuredStripe(env: AppEnv) {
   return new Stripe(env.STRIPE_SECRET_KEY);
 }
 
-function stripeObjectId(value: unknown): string | null {
+export function stripeObjectId(value: unknown): string | null {
   if (typeof value === "string") return value;
   if (value && typeof value === "object" && "id" in value && typeof value.id === "string") return value.id;
   return null;
@@ -42,6 +42,29 @@ function subscriptionPeriodEnd(value: unknown): Date | null {
 
 function stripeDate(value: unknown): Date | null {
   return typeof value === "number" && Number.isFinite(value) ? new Date(value * 1000) : null;
+}
+
+/** Basil+ APIs moved current_period_end onto subscription items. */
+export function subscriptionCurrentPeriodEnd(subscription: Record<string, unknown>): Date | null {
+  const items = subscription.items && typeof subscription.items === "object"
+    ? subscription.items as { data?: Array<{ current_period_end?: unknown }> }
+    : {};
+  return subscriptionPeriodEnd(items.data?.[0]?.current_period_end)
+    ?? subscriptionPeriodEnd(subscription.current_period_end);
+}
+
+/** Basil invoice objects nest the subscription under parent.subscription_details. */
+export function invoiceSubscriptionId(invoice: Record<string, unknown>): string | null {
+  const legacy = stripeObjectId(invoice.subscription);
+  if (legacy) return legacy;
+  const parent = invoice.parent && typeof invoice.parent === "object"
+    ? invoice.parent as Record<string, unknown>
+    : null;
+  if (!parent) return null;
+  const details = parent.subscription_details && typeof parent.subscription_details === "object"
+    ? parent.subscription_details as Record<string, unknown>
+    : null;
+  return stripeObjectId(details?.subscription) ?? stripeObjectId(parent.subscription);
 }
 
 function trialKind(trialStart: Date | null, trialEnd: Date | null, configuredDays: number): TrialKind {
@@ -116,7 +139,7 @@ export async function createOrganizationCheckoutSession(
   return session;
 }
 
-async function applySubscriptionEvent(db: Db, event: Stripe.Event, subscription: Record<string, unknown>) {
+export async function applySubscriptionEvent(db: Db, event: Stripe.Event, subscription: Record<string, unknown>) {
   const subscriptionId = stripeObjectId(subscription.id);
   const customerId = stripeObjectId(subscription.customer);
   const metadata = subscription.metadata && typeof subscription.metadata === "object"
@@ -148,6 +171,7 @@ async function applySubscriptionEvent(db: Db, event: Stripe.Event, subscription:
   const discounts = stripeDiscountIds(subscription.discounts);
   const nextTrialKind = nextStatus === "trialing" ? trialKind(trialStart, trialEnd, 7) : "none";
   const convertedAt = billing.status === "trialing" && nextStatus === "active" ? new Date(event.created * 1000) : null;
+  const periodEnd = subscriptionCurrentPeriodEnd(subscription);
   await updateOrganizationBilling(db, billing.organizationId, {
     status: nextStatus,
     stripeCustomerId: customerId,
@@ -159,7 +183,7 @@ async function applySubscriptionEvent(db: Db, event: Stripe.Event, subscription:
     trialKind: nextTrialKind,
     ...(discounts.promotionCodeId ? { stripePromotionCodeId: discounts.promotionCodeId } : {}),
     ...(discounts.couponId ? { stripeCouponId: discounts.couponId } : {}),
-    ...(subscriptionPeriodEnd(subscription.current_period_end) ? { currentPeriodEnd: subscriptionPeriodEnd(subscription.current_period_end) } : {}),
+    ...(periodEnd ? { currentPeriodEnd: periodEnd } : {}),
     cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
     ...(convertedAt ? { trialConvertedAt: convertedAt } : {}),
     lastStripeEventCreatedAt: new Date(event.created * 1000)
@@ -190,6 +214,59 @@ async function applyCheckoutCompleted(db: Db, event: Stripe.Event, session: Reco
     lastStripeEventCreatedAt: new Date(event.created * 1000)
   });
   return organizationId;
+}
+
+async function applyInvoiceSubscriptionEvent(
+  db: Db,
+  stripe: Stripe,
+  event: Stripe.Event,
+  invoice: Record<string, unknown>
+) {
+  const subscriptionId = invoiceSubscriptionId(invoice);
+  if (!subscriptionId) return null;
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  return applySubscriptionEvent(db, event, subscription as unknown as Record<string, unknown>);
+}
+
+export async function resyncOrganizationBillingFromStripe(
+  db: Db,
+  env: AppEnv,
+  organizationId: string
+) {
+  const stripe = configuredStripe(env);
+  if (!stripe) {
+    const error = new Error("Stripe billing is not configured") as Error & { statusCode: number };
+    error.statusCode = 503;
+    throw error;
+  }
+  const billing = await getOrganizationBilling(db, organizationId);
+  if (!billing?.stripeSubscriptionId) {
+    const error = new Error("No Stripe subscription is linked for this organization") as Error & { statusCode: number };
+    error.statusCode = 409;
+    throw error;
+  }
+  const subscription = await stripe.subscriptions.retrieve(billing.stripeSubscriptionId);
+  const event = {
+    id: `manual-resync:${organizationId}:${Date.now()}`,
+    created: Math.floor(Date.now() / 1000),
+    type: "customer.subscription.updated",
+    data: { object: subscription }
+  } as Stripe.Event;
+  const syncedOrganizationId = await applySubscriptionEvent(db, event, subscription as unknown as Record<string, unknown>);
+  if (!syncedOrganizationId) {
+    const error = new Error("Unable to apply Stripe subscription to organization billing") as Error & { statusCode: number };
+    error.statusCode = 409;
+    throw error;
+  }
+  const updated = await getOrganizationBilling(db, organizationId);
+  if (updated) {
+    await enqueueLicenseSubscriptionSync(db, env, buildSubscriptionState(updated, {
+      eventId: event.id,
+      eventCreatedAt: new Date(event.created * 1000),
+      gracePeriodDays: env.LICENSE_API_GRACE_PERIOD_DAYS
+    }));
+  }
+  return updated;
 }
 
 export async function registerBillingRoutes(app: FastifyInstance, db: Db, env: AppEnv) {
@@ -261,6 +338,33 @@ export async function registerBillingRoutes(app: FastifyInstance, db: Db, env: A
     }
   });
 
+  app.post("/api/v1/super-admin/organizations/:organizationId/billing/resync", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireSuperAdmin(actor);
+      const organizationId = (request.params as { organizationId: string }).organizationId;
+      const billing = await resyncOrganizationBillingFromStripe(db, env, organizationId);
+      await audit(db, actor, "billing.stripe.resync", "organization", organizationId, {
+        subscriptionId: billing?.stripeSubscriptionId ?? null,
+        status: billing?.status ?? null,
+        trialEnd: billing?.trialEnd?.toISOString() ?? null
+      });
+      return {
+        data: {
+          organizationId,
+          status: billing?.status ?? "pending",
+          stripeSubscriptionStatus: billing?.stripeSubscriptionStatus ?? null,
+          trialKind: billing?.trialKind ?? "none",
+          trialStart: billing?.trialStart?.toISOString() ?? null,
+          trialEnd: billing?.trialEnd?.toISOString() ?? null,
+          currentPeriodEnd: billing?.currentPeriodEnd?.toISOString() ?? null
+        }
+      };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
   app.post("/api/v1/webhooks/stripe", { config: { rawBody: true } }, async (request, reply) => {
     if (!env.STRIPE_WEBHOOK_SECRET) return reply.code(503).send({ error: "Stripe webhook is not configured" });
     const stripe = configuredStripe(env);
@@ -298,25 +402,8 @@ export async function registerBillingRoutes(app: FastifyInstance, db: Db, env: A
         syncOrganizationId = await applySubscriptionEvent(db, event, object);
         break;
       case "invoice.paid":
-        if (stripeObjectId(object.subscription)) {
-          syncOrganizationId = await applySubscriptionEvent(db, event, {
-            id: object.subscription,
-            customer: object.customer,
-            status: "active",
-            current_period_end: null,
-            metadata: {}
-          });
-        }
-        break;
       case "invoice.payment_failed":
-        if (stripeObjectId(object.subscription)) {
-          syncOrganizationId = await applySubscriptionEvent(db, event, {
-            id: object.subscription,
-            customer: object.customer,
-            status: "past_due",
-            metadata: {}
-          });
-        }
+        syncOrganizationId = await applyInvoiceSubscriptionEvent(db, stripe, event, object);
         break;
       default:
         break;
