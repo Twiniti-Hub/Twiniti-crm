@@ -18,6 +18,13 @@ Canonical policies (read and follow; do not invent process):
 - George: CODEOWNER **Approve** and **Merge**. Do not merge for George unless he explicitly asks the bot to merge that PR.
 - Never suggest disabling, weakening, or bypassing rulesets, CODEOWNERS, last-push separation, required checks, or protected environments.
 
+### Cloud Agents
+
+- Cursor may inject a GitHub App installation token (`ghs_…`) as `GH_TOKEN`. Do **not** open PRs with that identity.
+- Prefer Runtime Secret **`TWINITI_CODE_BOT_GITHUB_TOKEN`** (PAT owned by `twiniti-code-bot`). For mutations: `GH_TOKEN="$TWINITI_CODE_BOT_GITHUB_TOKEN" gh …`.
+- Project hook `.cursor/hooks/assert-github-bot-identity.mjs` denies mutating `gh` when identity is not the bot. If the check fails, **stop**—do not fall back to `George-Twiniti`.
+- Operator checklist: `docs/operations/CLOUD_AGENT_GITHUB_IDENTITY.md`.
+
 ## Branches
 
 - Feature work → PR into `development` only.
