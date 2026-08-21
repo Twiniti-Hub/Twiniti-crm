@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.52] - 2026-08-21
+
+- Cloud Agents must open `cursor/*` and `codex/*` PRs as `twiniti-code-bot`
+  via `GH_TOKEN="$TWINITI_CODE_BOT_GITHUB_TOKEN" gh`; Cursor `ManagePullRequest`
+  is forbidden because it authors PRs as `George-Twiniti`.
+- `policy / release-policy` fails agent-branch PRs unless the GitHub author is
+  the bot, and `AGENTS.md` records the identity contract.
+
 ## [0.10.51] - 2026-08-17
 
 - Billing gateway acknowledges fan-out Stripe events when any regional API accepts them, and logs each destination result (stops Stripe 502 retries caused by cold/unrelated regions).

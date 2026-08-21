@@ -22,8 +22,11 @@ Canonical policies (read and follow; do not invent process):
 
 - Cursor may inject a GitHub App installation token (`ghs_…`) as `GH_TOKEN`. Do **not** open PRs with that identity.
 - Prefer Runtime Secret **`TWINITI_CODE_BOT_GITHUB_TOKEN`** (PAT owned by `twiniti-code-bot`). For mutations: `GH_TOKEN="$TWINITI_CODE_BOT_GITHUB_TOKEN" gh …`.
+- Do **not** use Cursor `ManagePullRequest` or GitHub MCP PR-create tools in this repository. They authenticate as `George-Twiniti` and make CODEOWNER approval unsatisfiable.
+- After `gh pr create`, `gh pr view --json author --jq .author.login` must be `twiniti-code-bot`. If not, close and recreate as the bot.
 - Project hook `.cursor/hooks/assert-github-bot-identity.mjs` denies mutating `gh` when identity is not the bot. If the check fails, **stop**—do not fall back to `George-Twiniti`.
 - Operator checklist: `docs/operations/CLOUD_AGENT_GITHUB_IDENTITY.md`.
+- `AGENTS.md` repeats this identity contract for Cloud Agents.
 
 ## Branches
 

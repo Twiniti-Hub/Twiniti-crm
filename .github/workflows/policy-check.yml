@@ -27,5 +27,8 @@ jobs:
           node-version: 22.22.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: node --test scripts/policy/github-bot-identity.test.mjs
       - run: pnpm policy:check
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
       - run: pnpm policy:db-chain
