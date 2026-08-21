@@ -96,6 +96,7 @@ US, EU, or UK Loop host that owns the workspace.
 - The API services also build `apps/web`; set the public `VITE_HEXCLAVE_PROJECT_ID` and, when required, `VITE_HEXCLAVE_PUBLISHABLE_CLIENT_KEY` values on every regional API service. They must be present at Vite build time or the client intentionally falls back to bootstrap routing and `/sign-in` will not be available.
 - The landing package is `apps/landing`; configure its `VITE_APP_URL_US`, `VITE_APP_URL_EU`, and `VITE_APP_URL_UK` values so every sign-up and sign-in choice stays in the intended data region. The supplied regional domains are the checked-in defaults.
 - Keep the supplied Twiniti dark/light logo assets in `apps/landing/public/branding` when updating the landing page identity.
+- Keep `apps/landing/public/robots.txt` and `apps/landing/public/sitemap.xml` in sync with the public production host `https://loop.twiniti.ai/`. The robots file must include a wildcard group plus explicit AI crawler `User-agent` Allow rules and a `Sitemap:` line; do not rely on Cloudflare managed robots.txt alone.
 - Google Analytics uses the public `VITE_GOOGLE_ANALYTICS_ID` build variable; do not send names, email addresses, or other CRM fields to analytics.
 - Microsoft Clarity uses the public `VITE_MICROSOFT_CLARITY_ID` build variable; the current default is `xyd0gcl234` and it is not a secret. Use separate Clarity projects for development and production when available.
 - The analytics package loads Google Analytics and Microsoft Clarity only after optional-analytics consent; do not add a second raw tag to either HTML entrypoint. Before enabling Clarity for authenticated CRM sessions, configure Clarity masking/privacy controls for all customer and contact data.
@@ -108,3 +109,9 @@ call out schema or migration changes. The checked-in template and
 [release policy](docs/RELEASE_POLICY.md) define the required evidence. See
 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) for agent-ready criteria and
 [docs/HARDENING.md](docs/HARDENING.md) for production cutover checks.
+
+Agent-owned PRs (`cursor/*`, `codex/*`) must be authored by `twiniti-code-bot`.
+Cloud Agents must open them with
+`GH_TOKEN="$TWINITI_CODE_BOT_GITHUB_TOKEN" gh pr create`, never Cursor
+`ManagePullRequest`. See [AGENTS.md](AGENTS.md) and
+[docs/operations/CLOUD_AGENT_GITHUB_IDENTITY.md](docs/operations/CLOUD_AGENT_GITHUB_IDENTITY.md).

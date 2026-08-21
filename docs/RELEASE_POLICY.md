@@ -18,6 +18,10 @@ Before changing files, committing, pushing, or performing any GitHub mutation, t
 
 `gh api user --jq .login` must return `twiniti-code-bot` immediately before every agent-owned GitHub mutation. Credential-list status alone is not proof. The agent must never operate as `George-Twiniti`; George performs the independent CODEOWNER approval himself.
 
+### Cloud Agent GitHub identity
+
+Cursor Cloud Agents can have two GitHub credentials: a GitHub App installation token used for clone/push, and whatever `gh` reads from `GH_TOKEN`. App tokens must not be used for PR authorship. Cursor’s built-in `ManagePullRequest` tool uses the launching user’s GitHub identity (`George-Twiniti`) and is forbidden in this repository because GitHub will not count a CODEOWNER approval on a self-authored PR. Configure Cloud Agents Runtime Secret **`TWINITI_CODE_BOT_GITHUB_TOKEN`** (a PAT owned by `twiniti-code-bot`) and create or update PRs only as `GH_TOKEN="$TWINITI_CODE_BOT_GITHUB_TOKEN" gh …`. After creating a PR, confirm `author.login` is `twiniti-code-bot`. A project `beforeShellExecution` hook enforces the bot identity check before mutating `gh` commands. Agent-branch PRs (`cursor/*`, `codex/*`) fail `policy / release-policy` unless the PR author is `twiniti-code-bot`. Full operator steps: `docs/operations/CLOUD_AGENT_GITHUB_IDENTITY.md`.
+
 Use the canonical repository folder and branches only. Do not create a Git worktree or additional checkout unless George explicitly requests one. Preserve unrelated local files and stage only scoped paths.
 
 ## Branch rules

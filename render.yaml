@@ -192,6 +192,13 @@ services:
     autoDeployTrigger: checksPass
     buildCommand: pnpm install --frozen-lockfile && pnpm --filter @twiniti/landing build
     staticPublishPath: apps/landing/dist
+    headers:
+      - path: /robots.txt
+        name: Content-Type
+        value: text/plain; charset=utf-8
+      - path: /sitemap.xml
+        name: Content-Type
+        value: application/xml; charset=utf-8
     routes:
       - type: rewrite
         source: /*
