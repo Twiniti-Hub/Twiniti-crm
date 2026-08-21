@@ -13,6 +13,8 @@ Cursor Cloud Agents typically have two credentials:
 
 If `GH_TOKEN` is the App token or George’s session, `gh pr create` attributes the PR to the wrong user and breaks CODEOWNER self-approval.
 
+Cursor Cloud Agents also receive a built-in **`ManagePullRequest`** instruction. That tool talks to GitHub as the launching user (`George-Twiniti`), not as `twiniti-code-bot`. Incident: TWI-353 draft PR #69 was authored as George, so the required CODEOWNER review could not be satisfied. **Do not use `ManagePullRequest` (or GitHub MCP PR-create) in this repository.** Use `gh` with the bot secret only.
+
 Prefer a **dedicated secret name**. Cursor may overwrite plain `GH_TOKEN` with an App `ghs_…` token.
 
 ## Operator checklist (George)
@@ -40,10 +42,31 @@ Local agents already authenticated as the bot can use their normal `gh` session;
 GH_TOKEN="$TWINITI_CODE_BOT_GITHUB_TOKEN" gh pr create ...
 ```
 
+## Required PR create pattern
+
+```bash
+GH_TOKEN="$TWINITI_CODE_BOT_GITHUB_TOKEN" gh api user --jq .login
+# → twiniti-code-bot
+
+GH_TOKEN="$TWINITI_CODE_BOT_GITHUB_TOKEN" gh pr create \
+  --base development \
+  --head "$BRANCH" \
+  --title "$TITLE" \
+  --body-file "$BODY" \
+  --reviewer George-Twiniti
+
+GH_TOKEN="$TWINITI_CODE_BOT_GITHUB_TOKEN" gh pr view --json author --jq .author.login
+# → twiniti-code-bot
+```
+
+If the author is not `twiniti-code-bot`, close that PR immediately and reopen with the same commands.
+
 ## Repo enforcement
 
+- Instructions: `AGENTS.md` and `.cursor/rules/strict-release-policy.mdc` forbid `ManagePullRequest` for this repository.
 - Hook: `.cursor/hooks.json` → `.cursor/hooks/assert-github-bot-identity.mjs` on `beforeShellExecution`
 - Behavior: mutating `gh` commands are denied unless identity resolves to `twiniti-code-bot`. When `TWINITI_CODE_BOT_GITHUB_TOKEN` is set and Cursor has injected `ghs_…` as `GH_TOKEN`, the hook denies until the command references the bot secret.
+- CI: `policy / release-policy` fails `cursor/*` and `codex/*` pull requests unless `github.event.pull_request.user.login` is `twiniti-code-bot`.
 
 ## If a PR was opened as George-Twiniti
 
