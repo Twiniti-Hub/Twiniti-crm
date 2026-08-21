@@ -1,0 +1,12 @@
+{
+  "name": "Twiniti Loop CRM",
+  "install": "corepack enable && pnpm install --frozen-lockfile && pnpm exec playwright install chromium",
+  "start": "bash -lc 'for region in US EU UK; do var=DATABASE_URL_Dev_$region; url=${!var}; if [ -n \"$url\" ]; then echo \"[start] migrating $region\"; DATABASE_URL=\"$url\" pnpm --filter @twiniti/db db:migrate; else echo \"[start] skip $region (DATABASE_URL_Dev_$region not set)\"; fi; done'",
+  "terminals": [
+    {
+      "name": "dev",
+      "command": "pnpm dev"
+    }
+  ],
+  "ports": [4000, 5173]
+}

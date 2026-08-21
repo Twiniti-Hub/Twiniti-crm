@@ -1,0 +1,36 @@
+# Twiniti Loop public landing — https://loop.twiniti.ai/
+# RFC 9309 robots exclusion. Search engines and AI crawlers may index
+# this marketing site. Regional CRM apps (loop.us/eu/uk.twiniti.ai) are
+# separate hosts and are not covered by this file.
+
+User-agent: *
+Allow: /
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+Sitemap: https://loop.twiniti.ai/sitemap.xml
