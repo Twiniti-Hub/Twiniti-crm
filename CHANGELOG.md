@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.53] - 2026-08-21
+
+- Publish `/robots.txt` and `/sitemap.xml` on the Loop landing site so search
+  engines and AI crawlers can index `https://loop.twiniti.ai/`.
+- Allow named AI crawlers (GPTBot, OAI-SearchBot, Claude-Web, Google-Extended,
+  Amazonbot, anthropic-ai, Bytespider, CCBot, Applebot-Extended) in addition to
+  the wildcard rule, and serve crawler files as `text/plain` / `application/xml`.
+
 ## [0.10.52] - 2026-08-21
 
 - Cloud Agents must open `cursor/*` and `codex/*` PRs as `twiniti-code-bot`

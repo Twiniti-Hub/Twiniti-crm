@@ -104,6 +104,10 @@ Configure `VITE_APP_URL_US`, `VITE_APP_URL_EU`, and `VITE_APP_URL_UK` on the
 landing service when regional domains differ; the checked-in production values are
 `loop.us.twiniti.ai`, `loop.eu.twiniti.ai`, and `loop.uk.twiniti.ai`.
 The landing page brand assets are stored in `apps/landing/public/branding`.
+The public production landing host is `https://loop.twiniti.ai/`. Crawler
+discovery files live at `apps/landing/public/robots.txt` and
+`apps/landing/public/sitemap.xml`; Vite copies them to the site root so
+`/robots.txt` and `/sitemap.xml` are served as static files.
 UK runs as a logical cell in the Frankfurt Render region.
 
 ### Google Analytics
