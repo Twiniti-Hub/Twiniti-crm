@@ -109,3 +109,9 @@ call out schema or migration changes. The checked-in template and
 [release policy](docs/RELEASE_POLICY.md) define the required evidence. See
 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) for agent-ready criteria and
 [docs/HARDENING.md](docs/HARDENING.md) for production cutover checks.
+
+Agent-owned PRs (`cursor/*`, `codex/*`) must be authored by `twiniti-code-bot`.
+Cloud Agents must open them with
+`GH_TOKEN="$TWINITI_CODE_BOT_GITHUB_TOKEN" gh pr create`, never Cursor
+`ManagePullRequest`. See [AGENTS.md](AGENTS.md) and
+[docs/operations/CLOUD_AGENT_GITHUB_IDENTITY.md](docs/operations/CLOUD_AGENT_GITHUB_IDENTITY.md).

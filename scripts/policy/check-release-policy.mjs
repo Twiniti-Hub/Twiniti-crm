@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { agentPullRequestAuthorFailure } from "./github-bot-identity.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const failures = [];
@@ -31,14 +32,37 @@ if (!new RegExp(`^## \\[${escapedVersion}\\]`, "m").test(changelog)) {
 }
 
 for (const required of [
+  "AGENTS.md",
   "docs/RELEASE_POLICY.md",
   "docs/DATABASE_CHANGE_POLICY.md",
+  "docs/operations/CLOUD_AGENT_GITHUB_IDENTITY.md",
   ".github/CODEOWNERS",
   ".github/pull_request_template.md",
   ".github/workflows/policy-check.yml",
   ".github/workflows/production-promotion.yml",
-  ".github/workflows/e2e.yml"
+  ".github/workflows/e2e.yml",
+  ".cursor/hooks/assert-github-bot-identity.mjs"
 ]) read(required);
+
+const agentsMd = read("AGENTS.md");
+const identityDoc = read("docs/operations/CLOUD_AGENT_GITHUB_IDENTITY.md");
+const releasePolicy = read("docs/RELEASE_POLICY.md");
+if (!/TWINITI_CODE_BOT_GITHUB_TOKEN/.test(agentsMd) || !/ManagePullRequest/.test(agentsMd)) {
+  failures.push("AGENTS.md must require TWINITI_CODE_BOT_GITHUB_TOKEN gh PRs and forbid ManagePullRequest");
+}
+if (!/ManagePullRequest/.test(identityDoc) || !/twiniti-code-bot/.test(identityDoc)) {
+  failures.push("CLOUD_AGENT_GITHUB_IDENTITY.md must document the ManagePullRequest authorship trap");
+}
+if (!/TWINITI_CODE_BOT_GITHUB_TOKEN/.test(releasePolicy)) {
+  failures.push("RELEASE_POLICY.md must name TWINITI_CODE_BOT_GITHUB_TOKEN");
+}
+
+const authorFailure = agentPullRequestAuthorFailure({
+  eventName: process.env.GITHUB_EVENT_NAME,
+  headRef: process.env.GITHUB_HEAD_REF,
+  prAuthor: process.env.PR_AUTHOR || process.env.GITHUB_ACTOR
+});
+if (authorFailure) failures.push(authorFailure);
 
 if (!/branches:\s*\[main,\s*development,\s*production\]/m.test(ci)) {
   failures.push("CI must run on main, development, and production pushes");
