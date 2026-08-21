@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.52] - 2026-08-21
+
+- Publish `/robots.txt` and `/sitemap.xml` on the Loop landing site so search
+  engines and AI crawlers can index `https://loop.twiniti.ai/`.
+- Allow named AI crawlers (GPTBot, OAI-SearchBot, Claude-Web, Google-Extended,
+  Amazonbot, anthropic-ai, Bytespider, CCBot, Applebot-Extended) in addition to
+  the wildcard rule, and serve crawler files as `text/plain` / `application/xml`.
+
 ## [0.10.51] - 2026-08-17
 
 - Billing gateway acknowledges fan-out Stripe events when any regional API accepts them, and logs each destination result (stops Stripe 502 retries caused by cold/unrelated regions).
