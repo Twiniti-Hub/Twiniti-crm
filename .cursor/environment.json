@@ -8,5 +8,8 @@
       "command": "pnpm dev"
     }
   ],
-  "ports": [4000, 5173]
+  "ports": [
+    { "name": "api", "port": 4000 },
+    { "name": "web", "port": 5173 }
+  ]
 }
