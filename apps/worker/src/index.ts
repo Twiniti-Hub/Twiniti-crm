@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { loadEnv, regionalDatabaseUrls } from "@twiniti/config";
 import type { RegionCode } from "@twiniti/contracts";
 import {
@@ -13,6 +13,7 @@ import {
 } from "@twiniti/license-api";
 import {
   buildEmailTrackingAddress,
+  campaignApprovals,
   campaignRecipients,
   campaigns,
   claimJobs,
@@ -172,7 +173,7 @@ function mapCompanyImportRow(row: Record<string, unknown>): {
   return { name, industry, properties };
 }
 
-async function processCampaignSend(payload: { campaignId: string; organizationId: string }) {
+async function processCampaignSend(payload: { campaignId: string; organizationId: string; approvalId?: string }) {
   if (!env.RESEND_CREDENTIAL_ENCRYPTION_KEY) throw new Error("Resend credential encryption is not configured");
   const resendConfig = await getDefaultOrganizationResendDomain(db, payload.organizationId);
   if (!resendConfig) throw new Error("Organization Resend default domain is not configured");
@@ -183,11 +184,24 @@ async function processCampaignSend(payload: { campaignId: string; organizationId
     eq(campaigns.organizationId, payload.organizationId)
   )).limit(1);
   if (!campaign) throw new Error("Campaign not found");
+  if (campaign.status !== "sending") throw new Error("Campaign is not in sending state");
+  if (!payload.approvalId) throw new Error("Campaign send requires approval id");
+  const [approval] = await db.select().from(campaignApprovals).where(and(
+    eq(campaignApprovals.id, payload.approvalId),
+    eq(campaignApprovals.campaignId, campaign.id),
+    eq(campaignApprovals.organizationId, campaign.organizationId),
+    eq(campaignApprovals.status, "approved"),
+    sql`${campaignApprovals.expiresAt} > NOW()`
+  )).limit(1);
+  if (!approval) throw new Error("Campaign send requires valid approval");
+  if (approval.contentHash !== campaign.contentHash) throw new Error("Campaign content changed after approval");
+  if ((approval.recipientCount ?? 0) <= 0) throw new Error("Campaign has no recipients");
   const recipients = await db.select().from(campaignRecipients).where(and(
     eq(campaignRecipients.campaignId, campaign.id),
     eq(campaignRecipients.organizationId, campaign.organizationId),
     eq(campaignRecipients.status, "pending")
   ));
+  if (!recipients.length) throw new Error("Campaign has no pending recipients");
   let failedCount = 0;
 
   for (const recipient of recipients) {
@@ -900,11 +914,7 @@ async function processWorkflowStep(payload: {
   ));
 
   if (step?.type === "send_campaign" && step.campaignId) {
-    await enqueueJob(db, {
-      organizationId: workflow.organizationId,
-      kind: "campaign.send",
-      payload: { campaignId: step.campaignId }
-    });
+    throw new Error("Workflow send_campaign steps must use the approved campaign send API path");
   }
 }
 
@@ -974,7 +984,10 @@ async function handleJob(kind: string, payload: Record<string, unknown>, organiz
       return;
     case "campaign.send":
       if (!organizationId) throw new Error("Campaign jobs require an organization");
-      await processCampaignSend({ ...(payload as { campaignId: string }), organizationId });
+      await processCampaignSend({
+        ...(payload as { campaignId: string; approvalId?: string }),
+        organizationId
+      });
       return;
     case "import.hubspot.properties":
       await processHubspotPropertiesImport(payload as {
