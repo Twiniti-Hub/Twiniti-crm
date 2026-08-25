@@ -158,6 +158,11 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .app-dialog { border: 1px solid #e4ece8; border-radius: 17px; padding: 0; max-width: min(920px, 94vw); width: 100%; background: #f5f8f6; color: #192a38; }
 .app-dialog::backdrop { background: rgba(16, 43, 49, .45); }
 .dialog-form { margin: 0; box-shadow: none; }
+.campaign-preview-html { padding: 12px; border: 1px solid #e4ece8; border-radius: 10px; background: #fff; overflow: auto; }
+.form-property-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.form-property-option { display: grid; gap: 8px; align-content: start; padding: 14px; border: 1px solid #e4ece8; border-radius: 14px; background: #f8fbf9; min-width: 0; }
+.form-property-option input[type="checkbox"] { width: auto; }
+.form-property-label { color: #1f343f; font-size: 13px; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; }
 .kanban-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 16px; }
 .kanban-board-wrap { display: grid; gap: 12px; }
 .kanban-board { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; align-items: stretch; }

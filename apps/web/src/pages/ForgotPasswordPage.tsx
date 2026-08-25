@@ -1,15 +1,13 @@
 import { useHexclaveApp } from "@hexclave/react";
 import { FormEvent, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { Link } from "react-router";
 import { Brand } from "../components/Brand";
 
-export function SignInPage() {
+export function ForgotPasswordPage() {
   const app = useHexclaveApp();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function onSubmit(event: FormEvent) {
@@ -23,26 +21,18 @@ export function SignInPage() {
       setError("Email is required.");
       return;
     }
-    if (!password) {
-      setError("Password is required.");
-      return;
-    }
     setBusy(true);
     setError(null);
+    setMessage(null);
     try {
-      const result = await app.signInWithCredential({
-        email: trimmedEmail,
-        password,
-        noRedirect: true
-      });
+      const result = await app.sendForgotPasswordEmail(trimmedEmail);
       if (result.status === "error") {
-        setError(result.error.message || "Sign-in failed.");
+        setError(result.error.message || "Could not send reset email.");
         return;
       }
-      const after = searchParams.get("after");
-      navigate(after && after.startsWith("/") ? after : "/", { replace: true });
+      setMessage("If an account exists for that email, a password reset link is on its way.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign-in failed.");
+      setError(err instanceof Error ? err.message : "Could not send reset email.");
     } finally {
       setBusy(false);
     }
@@ -56,13 +46,14 @@ export function SignInPage() {
       <div className="auth-form-wrap">
         <form className="stack-form" onSubmit={onSubmit}>
           <div>
-            <p className="eyebrow">Sign in</p>
-            <h1>Welcome back</h1>
+            <p className="eyebrow">Password reset</p>
+            <h1>Reset your password</h1>
             <p className="muted">
-              Don&apos;t have an account? <Link to="/sign-up">Sign up</Link>
+              Remember your password? <Link to="/sign-in">Sign in</Link>
             </p>
           </div>
           {error ? <div className="banner error">{error}</div> : null}
+          {message ? <div className="banner info">{message}</div> : null}
           <label>
             Work email
             <input
@@ -73,21 +64,8 @@ export function SignInPage() {
               required
             />
           </label>
-          <label>
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-          </label>
-          <p className="muted" style={{ margin: 0 }}>
-            <Link to="/forgot-password">Forgot password?</Link>
-          </p>
           <button className="primary" type="submit" disabled={busy}>
-            {busy ? "Signing in…" : "Sign in"}
+            {busy ? "Sending…" : "Send reset email"}
           </button>
         </form>
       </div>

@@ -285,6 +285,33 @@ const CONTACT_COMPANY_PROPERTY_KEYS = [
   "primary_company_name"
 ] as const;
 
+const CONTACT_EMAIL_DOMAIN_PROPERTY_KEYS = [
+  "email_domain",
+  "hs_email_domain"
+] as const;
+
+export function extractEmailDomainFromAddress(email: string | null | undefined): string | null {
+  if (!email) return null;
+  const at = email.lastIndexOf("@");
+  if (at <= 0 || at >= email.length - 1) return null;
+  return normalizeDomain(email.slice(at + 1));
+}
+
+export function extractContactEmailDomain(
+  email: string | null | undefined,
+  properties: Record<string, unknown> | null | undefined
+): string | null {
+  if (properties) {
+    for (const key of CONTACT_EMAIL_DOMAIN_PROPERTY_KEYS) {
+      const value = properties[key];
+      if (typeof value === "string" && value.trim()) {
+        return normalizeDomain(value);
+      }
+    }
+  }
+  return extractEmailDomainFromAddress(email);
+}
+
 export function extractContactCompanyName(properties: Record<string, unknown> | null | undefined): string | null {
   if (!properties) return null;
   for (const key of CONTACT_COMPANY_PROPERTY_KEYS) {
@@ -995,14 +1022,18 @@ export async function resolveContactCompanyAssociation(
     contactId: string;
     companyName?: string | null;
     companyIndustry?: string | null;
+    contactEmail?: string | null;
+    contactProperties?: Record<string, unknown> | null;
   }
 ) {
   const companyName = input.companyName?.trim();
   if (!companyName) return null;
+  const domain = extractContactEmailDomain(input.contactEmail, input.contactProperties);
   const company = await upsertCompanyByName(db, {
     organizationId: input.organizationId,
     name: companyName,
-    industry: input.companyIndustry ?? undefined
+    industry: input.companyIndustry ?? undefined,
+    domain: domain ?? undefined
   });
   await setPrimaryCompanyAssociation(db, {
     organizationId: input.organizationId,
@@ -1027,6 +1058,7 @@ export async function reconcileContactCompanyAssociations(
   let createdCompanies = 0;
   let cleanedProperties = 0;
   let skipped = 0;
+  let domainsFilled = 0;
 
   for (const contact of rows) {
     const companyName = extractContactCompanyName((contact.properties ?? {}) as Record<string, unknown>);
@@ -1039,7 +1071,9 @@ export async function reconcileContactCompanyAssociations(
     const company = await resolveContactCompanyAssociation(db, {
       organizationId: input.organizationId,
       contactId: contact.id,
-      companyName
+      companyName,
+      contactEmail: contact.email,
+      contactProperties: (contact.properties ?? {}) as Record<string, unknown>
     });
     if (!company) {
       skipped += 1;
@@ -1047,6 +1081,7 @@ export async function reconcileContactCompanyAssociations(
     }
     matched += 1;
     if (!existingCompany) createdCompanies += 1;
+    else if (!existingCompany.domain && company.domain) domainsFilled += 1;
 
     const stripped = stripContactCompanyProperties((contact.properties ?? {}) as Record<string, unknown>);
     if (stripped.removed) {
@@ -1062,7 +1097,76 @@ export async function reconcileContactCompanyAssociations(
     }
   }
 
-  return { scanned: rows.length, matched, createdCompanies, cleanedProperties, skipped };
+  const domainBackfill = await backfillCompanyDomainsFromContacts(db, input);
+
+  return {
+    scanned: rows.length,
+    matched,
+    createdCompanies,
+    cleanedProperties,
+    skipped,
+    domainsFilled: domainsFilled + domainBackfill.updated
+  };
+}
+
+export async function backfillCompanyDomainsFromContacts(
+  db: Db,
+  input: { organizationId: string }
+) {
+  const rows = await db
+    .select({
+      companyId: companies.id,
+      companyDomain: companies.domain,
+      contactEmail: contacts.email,
+      contactProperties: contacts.properties
+    })
+    .from(companies)
+    .innerJoin(
+      contactCompanyAssociations,
+      and(
+        eq(contactCompanyAssociations.companyId, companies.id),
+        eq(contactCompanyAssociations.organizationId, input.organizationId),
+        eq(contactCompanyAssociations.label, "primary")
+      )
+    )
+    .innerJoin(
+      contacts,
+      and(
+        eq(contacts.id, contactCompanyAssociations.contactId),
+        eq(contacts.organizationId, input.organizationId),
+        isNull(contacts.archivedAt)
+      )
+    )
+    .where(and(
+      eq(companies.organizationId, input.organizationId),
+      isNull(companies.archivedAt),
+      isNull(companies.domain)
+    ));
+
+  let updated = 0;
+  const seen = new Set<string>();
+
+  for (const row of rows) {
+    if (seen.has(row.companyId)) continue;
+    const domain = extractContactEmailDomain(
+      row.contactEmail,
+      (row.contactProperties ?? {}) as Record<string, unknown>
+    );
+    if (!domain) continue;
+    seen.add(row.companyId);
+    const [company] = await db.update(companies).set({
+      domain,
+      domainNormalized: normalizeDomain(domain),
+      updatedAt: new Date()
+    }).where(and(
+      eq(companies.id, row.companyId),
+      eq(companies.organizationId, input.organizationId),
+      isNull(companies.domain)
+    )).returning({ id: companies.id });
+    if (company) updated += 1;
+  }
+
+  return { scanned: seen.size, updated };
 }
 
 export async function findContactByEmail(db: Db, organizationId: string, email: string) {
@@ -1287,8 +1391,8 @@ export async function upsertCompanyByName(
   }
 
   const [row] = await db.update(companies).set({
-    domain: input.domain === undefined ? existing.domain : input.domain,
-    domainNormalized: input.domain === undefined ? existing.domainNormalized : normalizeDomain(input.domain),
+    domain: existing.domain ?? input.domain ?? null,
+    domainNormalized: existing.domainNormalized ?? normalizeDomain(input.domain),
     industry: input.industry === undefined ? existing.industry : input.industry,
     properties: {
       ...((existing.properties ?? {}) as Record<string, unknown>),

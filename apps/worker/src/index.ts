@@ -446,7 +446,9 @@ async function processHubspotImport(payload: {
         await resolveContactCompanyAssociation(db, {
           organizationId: job.organizationId,
           contactId: result.row.id,
-          companyName: mapped.companyName
+          companyName: mapped.companyName,
+          contactEmail: result.row.email,
+          contactProperties: (result.row.properties ?? {}) as Record<string, unknown>
         });
 
         if (mapped.externalId) {
