@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { assertScope } from "@twiniti/auth";
 import type { AppEnv } from "@twiniti/config";
 import {
@@ -17,7 +17,8 @@ import {
   hubspotPropertyDefinitionsImportBodySchema,
   ingestEventSchema,
   updateAgentIdentitySchema,
-  updatePropertyDefinitionSchema
+  updatePropertyDefinitionSchema,
+  updateSegmentSchema
 } from "@twiniti/contracts";
 import {
   agentIdentities,
@@ -61,6 +62,7 @@ import {
   normalizeHubspotInternalName,
   parseFilterAst,
   propertyDefinitions,
+  resolveCampaignAllowedRecipients,
   upsertPropertyDefinition,
   reportDefinitions,
   searchContacts,
@@ -82,6 +84,10 @@ const createTemplateSchema = z.object({
   htmlBody: z.string().min(1),
   textBody: z.string().optional(),
   status: z.enum(["draft", "review", "published", "archived"]).optional()
+});
+
+const approveCampaignBodySchema = z.object({
+  scheduledAt: z.string().datetime()
 });
 
 const CONTACT_IMPORT_CHUNK_SIZE = 250;
@@ -355,11 +361,90 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       const actor = requireActor(request);
       if (actor.type === "agent") assertScope(actor, "segments:read");
       const { id } = request.params as { id: string };
-      const [segment] = await db.select().from(segments).where(and(eq(segments.id, id), eq(segments.organizationId, requireOrgId(actor)))).limit(1);
+      const organizationId = requireOrgId(actor);
+      const [segment] = await db.select().from(segments).where(and(eq(segments.id, id), eq(segments.organizationId, organizationId))).limit(1);
       if (!segment) return reply.code(404).send({ error: { code: "not_found", message: "Segment not found" } });
       const filter = compileFilterAst(parseFilterAst(segment.filterAst));
-      const rows = await db.select().from(contacts).where(and(eq(contacts.organizationId, requireOrgId(actor)), filter));
-      return { data: { count: rows.length } };
+      const rows = await db.select({ value: count() }).from(contacts).where(and(eq(contacts.organizationId, organizationId), filter));
+      return { data: { count: Number(rows[0]?.value ?? 0) } };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.get("/api/v1/segments/:id/contacts", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      if (actor.type === "agent") {
+        assertScope(actor, "segments:read");
+        assertScope(actor, "contacts:read");
+      } else requireUserRole(actor, "member");
+      const { id } = request.params as { id: string };
+      const organizationId = requireOrgId(actor);
+      const query = z.object({
+        limit: z.coerce.number().int().min(1).max(100).default(25),
+        page: z.coerce.number().int().min(1).default(1)
+      }).parse(request.query ?? {});
+      const [segment] = await db.select().from(segments).where(and(eq(segments.id, id), eq(segments.organizationId, organizationId))).limit(1);
+      if (!segment) return reply.code(404).send({ error: { code: "not_found", message: "Segment not found" } });
+      const filter = compileFilterAst(parseFilterAst(segment.filterAst));
+      const rows = await db.select({
+        id: contacts.id,
+        email: contacts.email,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        lifecycleStage: contacts.lifecycleStage
+      }).from(contacts).where(and(eq(contacts.organizationId, organizationId), filter))
+        .orderBy(asc(contacts.email))
+        .limit(query.limit)
+        .offset((query.page - 1) * query.limit);
+      return { data: rows };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.patch("/api/v1/segments/:id", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireUserRole(actor, "member");
+      const { id } = request.params as { id: string };
+      const organizationId = requireOrgId(actor);
+      const input = updateSegmentSchema.parse(request.body);
+      const [segment] = await db.select().from(segments).where(and(eq(segments.id, id), eq(segments.organizationId, organizationId))).limit(1);
+      if (!segment) return reply.code(404).send({ error: { code: "not_found", message: "Segment not found" } });
+      if (input.filterAst) parseFilterAst(input.filterAst);
+      const [row] = await db.update(segments).set({
+        name: input.name ?? segment.name,
+        description: input.description === undefined ? segment.description : input.description,
+        filterAst: input.filterAst ?? segment.filterAst,
+        updatedAt: new Date()
+      }).where(and(eq(segments.id, id), eq(segments.organizationId, organizationId))).returning();
+      await audit(db, actor, "segment.update", "segment", id);
+      return { data: row };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.delete("/api/v1/segments/:id", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireUserRole(actor, "member");
+      const { id } = request.params as { id: string };
+      const organizationId = requireOrgId(actor);
+      const [segment] = await db.select().from(segments).where(and(eq(segments.id, id), eq(segments.organizationId, organizationId))).limit(1);
+      if (!segment) return reply.code(404).send({ error: { code: "not_found", message: "Segment not found" } });
+      const [campaignRef] = await db.select({ id: campaigns.id }).from(campaigns).where(and(
+        eq(campaigns.segmentId, id),
+        eq(campaigns.organizationId, organizationId)
+      )).limit(1);
+      if (campaignRef) {
+        return reply.code(409).send({ error: { code: "conflict", message: "Segment is used by a campaign and cannot be deleted" } });
+      }
+      await db.delete(segments).where(and(eq(segments.id, id), eq(segments.organizationId, organizationId)));
+      await audit(db, actor, "segment.delete", "segment", id, { name: segment.name });
+      return { data: { id, deleted: true } };
     } catch (error) {
       return sendError(reply, error);
     }
@@ -538,7 +623,27 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
     try {
       const actor = requireActor(request);
       if (actor.type === "agent") assertScope(actor, "campaigns:read");
-      return { data: await listCampaigns(db, requireOrgId(actor)) };
+      const organizationId = requireOrgId(actor);
+      const rows = await listCampaigns(db, organizationId);
+      const pendingApprovals = rows.length
+        ? await db.select({
+          campaignId: campaignApprovals.campaignId,
+          requestedBy: campaignApprovals.requestedBy,
+          recipientCount: campaignApprovals.recipientCount
+        }).from(campaignApprovals).where(and(
+          eq(campaignApprovals.organizationId, organizationId),
+          eq(campaignApprovals.status, "pending"),
+          sql`${campaignApprovals.expiresAt} > NOW()`,
+          inArray(campaignApprovals.campaignId, rows.map((row) => row.id))
+        ))
+        : [];
+      const pendingByCampaign = new Map(pendingApprovals.map((row) => [row.campaignId, row]));
+      return {
+        data: rows.map((row) => ({
+          ...row,
+          pendingApproval: pendingByCampaign.get(row.id) ?? null
+        }))
+      };
     } catch (error) {
       return sendError(reply, error);
     }
@@ -602,7 +707,11 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       const organizationId = requireOrgId(actor);
       const [campaign] = await db.select().from(campaigns).where(and(eq(campaigns.id, id), eq(campaigns.organizationId, organizationId))).limit(1);
       if (!campaign) return reply.code(404).send({ error: { code: "not_found", message: "Campaign not found" } });
-      const sampleContacts = await searchContacts(db, requireOrgId(actor), { limit: 3 });
+      if (!campaign.segmentId && !campaign.listId) {
+        return reply.code(400).send({ error: { code: "audience_required", message: "Campaign requires a segment or list audience before preview" } });
+      }
+      const allowed = await resolveCampaignAllowedRecipients(db, organizationId, campaign);
+      const sampleContacts = allowed.slice(0, 3);
       const previews = sampleContacts.map((contact) => ({
         contactId: contact.id,
         email: contact.email,
@@ -614,14 +723,11 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
         }),
         suppressed: false
       }));
-      for (const preview of previews) {
-        preview.suppressed = await isEmailSuppressed(db, requireOrgId(actor), preview.email);
-      }
       return {
         data: {
           campaignId: campaign.id,
           subject: campaign.subject,
-          recipientEstimate: campaign.recipientCount ?? sampleContacts.length,
+          recipientEstimate: allowed.length,
           previews
         }
       };
@@ -639,36 +745,30 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       const organizationId = requireOrgId(actor);
       const [campaign] = await db.select().from(campaigns).where(and(eq(campaigns.id, id), eq(campaigns.organizationId, organizationId))).limit(1);
       if (!campaign) return reply.code(404).send({ error: { code: "not_found", message: "Campaign not found" } });
-      let recipients = await searchContacts(db, organizationId, { limit: 100 });
-      if (campaign.segmentId) {
-        const [segment] = await db.select().from(segments).where(and(
-          eq(segments.id, campaign.segmentId),
-          eq(segments.organizationId, organizationId)
-        )).limit(1);
-        if (segment) {
-          const filter = compileFilterAst(parseFilterAst(segment.filterAst));
-          recipients = await db.select().from(contacts).where(and(eq(contacts.organizationId, organizationId), filter));
-        }
+      if (campaign.status !== "draft") {
+        return reply.code(409).send({ error: { code: "conflict", message: "Only draft campaigns can request approval" } });
       }
-      const allowed = [];
-      for (const contact of recipients) {
-        if (!(await isEmailSuppressed(db, organizationId, contact.email))) {
-          allowed.push(contact);
-        }
+      if (!campaign.segmentId && !campaign.listId) {
+        return reply.code(400).send({ error: { code: "audience_required", message: "Campaign requires a segment or list audience" } });
+      }
+      if (!campaign.subject?.trim() || !campaign.htmlBody?.trim()) {
+        return reply.code(400).send({ error: { code: "bad_request", message: "Campaign subject and HTML body are required before approval" } });
+      }
+      const allowed = await resolveCampaignAllowedRecipients(db, organizationId, campaign);
+      if (!allowed.length) {
+        return reply.code(400).send({ error: { code: "audience_empty", message: "Campaign audience has no mailable recipients" } });
       }
       await db.delete(campaignRecipients).where(and(
         eq(campaignRecipients.campaignId, campaign.id),
         eq(campaignRecipients.organizationId, organizationId)
       ));
-      if (allowed.length) {
-        await db.insert(campaignRecipients).values(allowed.map((contact) => ({
-          organizationId,
-          campaignId: campaign.id,
-          contactId: contact.id,
-          emailNormalized: normalizeEmail(contact.email),
-          idempotencyKey: `${campaign.id}:${contact.id}:${campaign.contentHash ?? "na"}`
-        })));
-      }
+      await db.insert(campaignRecipients).values(allowed.map((contact) => ({
+        organizationId,
+        campaignId: campaign.id,
+        contactId: contact.id,
+        emailNormalized: normalizeEmail(contact.email),
+        idempotencyKey: `${campaign.id}:${contact.id}:${campaign.contentHash ?? "na"}`
+      })));
       const [approval] = await db.insert(campaignApprovals).values({
         organizationId,
         campaignId: campaign.id,
@@ -695,23 +795,47 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       const actor = requireActor(request);
       requireUserRole(actor, "admin");
       const { id } = request.params as { id: string };
+      const organizationId = requireOrgId(actor);
+      const input = approveCampaignBodySchema.parse(request.body ?? {});
+      const scheduledAt = new Date(input.scheduledAt);
+      if (Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() <= Date.now()) {
+        return reply.code(400).send({ error: { code: "bad_request", message: "scheduledAt must be a future datetime" } });
+      }
+      const [campaign] = await db.select().from(campaigns).where(and(
+        eq(campaigns.id, id),
+        eq(campaigns.organizationId, organizationId)
+      )).limit(1);
+      if (!campaign) return reply.code(404).send({ error: { code: "not_found", message: "Campaign not found" } });
+      if (campaign.status !== "review") {
+        return reply.code(409).send({ error: { code: "conflict", message: "Only campaigns in review can be approved" } });
+      }
       const pending = await db.select().from(campaignApprovals).where(and(
         eq(campaignApprovals.campaignId, id),
-        eq(campaignApprovals.organizationId, requireOrgId(actor)),
+        eq(campaignApprovals.organizationId, organizationId),
         eq(campaignApprovals.status, "pending"),
         sql`${campaignApprovals.expiresAt} > NOW()`
       )).limit(1);
       if (!pending[0]) return reply.code(404).send({ error: { code: "not_found", message: "No pending approval" } });
+      if (pending[0].requestedBy === actor.id) {
+        return reply.code(403).send({ error: { code: "self_approval_forbidden", message: "The approver must be a different admin than the requester" } });
+      }
+      if ((pending[0].recipientCount ?? 0) <= 0) {
+        return reply.code(400).send({ error: { code: "audience_empty", message: "Campaign has no recipients to schedule" } });
+      }
       const [approval] = await db.update(campaignApprovals).set({
         status: "approved",
         approvedBy: actor.id,
         decidedAt: new Date()
       }).where(eq(campaignApprovals.id, pending[0].id)).returning();
-      await db.update(campaigns).set({ status: "scheduled", updatedAt: new Date() }).where(and(
+      await db.update(campaigns).set({
+        status: "scheduled",
+        scheduledAt,
+        updatedAt: new Date()
+      }).where(and(
         eq(campaigns.id, id),
-        eq(campaigns.organizationId, requireOrgId(actor))
+        eq(campaigns.organizationId, organizationId)
       ));
-      await audit(db, actor, "campaign.approve", "campaign", id);
+      await audit(db, actor, "campaign.approve", "campaign", id, { scheduledAt: scheduledAt.toISOString() });
       return { data: approval };
     } catch (error) {
       return sendError(reply, error);
@@ -742,6 +866,12 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       if (!campaign) return reply.code(409).send({ error: { code: "conflict", message: "Campaign is not approved for sending" } });
       if (approvals[0].contentHash !== campaign.contentHash) {
         return reply.code(409).send({ error: { code: "conflict", message: "Campaign content changed after approval" } });
+      }
+      if ((campaign.recipientCount ?? 0) <= 0 || (approvals[0].recipientCount ?? 0) <= 0) {
+        return reply.code(400).send({ error: { code: "audience_empty", message: "Campaign has no recipients" } });
+      }
+      if (campaign.scheduledAt && campaign.scheduledAt.getTime() > Date.now()) {
+        return reply.code(409).send({ error: { code: "conflict", message: "Campaign is not yet scheduled to send" } });
       }
       await db.update(campaigns).set({ status: "sending", updatedAt: new Date() }).where(and(
         eq(campaigns.id, id),

@@ -19,7 +19,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "tsx --test src/lib/csv.test.ts src/lib/board.test.ts",
+    "test": "tsx --test src/lib/csv.test.ts src/lib/board.test.ts src/lib/formatFilterAst.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit"
   },

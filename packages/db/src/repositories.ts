@@ -2,6 +2,7 @@ import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } 
 // neon-http workers use optimistic claim rather than SKIP LOCKED transactions
 import { randomBytes, randomUUID } from "node:crypto";
 import type { Db } from "./client.js";
+import { compileFilterAst, parseFilterAst } from "./filters.js";
 import {
   mapHubspotPropertyType,
   normalizeHubspotInternalName,
@@ -22,6 +23,7 @@ import {
   externalRecordIds,
   forms,
   jobs,
+  listMemberships,
   organizationBilling,
   organizationResendDomains,
   organizationInvitations,
@@ -1404,8 +1406,97 @@ export async function upsertCompanyByName(
   return { row, created: false as const };
 }
 
+export async function resolveCampaignRecipients(
+  db: Db,
+  organizationId: string,
+  campaign: { segmentId: string | null; listId: string | null }
+) {
+  if (campaign.segmentId) {
+    const segment = await getSegmentById(db, organizationId, campaign.segmentId);
+    if (!segment) return [];
+    const filter = compileFilterAst(parseFilterAst(segment.filterAst));
+    return db.select().from(contacts).where(and(eq(contacts.organizationId, organizationId), filter));
+  }
+  if (campaign.listId) {
+    const rows = await db.select({ contact: contacts }).from(listMemberships).innerJoin(
+      contacts,
+      eq(listMemberships.contactId, contacts.id)
+    ).where(and(
+      eq(listMemberships.listId, campaign.listId),
+      eq(listMemberships.organizationId, organizationId),
+      eq(contacts.organizationId, organizationId)
+    ));
+    return rows.map((row) => row.contact);
+  }
+  return [];
+}
+
+export async function resolveCampaignAllowedRecipients(
+  db: Db,
+  organizationId: string,
+  campaign: { segmentId: string | null; listId: string | null }
+) {
+  const recipients = await resolveCampaignRecipients(db, organizationId, campaign);
+  const allowed = [];
+  for (const contact of recipients) {
+    if (!(await isEmailSuppressed(db, organizationId, contact.email))) {
+      allowed.push(contact);
+    }
+  }
+  return allowed;
+}
+
+export function buildImportedMarketingTimelineEvents(
+  contactId: string,
+  organizationId: string,
+  properties: Record<string, unknown>,
+  existingDedupeKeys: Set<string>
+) {
+  const dedupeKey = `import:${contactId}:marketing-summary`;
+  if (existingDedupeKeys.has(dedupeKey)) return [];
+
+  const deliveredRaw = properties.marketing_emails_delivered ?? properties.hs_email_delivered;
+  const lastName = properties.last_marketing_email_name ?? properties.hs_email_last_email_name;
+  const lastSendDate = properties.hs_email_last_send_date ?? properties.last_marketing_email_sent_date;
+
+  const deliveredCount = typeof deliveredRaw === "number" ? deliveredRaw : Number(deliveredRaw);
+  const hasDelivered = Number.isFinite(deliveredCount) && deliveredCount > 0;
+  const hasLastName = typeof lastName === "string" && lastName.trim().length > 0;
+  if (!hasDelivered && !hasLastName) return [];
+
+  let occurredAt = new Date();
+  if (typeof lastSendDate === "string" && lastSendDate.trim()) {
+    const parsed = new Date(lastSendDate);
+    if (!Number.isNaN(parsed.getTime())) occurredAt = parsed;
+  }
+
+  return [{
+    id: dedupeKey,
+    organizationId,
+    contactId,
+    companyId: null,
+    eventType: "email.sent",
+    source: "hubspot.import",
+    occurredAt,
+    payload: {
+      direction: "outbound",
+      activityType: "sent",
+      provider: "import",
+      subject: hasLastName ? lastName.trim() : "Marketing email",
+      metadata: {
+        imported: true,
+        marketingEmailsDelivered: hasDelivered ? deliveredCount : undefined
+      }
+    },
+    dedupeKey,
+    privacyClass: "standard",
+    createdAt: occurredAt
+  }];
+}
+
 export async function getContactTimeline(db: Db, organizationId: string, contactId: string) {
-  const [events, activities] = await Promise.all([
+  const [contact, events, activities] = await Promise.all([
+    getContactById(db, organizationId, contactId),
     db.select().from(customerEvents).where(and(
       eq(customerEvents.organizationId, organizationId),
       eq(customerEvents.contactId, contactId)
@@ -1443,7 +1534,22 @@ export async function getContactTimeline(db: Db, organizationId: string, contact
     privacyClass: "standard",
     createdAt: activity.createdAt
   }));
-  return [...events, ...emailEvents]
+  const existingDedupeKeys = new Set<string>();
+  for (const activity of activities) {
+    if (activity.dedupeKey) existingDedupeKeys.add(activity.dedupeKey);
+  }
+  for (const event of events) {
+    if (event.dedupeKey) existingDedupeKeys.add(event.dedupeKey);
+  }
+  const importedEvents = contact
+    ? buildImportedMarketingTimelineEvents(
+      contactId,
+      organizationId,
+      (contact.properties ?? {}) as Record<string, unknown>,
+      existingDedupeKeys
+    )
+    : [];
+  return [...events, ...emailEvents, ...importedEvents]
     .sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime())
     .slice(0, 100);
 }
