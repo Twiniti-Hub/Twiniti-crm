@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 
 type Campaign = {
@@ -9,6 +9,18 @@ type Campaign = {
   recipientCount?: number | null;
 };
 
+type CampaignPreview = {
+  campaignId: string;
+  subject: string | null;
+  recipientEstimate: number;
+  previews: Array<{
+    contactId: string;
+    email: string;
+    html: string;
+    suppressed: boolean;
+  }>;
+};
+
 export function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [name, setName] = useState("");
@@ -17,6 +29,9 @@ export function CampaignsPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<CampaignPreview | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const previewDialogRef = useRef<HTMLDialogElement>(null);
 
   async function load() {
     const res = await api("/api/v1/campaigns");
@@ -27,17 +42,33 @@ export function CampaignsPage() {
     load().catch((err) => setError(err instanceof Error ? err.message : "Failed to load campaigns"));
   }, []);
 
+  useEffect(() => {
+    if (preview) previewDialogRef.current?.showModal();
+    else previewDialogRef.current?.close();
+  }, [preview]);
+
   async function onCreate(event: FormEvent) {
     event.preventDefault();
+    const trimmedName = name.trim();
+    const trimmedSubject = subject.trim();
+    if (!trimmedName) {
+      setError("Campaign name is required.");
+      return;
+    }
+    if (!trimmedSubject) {
+      setError("Subject is required.");
+      return;
+    }
     setBusy(true);
     setError(null);
     setMessage(null);
     try {
       await api("/api/v1/campaigns", {
         method: "POST",
-        body: JSON.stringify({ name, subject, htmlBody })
+        body: JSON.stringify({ name: trimmedName, subject: trimmedSubject, htmlBody })
       });
       setName("");
+      setSubject("");
       await load();
       setMessage("Draft campaign created");
     } catch (err) {
@@ -51,11 +82,19 @@ export function CampaignsPage() {
     setError(null);
     setMessage(null);
     try {
+      if (action === "preview") {
+        setPreviewBusy(true);
+        const res = await api(`/api/v1/campaigns/${id}/preview`, { method: "POST", body: "{}" });
+        setPreview((res.data ?? null) as CampaignPreview | null);
+        return;
+      }
       const res = await api(`/api/v1/campaigns/${id}/${action}`, { method: "POST", body: "{}" });
       setMessage(`${action}: ${JSON.stringify(res.data)}`);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : `${action} failed`);
+    } finally {
+      setPreviewBusy(false);
     }
   }
 
@@ -77,7 +116,7 @@ export function CampaignsPage() {
           </label>
           <label>
             Subject
-            <input value={subject} onChange={(e) => setSubject(e.target.value)} />
+            <input value={subject} onChange={(e) => setSubject(e.target.value)} required />
           </label>
         </div>
         <label>
@@ -107,8 +146,13 @@ export function CampaignsPage() {
                 </td>
                 <td>{campaign.subject ?? "—"}</td>
                 <td className="row-actions">
-                  <button className="secondary" type="button" onClick={() => runAction(campaign.id, "preview")}>
-                    Preview
+                  <button
+                    className="secondary"
+                    type="button"
+                    disabled={previewBusy}
+                    onClick={() => runAction(campaign.id, "preview")}
+                  >
+                    {previewBusy ? "Loading…" : "Preview"}
                   </button>
                   <button className="secondary" type="button" onClick={() => runAction(campaign.id, "request-approval")}>
                     Request approval
@@ -130,6 +174,45 @@ export function CampaignsPage() {
           </tbody>
         </table>
       </div>
+
+      <dialog
+        ref={previewDialogRef}
+        className="app-dialog"
+        onClose={() => setPreview(null)}
+      >
+        {preview ? (
+          <div className="stack-form dialog-form">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Preview</p>
+                <h3>{preview.subject ?? "Untitled campaign"}</h3>
+                <p className="muted">Estimated recipients: {preview.recipientEstimate}</p>
+              </div>
+              <button className="secondary" type="button" onClick={() => previewDialogRef.current?.close()}>
+                Close
+              </button>
+            </div>
+            {preview.previews.length ? (
+              preview.previews.map((sample) => (
+                <section key={sample.contactId} className="panel inset-panel">
+                  <div className="panel-heading">
+                    <div>
+                      <strong>{sample.email}</strong>
+                      {sample.suppressed ? <span className="pill">Suppressed</span> : null}
+                    </div>
+                  </div>
+                  <div
+                    className="campaign-preview-html"
+                    dangerouslySetInnerHTML={{ __html: sample.html }}
+                  />
+                </section>
+              ))
+            ) : (
+              <div className="banner info">No sample contacts available for preview.</div>
+            )}
+          </div>
+        ) : null}
+      </dialog>
     </>
   );
 }

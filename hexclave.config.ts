@@ -10,6 +10,7 @@ export default {
   urls: {
     signIn: "/sign-in",
     signUp: "/sign-up",
+    forgotPassword: "/forgot-password",
     home: "/",
     afterSignIn: "/",
     afterSignUp: "/",

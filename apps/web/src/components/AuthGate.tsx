@@ -9,6 +9,7 @@ import { AcceptInvitePage } from "../pages/AcceptInvitePage";
 import { BillingPage } from "../pages/BillingPage";
 import { LandingPage } from "../pages/LandingPage";
 import { OnboardingPage } from "../pages/OnboardingPage";
+import { ForgotPasswordPage } from "../pages/ForgotPasswordPage";
 import { SignInPage } from "../pages/SignInPage";
 import { SignUpPage } from "../pages/SignUpPage";
 import { CrmRoutes } from "./CrmRoutes";
@@ -84,6 +85,7 @@ export function AuthGate() {
         <Route path="/" element={<LandingPage />} />
         <Route path="sign-in" element={<SignInPage />} />
         <Route path="sign-up" element={<SignUpPage />} />
+        <Route path="forgot-password" element={<ForgotPasswordPage />} />
         <Route path="accept-invite" element={<AcceptInvitePage />} />
         <Route path="handler/*" element={<HexclaveHandler fullPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
