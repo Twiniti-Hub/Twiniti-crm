@@ -35,6 +35,9 @@ export function CampaignsPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<CampaignPreview | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const previewDialogRef = useRef<HTMLDialogElement>(null);
 
   const isAdmin = me?.role === "admin" || me?.isSuperAdmin === true;
 
@@ -73,6 +76,7 @@ export function CampaignsPage() {
         body: JSON.stringify({ name, subject, htmlBody, segmentId })
       });
       setName("");
+      setSubject("");
       await load();
       setMessage("Draft campaign created");
     } catch (err) {
@@ -94,6 +98,8 @@ export function CampaignsPage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : `${action} failed`);
+    } finally {
+      setPreviewBusy(false);
     }
   }
 
@@ -248,6 +254,45 @@ export function CampaignsPage() {
           </tbody>
         </table>
       </div>
+
+      <dialog
+        ref={previewDialogRef}
+        className="app-dialog"
+        onClose={() => setPreview(null)}
+      >
+        {preview ? (
+          <div className="stack-form dialog-form">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Preview</p>
+                <h3>{preview.subject ?? "Untitled campaign"}</h3>
+                <p className="muted">Estimated recipients: {preview.recipientEstimate}</p>
+              </div>
+              <button className="secondary" type="button" onClick={() => previewDialogRef.current?.close()}>
+                Close
+              </button>
+            </div>
+            {preview.previews.length ? (
+              preview.previews.map((sample) => (
+                <section key={sample.contactId} className="panel inset-panel">
+                  <div className="panel-heading">
+                    <div>
+                      <strong>{sample.email}</strong>
+                      {sample.suppressed ? <span className="pill">Suppressed</span> : null}
+                    </div>
+                  </div>
+                  <div
+                    className="campaign-preview-html"
+                    dangerouslySetInnerHTML={{ __html: sample.html }}
+                  />
+                </section>
+              ))
+            ) : (
+              <div className="banner info">No sample contacts available for preview.</div>
+            )}
+          </div>
+        ) : null}
+      </dialog>
     </>
   );
 }

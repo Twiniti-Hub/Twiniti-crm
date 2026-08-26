@@ -114,15 +114,19 @@ export function FormsPage() {
         <fieldset>
           <legend className="eyebrow">Fields from property definitions</legend>
           <p className="muted">Email is always included. Select additional HubSpot-mapped properties.</p>
-          <div className="form-row">
+          <div className="form-property-grid">
             {definitions.map((def) => (
-              <label key={def.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <input
-                  type="checkbox"
-                  checked={selectedProps.includes(def.internalName)}
-                  onChange={() => toggleProp(def.internalName)}
-                />
-                {def.label} <code>{def.internalName}</code>
+              <label key={def.id} className="form-property-option">
+                <span className="form-property-label">{def.label}</span>
+                <span className="property-code">{def.internalName}</span>
+                <span className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={selectedProps.includes(def.internalName)}
+                    onChange={() => toggleProp(def.internalName)}
+                  />
+                  Include field
+                </span>
               </label>
             ))}
             {!definitions.length ? (
