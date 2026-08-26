@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import type { Me } from "../lib/me";
 
@@ -17,10 +17,23 @@ type Campaign = {
   pendingApproval?: { requestedBy: string; recipientCount: number } | null;
 };
 
+type CampaignPreview = {
+  campaignId: string;
+  subject: string | null;
+  recipientEstimate: number;
+  previews: Array<{
+    contactId: string;
+    email: string;
+    html: string;
+    suppressed: boolean;
+  }>;
+};
+
 function defaultScheduleValue() {
   const date = new Date(Date.now() + 60 * 60 * 1000);
   date.setSeconds(0, 0);
-  return date.toISOString().slice(0, 16);
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 export function CampaignsPage() {
@@ -49,12 +62,17 @@ export function CampaignsPage() {
     ]);
     setCampaigns((campaignRes.data ?? []) as Campaign[]);
     setSegments((segmentRes.data ?? []) as SegmentOption[]);
-    setMe(meRes as Me);
+    setMe(meRes.data as Me);
   }
 
   useEffect(() => {
     load().catch((err) => setError(err instanceof Error ? err.message : "Failed to load campaigns"));
   }, []);
+
+  useEffect(() => {
+    if (preview) previewDialogRef.current?.showModal();
+    else previewDialogRef.current?.close();
+  }, [preview]);
 
   const segmentNameById = useMemo(
     () => new Map(segments.map((segment) => [segment.id, segment.name])),
@@ -90,6 +108,12 @@ export function CampaignsPage() {
     setError(null);
     setMessage(null);
     try {
+      if (action === "preview") {
+        setPreviewBusy(true);
+        const res = await api(`/api/v1/campaigns/${id}/preview`, { method: "POST", body: "{}" });
+        setPreview((res.data ?? null) as CampaignPreview | null);
+        return;
+      }
       const body = action === "approve"
         ? JSON.stringify({ scheduledAt: new Date(approveSchedule).toISOString() })
         : "{}";
@@ -213,10 +237,10 @@ export function CampaignsPage() {
                   <button
                     className="secondary"
                     type="button"
-                    disabled={!canPreview(campaign)}
+                    disabled={!canPreview(campaign) || previewBusy}
                     onClick={() => runAction(campaign.id, "preview")}
                   >
-                    Preview
+                    {previewBusy ? "Loading…" : "Preview"}
                   </button>
                   <button
                     className="secondary"

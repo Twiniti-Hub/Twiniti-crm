@@ -31,20 +31,47 @@ const CORE_FIELDS = [
   { value: "last_name", label: "Last name" }
 ];
 
-function firstLeafFromFilter(filterAst: unknown) {
+type FilterLeaf = {
+  op: "eq" | "contains" | "neq";
+  field: string;
+  value: string;
+};
+
+function firstLeafFromFilter(filterAst: unknown): FilterLeaf {
   if (!filterAst || typeof filterAst !== "object") {
-    return { field: "lifecycle_stage", op: "eq" as const, value: "lead" };
+    return { field: "lifecycle_stage", op: "eq", value: "lead" };
   }
   const node = filterAst as { children?: Array<{ field?: string; op?: string; value?: unknown }> };
   const leaf = node.children?.[0];
   if (!leaf?.field || !leaf.op) {
-    return { field: "lifecycle_stage", op: "eq" as const, value: "lead" };
+    return { field: "lifecycle_stage", op: "eq", value: "lead" };
   }
   return {
     field: leaf.field,
-    op: leaf.op as "eq" | "contains" | "neq",
+    op: leaf.op as FilterLeaf["op"],
     value: String(leaf.value ?? "")
   };
+}
+
+function updateFirstLeaf(filterAst: unknown, leaf: FilterLeaf) {
+  if (!filterAst || typeof filterAst !== "object") {
+    return { op: "and", children: [leaf] };
+  }
+  const node = filterAst as {
+    op?: string;
+    field?: string;
+    value?: unknown;
+    children?: Array<Record<string, unknown>>;
+  };
+  if (node.children?.length) {
+    return {
+      ...node,
+      children: node.children.map((child, index) => (
+        index === 0 ? { op: leaf.op, field: leaf.field, value: leaf.value } : child
+      ))
+    };
+  }
+  return { op: leaf.op, field: leaf.field, value: leaf.value };
 }
 
 export function SegmentsPage() {
@@ -56,6 +83,7 @@ export function SegmentsPage() {
   const [op, setOp] = useState<"eq" | "contains" | "neq">("eq");
   const [value, setValue] = useState("lead");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingFilterAst, setEditingFilterAst] = useState<unknown>(null);
   const [previewSegment, setPreviewSegment] = useState<Segment | null>(null);
   const [previewContacts, setPreviewContacts] = useState<PreviewContact[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +122,7 @@ export function SegmentsPage() {
 
   function resetForm() {
     setEditingId(null);
+    setEditingFilterAst(null);
     setName("");
     setField("lifecycle_stage");
     setOp("eq");
@@ -103,6 +132,7 @@ export function SegmentsPage() {
   function startEdit(segment: Segment) {
     const leaf = firstLeafFromFilter(segment.filterAst);
     setEditingId(segment.id);
+    setEditingFilterAst(segment.filterAst);
     setName(segment.name);
     setField(leaf.field);
     setOp(leaf.op);
@@ -115,10 +145,10 @@ export function SegmentsPage() {
     setError(null);
     setMessage(null);
     try {
-      const filterAst = {
-        op: "and",
-        children: [{ op, field, value }]
-      };
+      const leaf: FilterLeaf = { op, field, value };
+      const filterAst = editingId && editingFilterAst
+        ? updateFirstLeaf(editingFilterAst, leaf)
+        : { op: "and", children: [leaf] };
       if (editingId) {
         await api(`/api/v1/segments/${editingId}`, {
           method: "PATCH",
