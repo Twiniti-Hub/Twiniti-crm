@@ -375,8 +375,10 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
   app.get("/api/v1/segments/:id/contacts", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      if (actor.type === "agent") assertScope(actor, "segments:read");
-      else requireUserRole(actor, "member");
+      if (actor.type === "agent") {
+        assertScope(actor, "segments:read");
+        assertScope(actor, "contacts:read");
+      } else requireUserRole(actor, "member");
       const { id } = request.params as { id: string };
       const organizationId = requireOrgId(actor);
       const query = z.object({
