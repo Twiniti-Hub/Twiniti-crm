@@ -7,6 +7,9 @@ on:
   pull_request:
   push:
 
+# Dependabot PRs cannot read repository secrets, so ingest uploads are skipped
+# for that actor. Semgrep/Gitleaks still run and the required check still
+# enforces scanner exit codes.
 concurrency:
   group: security-scan-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: true
@@ -77,9 +80,14 @@ jobs:
           fi
           echo "scanner_status=$scanner_status" >> "$GITHUB_OUTPUT"
 
+      - name: Skip Dependabot security ingest
+        if: github.actor == 'dependabot[bot]'
+        run: echo "::notice::Skipping Twiniti Security ingest; Dependabot workflows cannot access repository secrets"
+
       - name: Upload Semgrep SARIF to Twiniti Security
         if: >-
           always() && hashFiles('semgrep.sarif') != '' &&
+          github.actor != 'dependabot[bot]' &&
           (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         env:
           SECURITY_INGEST_URL: ${{ secrets.SECURITY_INGEST_URL }}
@@ -110,6 +118,7 @@ jobs:
       - name: Upload Gitleaks SARIF to Twiniti Security
         if: >-
           always() && hashFiles('gitleaks.sarif') != '' &&
+          github.actor != 'dependabot[bot]' &&
           (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         env:
           SECURITY_INGEST_URL: ${{ secrets.SECURITY_INGEST_URL }}
