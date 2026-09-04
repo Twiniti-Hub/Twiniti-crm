@@ -1,9 +1,11 @@
 # Dependency security status
 
-Last reviewed: 2026-07-31
+Last reviewed: 2026-09-04
 
 ## Resolved in this change
 
+- Fastify was updated from 5.10.0 to 5.12.1 (API and billing gateway) for
+  GHSA-w2qp-rph6-63g4 and GHSA-3m5p-2c4r-xxw2.
 - React Router moved from the removed `react-router-dom` v7 re-export to `react-router` v8.3.0.
 - React and React DOM were updated to 19.2.8.
 - Vite was updated to 7.3.6 and `@vitejs/plugin-react` to 5.2.0, which are compatible with the React Router v8 baseline.

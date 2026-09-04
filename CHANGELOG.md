@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.54] - 2026-09-04
+
+- Bump Fastify from 5.10.0 to 5.12.1 in the API and billing gateway to pick up
+  the GHSA-w2qp-rph6-63g4 and GHSA-3m5p-2c4r-xxw2 security fixes.
+- `Security / scan` skips Twiniti Security SARIF ingest on Dependabot runs,
+  which cannot access repository secrets, so required checks can pass without
+  hiding Semgrep or Gitleaks enforcement.
+
 ## [0.10.53] - 2026-08-21
 
 - Publish `/robots.txt` and `/sitemap.xml` on the Loop landing site so search
