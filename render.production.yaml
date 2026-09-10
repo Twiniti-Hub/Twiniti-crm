@@ -28,8 +28,6 @@ services:
         sync: false
       - key: RESEND_CREDENTIAL_ENCRYPTION_KEY
         sync: false
-      - key: PLATFORM_RESEND_API_KEY
-        sync: false
       - key: PLATFORM_EMAIL_FROM
         value: "Twiniti Loop <noreply@twiniti.ai>"
       - key: SUPPORT_EMAIL
@@ -96,8 +94,6 @@ services:
         sync: false
       - key: RESEND_CREDENTIAL_ENCRYPTION_KEY
         sync: false
-      - key: PLATFORM_RESEND_API_KEY
-        sync: false
       - key: PLATFORM_EMAIL_FROM
         value: "Twiniti Loop <noreply@twiniti.ai>"
       - key: SUPPORT_EMAIL
@@ -163,8 +159,6 @@ services:
       - key: VITE_GOOGLE_ANALYTICS_ID
         sync: false
       - key: RESEND_CREDENTIAL_ENCRYPTION_KEY
-        sync: false
-      - key: PLATFORM_RESEND_API_KEY
         sync: false
       - key: PLATFORM_EMAIL_FROM
         value: "Twiniti Loop <noreply@twiniti.ai>"

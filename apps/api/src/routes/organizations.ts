@@ -120,7 +120,7 @@ async function notifySupportOfSignup(
   },
   log?: { warn: (obj: unknown, msg?: string) => void }
 ) {
-  if (!env.PLATFORM_RESEND_API_KEY || !env.PLATFORM_EMAIL_FROM || !env.SUPPORT_EMAIL) {
+  if (!env.RESEND_API_KEY || !env.PLATFORM_EMAIL_FROM || !env.SUPPORT_EMAIL) {
     log?.warn(
       { organizationId: input.organizationId },
       "Skipping signup support notification; platform email is not configured"
@@ -135,7 +135,7 @@ async function notifySupportOfSignup(
 
   try {
     await sendEmail({
-      apiKey: env.PLATFORM_RESEND_API_KEY,
+      apiKey: env.RESEND_API_KEY,
       from: env.PLATFORM_EMAIL_FROM,
       to: env.SUPPORT_EMAIL,
       subject: content.subject,

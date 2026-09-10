@@ -27,8 +27,8 @@ export const envSchema = z.object({
   HEXCLAVE_SECRET_SERVER_KEY: z.string().optional().default(""),
   VITE_HEXCLAVE_PROJECT_ID: z.string().optional().default(""),
   RESEND_CREDENTIAL_ENCRYPTION_KEY: z.string().optional().default(""),
-  // Platform Resend for operational alerts (e.g. signup → support). Not org-scoped.
-  PLATFORM_RESEND_API_KEY: z.string().optional().default(""),
+  // Shared platform Resend API key (Render common env group) for operational alerts.
+  RESEND_API_KEY: z.string().optional().default(""),
   PLATFORM_EMAIL_FROM: z.string().optional().default("Twiniti Loop <noreply@twiniti.ai>"),
   SUPPORT_EMAIL: z.string().email().optional().default("support@twiniti.ai"),
   STRIPE_SECRET_KEY: z.string().optional().default(""),
