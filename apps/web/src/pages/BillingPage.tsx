@@ -20,6 +20,12 @@ function trialDaysRemaining(billing: Billing | null): number | null {
   const remaining = new Date(end).getTime() - Date.now();
   return Math.max(0, Math.ceil(remaining / (24 * 60 * 60 * 1000)));
 }
+
+function isBillingActive(billing: Billing | null): boolean {
+  return (billing?.status === "active" || billing?.status === "trialing")
+    && (!billing?.licenseDecision || billing.licenseDecision === "allow");
+}
+
 export function BillingPage() {
   const [billing, setBilling] = useState<Billing | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +34,10 @@ export function BillingPage() {
   const canceled = params.get("canceled") === "1";
   const success = params.get("success") === "1";
   const [confirming, setConfirming] = useState(success);
+  const active = isBillingActive(billing);
+  const licenseExpired = billing?.licenseStatus === "expired"
+    || billing?.licenseReasonCode === "LICENSE_EXPIRED";
+  const trialRemaining = trialDaysRemaining(billing);
 
   async function load() {
     try {
@@ -61,6 +71,13 @@ export function BillingPage() {
     return () => { cancelled = true; };
   }, [success]);
 
+  useEffect(() => {
+    if (!active) return;
+    // AuthGate cages on a cached /me billingStatus. Hard-navigate so /me
+    // reloads and the CRM shell unlocks once Stripe/License are active.
+    window.location.assign("/");
+  }, [active]);
+
   async function startCheckout() {
     setBusy(true);
     setError(null);
@@ -91,11 +108,9 @@ export function BillingPage() {
     }
   }
 
-  const active = (billing?.status === "active" || billing?.status === "trialing")
-    && (!billing?.licenseDecision || billing.licenseDecision === "allow");
-  const licenseExpired = billing?.licenseStatus === "expired"
-    || billing?.licenseReasonCode === "LICENSE_EXPIRED";
-  const trialRemaining = trialDaysRemaining(billing);
+  function enterWorkspace() {
+    window.location.assign("/");
+  }
 
   return (
     <div className="auth-page">
@@ -131,7 +146,10 @@ export function BillingPage() {
             {billing?.licenseReasonCode ? <p className="muted">License status: {billing.licenseReasonCode}</p> : null}
           </div>
           {active ? (
-            <button className="secondary" type="button" onClick={() => void openPortal()} disabled={busy}>Manage billing</button>
+            <>
+              <button className="primary" type="button" onClick={enterWorkspace}>Enter workspace</button>
+              <button className="secondary" type="button" onClick={() => void openPortal()} disabled={busy}>Manage billing</button>
+            </>
           ) : (
             <button className="primary" type="button" onClick={() => void startCheckout()} disabled={busy}>
               {busy ? "Opening checkout…" : licenseExpired ? "Restart subscription" : "Continue to secure checkout"}

@@ -41,29 +41,32 @@ export function AuthGate() {
     let cancelled = false;
     let settled = false;
 
+    const loadMe = () =>
+      api("/api/v1/me")
+        .then((res) => {
+          if (cancelled) return;
+          settled = true;
+          setMe(res.data as Me);
+          setMeError(null);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          const message = err instanceof Error ? err.message : "Failed to load session";
+          if (!authorizationHeader && /unauthorized|authentication required/i.test(message)) {
+            return;
+          }
+          // Soft-refresh failures must not tear down an already-loaded shell.
+          if (meRef.current) {
+            settled = true;
+            return;
+          }
+          settled = true;
+          setMeError(message);
+        });
+
     // Cookie-backed Hexclave sessions can authenticate /me without a bearer
     // header. Fetch immediately; retry when the header later appears.
-    api("/api/v1/me")
-      .then((res) => {
-        if (cancelled) return;
-        settled = true;
-        setMe(res.data as Me);
-        setMeError(null);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        const message = err instanceof Error ? err.message : "Failed to load session";
-        if (!authorizationHeader && /unauthorized|authentication required/i.test(message)) {
-          return;
-        }
-        // Soft-refresh failures must not tear down an already-loaded shell.
-        if (meRef.current) {
-          settled = true;
-          return;
-        }
-        settled = true;
-        setMeError(message);
-      });
+    void loadMe();
 
     const timeoutId = window.setTimeout(() => {
       if (cancelled || settled) return;
@@ -73,9 +76,24 @@ export function AuthGate() {
       setMeError("Timed out loading workspace");
     }, 20_000);
 
+    // While locked on billing, poll /me so Stripe webhook activation unlocks
+    // the CRM without requiring a manual full-page reload.
+    const billingLocked = Boolean(
+      meRef.current?.billingStatus
+      && !meRef.current.isSuperAdmin
+      && !["active", "trialing"].includes(meRef.current.billingStatus)
+    );
+    const pollId = billingLocked || location.pathname.startsWith("/billing")
+      ? window.setInterval(() => {
+          if (cancelled) return;
+          void loadMe();
+        }, 4000)
+      : undefined;
+
     return () => {
       cancelled = true;
       window.clearTimeout(timeoutId);
+      if (pollId !== undefined) window.clearInterval(pollId);
     };
   }, [userId, authorizationHeader, location.pathname]);
 
