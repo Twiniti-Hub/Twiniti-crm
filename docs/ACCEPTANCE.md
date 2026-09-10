@@ -14,8 +14,8 @@ Release acceptance for the Agent-Native Marketing CRM. An agent (or human) can t
 - [x] Cloud Agent GitHub identity: agent-branch PRs (`cursor/*`, `codex/*`) are authored by `twiniti-code-bot` via `GH_TOKEN="$TWINITI_CODE_BOT_GITHUB_TOKEN" gh`; Cursor `ManagePullRequest` is forbidden (`scripts/policy/github-bot-identity.test.mjs`)
 - [x] Trial visibility: the billing page shows the remaining days of the seven-day trial while the organization is in `trialing` status
 - [x] Super Admin workspace access: `/super-admin` provides an explicit workspace selector, persists the regional choice, and the API validates the selected workspace context before CRM access
-- [x] Email: Resend adapter contract tests (`packages/email/src/index.test.ts` personalize + signature)
-- [x] Webhooks: signature validation rejects invalid signatures (`POST /api/v1/webhooks/resend`)
+- [x] Email: Resend adapter contract tests (`packages/email/src/index.test.ts` personalize + Svix signature + domain extraction)
+- [x] Webhooks: Svix signature validation rejects invalid signatures (`POST /api/v1/webhooks/resend` and Svix-signed `POST /`)
 - [ ] Rendering: email HTML/text personalization across clients (spot-check)
 - [x] Migration: HubSpot-like export fixtures import cleanly (`fixtures/hubspot/*` + schema-mapped worker)
 - [ ] E2E: Playwright smoke for shell routes + create contact

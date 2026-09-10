@@ -33,7 +33,6 @@ import {
   customerEvents,
   emailTrackingAddresses,
   emailEvents,
-  organizationResendDomains,
   emailTemplates,
   enqueueJob,
   experiments,
@@ -67,13 +66,12 @@ import {
   reportDefinitions,
   searchContacts,
   segments,
-  storeWebhookEvent,
   suppressionEntries,
   workflows,
   workflowEnrollments,
   type Db
 } from "@twiniti/db";
-import { decryptResendSecret, personalizeForContact, verifyResendWebhookSignature } from "@twiniti/email";
+import { personalizeForContact } from "@twiniti/email";
 import { z } from "zod";
 import { audit, requireActor, requireOrgId, requireUserRole, sendError } from "../auth-hook.js";
 import { enqueueLicenseAgentProvisioning, enqueueLicenseAgentRevocation } from "../license-jobs.js";
@@ -1465,44 +1463,6 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
           resendDomainId: resendDomain.id
         }
       };
-    } catch (error) {
-      return sendError(reply, error);
-    }
-  });
-
-  app.post("/api/v1/webhooks/resend", async (request, reply) => {
-    try {
-      const raw = typeof request.body === "string" ? request.body : JSON.stringify(request.body ?? {});
-      const signature = request.headers["svix-signature"] ?? request.headers["resend-signature"];
-      const signatureHeader = Array.isArray(signature) ? signature[0] : signature;
-      const domainName = ((request.query as { domain?: string }).domain ?? "").trim().toLowerCase();
-      if (!domainName || !env.RESEND_CREDENTIAL_ENCRYPTION_KEY) return reply.code(400).send({ error: { code: "resend_domain_required", message: "A Resend domain is required for webhook routing" } });
-      const [domain] = await db.select().from(organizationResendDomains).where(and(eq(organizationResendDomains.domain, domainName), eq(organizationResendDomains.active, true), eq(organizationResendDomains.verificationStatus, "verified"))).limit(1);
-      if (!domain) return reply.code(404).send({ error: { code: "resend_domain_not_found", message: "Resend domain is not configured" } });
-      const valid = verifyResendWebhookSignature(raw, signatureHeader, decryptResendSecret(domain.webhookSecretCiphertext ?? "", env.RESEND_CREDENTIAL_ENCRYPTION_KEY));
-      if (!valid) {
-        return reply.code(401).send({
-          error: { code: "unauthorized", message: "Invalid Resend webhook signature" }
-        });
-      }
-      const payload = typeof request.body === "object" && request.body ? request.body as Record<string, unknown> : { raw };
-      const event = await storeWebhookEvent(db, {
-        organizationId: domain.organizationId,
-        provider: "resend",
-        eventType: typeof payload.type === "string" ? payload.type : "unknown",
-        payload,
-        signatureValid: true
-      });
-      await enqueueJob(db, {
-        organizationId: domain.organizationId,
-        kind: "webhook.resend.process",
-        payload: {
-          webhookEventId: event.id,
-          organizationId: domain.organizationId,
-          receivingDomain: domainName
-        }
-      });
-      return { data: { accepted: true, signatureValid: true } };
     } catch (error) {
       return sendError(reply, error);
     }
