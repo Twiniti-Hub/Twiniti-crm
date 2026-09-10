@@ -64,6 +64,95 @@ async function sendInviteEmail(
   return { inviteUrl, sent: true as const };
 }
 
+export function buildSignupSupportNotification(input: {
+  organizationId: string;
+  organizationName: string;
+  adminEmail: string | null;
+  adminDisplayName: string | null;
+  countryCode: string;
+  regionCode: string;
+  deploymentEnv: string;
+}) {
+  const adminLabel = input.adminDisplayName?.trim() || input.adminEmail || "unknown";
+  const subject = `[${input.deploymentEnv}] New Twiniti Loop signup: ${input.organizationName}`;
+  const text = [
+    "A new user signed up for Twiniti Loop.",
+    "",
+    `Organization: ${input.organizationName}`,
+    `Organization ID: ${input.organizationId}`,
+    `Admin: ${adminLabel}`,
+    `Admin email: ${input.adminEmail ?? "unknown"}`,
+    `Country: ${input.countryCode}`,
+    `Region: ${input.regionCode}`,
+    `Environment: ${input.deploymentEnv}`
+  ].join("\n");
+  const html = `<p>A new user signed up for Twiniti Loop.</p>
+<ul>
+<li><strong>Organization:</strong> ${escapeHtml(input.organizationName)}</li>
+<li><strong>Organization ID:</strong> ${escapeHtml(input.organizationId)}</li>
+<li><strong>Admin:</strong> ${escapeHtml(adminLabel)}</li>
+<li><strong>Admin email:</strong> ${escapeHtml(input.adminEmail ?? "unknown")}</li>
+<li><strong>Country:</strong> ${escapeHtml(input.countryCode)}</li>
+<li><strong>Region:</strong> ${escapeHtml(input.regionCode)}</li>
+<li><strong>Environment:</strong> ${escapeHtml(input.deploymentEnv)}</li>
+</ul>`;
+  return { subject, text, html };
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+async function notifySupportOfSignup(
+  env: AppEnv,
+  input: {
+    organizationId: string;
+    organizationName: string;
+    adminEmail: string | null;
+    adminDisplayName: string | null;
+    countryCode: string;
+    regionCode: string;
+  },
+  log?: { warn: (obj: unknown, msg?: string) => void }
+) {
+  if (!env.RESEND_API_KEY || !env.PLATFORM_EMAIL_FROM || !env.SUPPORT_EMAIL) {
+    log?.warn(
+      { organizationId: input.organizationId },
+      "Skipping signup support notification; platform email is not configured"
+    );
+    return { sent: false as const, reason: "not_configured" as const };
+  }
+
+  const content = buildSignupSupportNotification({
+    ...input,
+    deploymentEnv: env.DEPLOYMENT_ENV
+  });
+
+  try {
+    await sendEmail({
+      apiKey: env.RESEND_API_KEY,
+      from: env.PLATFORM_EMAIL_FROM,
+      to: env.SUPPORT_EMAIL,
+      subject: content.subject,
+      html: content.html,
+      text: content.text,
+      idempotencyKey: `signup-support:${input.organizationId}`
+    });
+    return { sent: true as const };
+  } catch (error) {
+    log?.warn(
+      { err: error, organizationId: input.organizationId },
+      "Failed to send signup support notification"
+    );
+    return { sent: false as const, reason: "send_failed" as const };
+  }
+}
+
 function mapMember(row: {
   id: string;
   email: string | null;
@@ -352,6 +441,21 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         entityId: created.organization.id,
         metadata: { name: created.organization.name, joinedAsAdmin: joinAsAdmin }
       });
+
+      if (created.created && joinAsAdmin && actor.needsSetup) {
+        await notifySupportOfSignup(
+          env,
+          {
+            organizationId: created.organization.id,
+            organizationName: created.organization.name,
+            adminEmail: created.admin?.email ?? actor.email ?? null,
+            adminDisplayName: created.admin?.displayName ?? actor.displayName ?? null,
+            countryCode: input.countryCode,
+            regionCode: created.organization.residencyRegion
+          },
+          request.log
+        );
+      }
 
       return {
         data: {
