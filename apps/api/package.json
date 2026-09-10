@@ -9,7 +9,7 @@
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/tests/agent-harness.test.ts src/tests/security-contracts.test.ts src/tests/mcp-transport.test.ts src/tests/billing-stripe-fields.test.ts"
+    "test": "tsx --test src/tests/agent-harness.test.ts src/tests/security-contracts.test.ts src/tests/mcp-transport.test.ts src/tests/billing-stripe-fields.test.ts src/tests/signup-support-email.test.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.1",
