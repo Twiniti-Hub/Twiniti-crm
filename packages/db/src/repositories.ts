@@ -39,7 +39,7 @@ import {
 } from "./schema.js";
 
 export async function listOrganizationResendDomains(db: Db, organizationId: string) {
-  return db.select({
+  const rows = await db.select({
     id: organizationResendDomains.id,
     organizationId: organizationResendDomains.organizationId,
     domain: organizationResendDomains.domain,
@@ -53,8 +53,13 @@ export async function listOrganizationResendDomains(db: Db, organizationId: stri
     lastValidatedAt: organizationResendDomains.lastValidatedAt,
     rotatedAt: organizationResendDomains.rotatedAt,
     createdAt: organizationResendDomains.createdAt,
-    updatedAt: organizationResendDomains.updatedAt
+    updatedAt: organizationResendDomains.updatedAt,
+    webhookSecretCiphertext: organizationResendDomains.webhookSecretCiphertext
   }).from(organizationResendDomains).where(eq(organizationResendDomains.organizationId, organizationId));
+  return rows.map(({ webhookSecretCiphertext, ...domain }) => ({
+    ...domain,
+    webhookSecretConfigured: Boolean(webhookSecretCiphertext)
+  }));
 }
 
 export async function getOrganizationResendDomain(db: Db, organizationId: string, id: string) {

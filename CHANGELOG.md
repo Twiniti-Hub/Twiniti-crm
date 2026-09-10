@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.10.55] - 2026-09-10
+
+- Accept Svix-signed Resend webhooks at the regional Loop origin (`POST /`) as well as `/api/v1/webhooks/resend`, so a dashboard endpoint pointed at `https://loop.us.twiniti.ai` can receive events.
+- Verify Resend webhooks with the Svix `id.timestamp.body` algorithm and the raw request body; infer the receiving domain from the payload when `?domain=` is omitted.
+- Settings copies an absolute webhook URL per domain and warns when the signing secret is missing.
+
 ## [0.10.54] - 2026-09-04
 
 - Bump Fastify from 5.10.0 to 5.12.1 in the API and billing gateway to pick up
