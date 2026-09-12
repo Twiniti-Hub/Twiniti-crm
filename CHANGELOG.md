@@ -5,6 +5,7 @@
 - Add the DW-7 Relationship Steward foundation: organization-scoped relationship profiles, evidence-backed facts and signals, supervised queue/profile APIs, and a draft-only Attention view.
 - Keep autonomous external communication disabled while Relationship Steward rollout and human approval workflows are validated.
 - Add the DW-8 run credential foundation: audience-bound, expiring and revocable worker-run credentials plus untrusted external tool metadata assessment with side effects disabled by default.
+- Fix Super Admin navigation so CRM menus do not flash before workspace context loads; Super Admins now see a stable workspace-selection console until they explicitly open a workspace.
 
 ## [0.10.55] - 2026-09-10
 

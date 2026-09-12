@@ -50,14 +50,17 @@ function AccountFooter({ me }: { me: Me | null }) {
 
 export function Shell() {
   const [me, setMe] = useState<Me | null>(null);
+  const [meLoading, setMeLoading] = useState(authConfigured);
 
   useEffect(() => {
     api("/api/v1/me")
       .then((res) => setMe(res.data as Me))
-      .catch(() => setMe(null));
+      .catch(() => setMe(null))
+      .finally(() => setMeLoading(false));
   }, []);
 
   const workspaceRequired = Boolean(me?.isSuperAdmin && !me.organizationId);
+  const showCrmLinks = !meLoading && !workspaceRequired;
 
   return (
     <main className="shell">
@@ -69,7 +72,7 @@ export function Shell() {
           </div>
         ) : null}
         <nav>
-          {(workspaceRequired ? [] : crmLinks).map((link) => (
+          {(showCrmLinks ? crmLinks : []).map((link) => (
             <NavLink
               key={link.to}
               to={link.to}
