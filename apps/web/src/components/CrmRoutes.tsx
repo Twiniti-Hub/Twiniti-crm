@@ -25,14 +25,20 @@ import { Shell } from "./Shell";
 function WorkspaceGate() {
   const location = useLocation();
   const [me, setMe] = useState<Me | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api("/api/v1/me")
       .then((res) => setMe(res.data as Me))
-      .catch(() => setMe(null));
+      .catch(() => setMe(null))
+      .finally(() => setLoading(false));
   }, []);
 
-  if (location.pathname === "/super-admin" || !me || !me.isSuperAdmin || me.organizationId) {
+  if (loading) {
+    return <div className="banner info">Loading workspace…</div>;
+  }
+
+  if (location.pathname.startsWith("/super-admin") || !me || !me.isSuperAdmin || me.organizationId) {
     return <Outlet />;
   }
   return <Navigate to="/super-admin" replace />;
