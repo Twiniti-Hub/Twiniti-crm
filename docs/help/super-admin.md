@@ -19,3 +19,5 @@ Use the workspace selector to choose a company and region, then select **Open wo
 
 Super Admins can create workspaces and manage workspace membership. Treat these actions as administrative changes: verify the organization and invitee email carefully, and grant the smallest appropriate role.
 
+If a Super Admin account was provisioned before subject-based membership was enabled, the existing active membership is matched to the verified Super Admin email so the assigned workspace can load normally.
+

@@ -5,6 +5,7 @@ import { createLicenseApiClient, type LicenseCheck } from "@twiniti/license-api"
 import {
   ensureBootstrapOrg,
   findAgentByCredentialHash,
+  findCrmUserByEmail,
   findCrmUserBySubject,
   findOrCreateCrmUser,
   getOrganizationBilling,
@@ -353,7 +354,11 @@ export async function resolveRequestActor(
     ?? null;
   const displayName = (user as { displayName?: string | null }).displayName ?? null;
   const superAdmin = isSuperAdminEmail(email, env);
-  const crmUser = await findCrmUserBySubject(db, subject);
+  const crmUserBySubject = await findCrmUserBySubject(db, subject);
+  // Super Admins may predate subject-bound CRM provisioning. If their verified
+  // platform email already belongs to an active CRM membership, use that
+  // membership as the default workspace rather than forcing a blank console.
+  const crmUser = crmUserBySubject ?? (superAdmin && email ? await findCrmUserByEmail(db, email) : null);
 
   // A platform super admin must explicitly choose a workspace. The database
   // lookup below is the authorization boundary; an arbitrary client-supplied

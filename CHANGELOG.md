@@ -6,6 +6,7 @@
 - Keep autonomous external communication disabled while Relationship Steward rollout and human approval workflows are validated.
 - Add the DW-8 run credential foundation: audience-bound, expiring and revocable worker-run credentials plus untrusted external tool metadata assessment with side effects disabled by default.
 - Fix Super Admin navigation so CRM menus do not flash before workspace context loads; Super Admins now see a stable workspace-selection console until they explicitly open a workspace.
+- Resolve pre-provisioned Super Admin memberships by verified email when the current auth subject is not yet attached, allowing the existing Twiniti workspace membership to load correctly.
 
 ## [0.10.55] - 2026-09-10
 
