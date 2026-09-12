@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { Me } from "../lib/me";
 import { AgentsPage } from "../pages/AgentsPage";
+import { AttentionPage } from "../pages/AttentionPage";
 import { BillingPage } from "../pages/BillingPage";
 import { CampaignsPage } from "../pages/CampaignsPage";
 import { CompanyDetailPage } from "../pages/CompanyDetailPage";
@@ -10,6 +11,7 @@ import { CompaniesPage } from "../pages/CompaniesPage";
 import { ContactDetailPage } from "../pages/ContactDetailPage";
 import { ContactsPage } from "../pages/ContactsPage";
 import { DeliverabilityPage } from "../pages/DeliverabilityPage";
+import { DigitalWorkersPage } from "../pages/DigitalWorkersPage";
 import { FormsPage } from "../pages/FormsPage";
 import { HelpPage } from "../pages/HelpPage";
 import { ImportPage } from "../pages/ImportPage";
@@ -52,6 +54,8 @@ export function CrmRoutes() {
         <Route path="forms" element={<FormsPage />} />
         <Route path="workflows" element={<WorkflowsPage />} />
         <Route path="agents" element={<AgentsPage />} />
+        <Route path="attention" element={<AttentionPage />} />
+        <Route path="digital-workers" element={<DigitalWorkersPage />} />
         <Route path="deliverability" element={<DeliverabilityPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="billing" element={<BillingPage />} />

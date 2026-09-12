@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+- Add the DW-7 Relationship Steward foundation: organization-scoped relationship profiles, evidence-backed facts and signals, supervised queue/profile APIs, and a draft-only Attention view.
+- Keep autonomous external communication disabled while Relationship Steward rollout and human approval workflows are validated.
+- Add the DW-8 run credential foundation: audience-bound, expiring and revocable worker-run credentials plus untrusted external tool metadata assessment with side effects disabled by default.
+
 ## [0.10.55] - 2026-09-10
 
 - Accept Svix-signed Resend webhooks at the regional Loop origin (`POST /`) as well as `/api/v1/webhooks/resend`, so a dashboard endpoint pointed at `https://loop.us.twiniti.ai` can receive events.
@@ -132,6 +138,31 @@
 
 ## Unreleased
 
+- Added DW-6 supervisor experience foundations: live read endpoints for worker
+  directories, runs, action proposals, approvals, and evaluations plus a
+  responsive Digital Workers workspace view at `/digital-workers`.
+- Added DW-5 foundations for provenance-aware worker memory, deterministic
+  evaluation records, fixture scoring, and no-side-effect replay/simulation.
+- Added DW-4 AI control-plane primitives: provider-neutral model gateway
+  boundary with timeout and fail-closed entitlement behavior, separate AI
+  entitlement records, and an idempotent token/cost usage ledger.
+- Added DW-3 control-plane primitives for versioned worker tools, risk tiers,
+  hash-bound action proposals, policy decisions, approval records, expiry, and
+  anti-self-approval checks. Side-effect execution remains intentionally gated.
+- Added the first durable Digital Worker mission/run/step engine primitives:
+  organization-scoped mission, run, and step records, explicit lifecycle
+  contracts, idempotency keys, lease heartbeats, and transactional run-job
+  enqueueing. Tool execution and approval transitions remain future milestones.
+- Added the first Digital Worker registry foundation: versioned worker
+  instructions and policy sets, model profiles, worker tool grants,
+  organization-scoped worker records with RLS, and observe-only typed worker
+  contracts. Run orchestration and side-effect execution remain gated for the
+  later milestones in the build plan.
+- Added implementation plans for the Digital Workers control plane and its
+  first supervised Relationship Steward worker, including phased delivery,
+  security, billing, resilience, evaluation, rollout, and coding-agent work
+  packets. This documentation-only change does not alter product version
+  `0.10.55`.
 - Added repository-enforced development-first promotion, required PR evidence,
   CODEOWNERS coverage, and production-source validation.
 - Added migration manifest/checksum validation, regional schema preflight and

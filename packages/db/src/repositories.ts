@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 // neon-http workers use optimistic claim rather than SKIP LOCKED transactions
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Db } from "./client.js";
 import { compileFilterAst, parseFilterAst } from "./filters.js";
 import {
@@ -9,7 +9,9 @@ import {
   type PropertyDataType
 } from "./hubspot.js";
 import {
+  actionProposals,
   agentIdentities,
+  approvals,
   auditEvents,
   campaigns,
   companies,
@@ -18,6 +20,7 @@ import {
   contactIdentities,
   crmUsers,
   customerEvents,
+  digitalWorkers,
   emailActivities,
   emailTrackingAddresses,
   externalRecordIds,
@@ -35,7 +38,10 @@ import {
   stripeEvents,
   suppressionEntries,
   workflows,
-  webhookEvents
+  webhookEvents,
+  workerMissions,
+  workerRuns,
+  workerRunSteps
 } from "./schema.js";
 
 export async function listOrganizationResendDomains(db: Db, organizationId: string) {
@@ -1291,6 +1297,172 @@ export async function completeJob(db: Db, id: string, error?: string, options?: 
     lastError: null,
     lockedAt: null
   }).where(eq(jobs.id, id));
+}
+
+function workerInputHash(input: unknown) {
+  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
+}
+
+export async function createWorkerMission(
+  db: Db,
+  input: {
+    organizationId: string;
+    workerId: string;
+    goal: string;
+    missionInput?: Record<string, unknown>;
+    successCriteria?: string[];
+    priority?: number;
+    budget?: Record<string, unknown>;
+    requestedBy: string;
+    dueAt?: Date | null;
+  }
+) {
+  return db.transaction(async (tx) => {
+    const [worker] = await tx.select({ id: digitalWorkers.id }).from(digitalWorkers).where(and(
+      eq(digitalWorkers.id, input.workerId),
+      eq(digitalWorkers.organizationId, input.organizationId),
+      eq(digitalWorkers.status, "active")
+    )).limit(1);
+    if (!worker) throw new Error("Digital worker is not active or not found");
+    const missionInput = input.missionInput ?? {};
+    const [mission] = await tx.insert(workerMissions).values({
+      organizationId: input.organizationId,
+      workerId: input.workerId,
+      goal: input.goal,
+      input: missionInput,
+      successCriteria: input.successCriteria ?? [],
+      priority: input.priority ?? 100,
+      budget: input.budget ?? {},
+      requestedBy: input.requestedBy,
+      dueAt: input.dueAt ?? null,
+      status: "active"
+    }).returning();
+    if (!mission) throw new Error("Unable to create worker mission");
+    const inputHash = workerInputHash(missionInput);
+    const [run] = await tx.insert(workerRuns).values({
+      organizationId: input.organizationId,
+      missionId: mission.id,
+      attempt: 1,
+      trigger: "manual",
+      inputSnapshot: missionInput,
+      inputHash,
+      status: "queued"
+    }).returning();
+    if (!run) throw new Error("Unable to create worker run");
+    await tx.insert(jobs).values({
+      organizationId: input.organizationId,
+      kind: "digital_worker.run",
+      payload: { runId: run.id, missionId: mission.id, workerId: input.workerId },
+      dedupeKey: `worker-run:${run.id}`,
+      priority: input.priority ?? 100
+    });
+    return { mission, run };
+  });
+}
+
+export async function getWorkerRun(db: Db, organizationId: string, runId: string) {
+  const [run] = await db.select().from(workerRuns).where(and(
+    eq(workerRuns.organizationId, organizationId),
+    eq(workerRuns.id, runId)
+  )).limit(1);
+  if (!run) return null;
+  const steps = await db.select().from(workerRunSteps).where(and(
+    eq(workerRunSteps.organizationId, organizationId),
+    eq(workerRunSteps.runId, runId)
+  )).orderBy(asc(workerRunSteps.sequence));
+  return { run, steps };
+}
+
+export async function heartbeatWorkerRun(db: Db, organizationId: string, runId: string, leaseToken: string, leaseMs = 120_000) {
+  const now = new Date();
+  const [run] = await db.update(workerRuns).set({
+    heartbeatAt: now,
+    leaseExpiresAt: new Date(now.getTime() + leaseMs),
+    status: "running"
+  }).where(and(
+    eq(workerRuns.organizationId, organizationId),
+    eq(workerRuns.id, runId),
+    eq(workerRuns.leaseToken, leaseToken),
+    inArray(workerRuns.status, ["planning", "running"])
+  )).returning();
+  return run ?? null;
+}
+
+function proposalHash(input: { actionType: string; target: unknown; payload: unknown; riskTier: string }) {
+  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
+}
+
+export async function createActionProposal(
+  db: Db,
+  input: {
+    organizationId: string;
+    runId?: string | null;
+    stepId?: string | null;
+    actionType: string;
+    target?: Record<string, unknown>;
+    payload?: Record<string, unknown>;
+    riskTier: string;
+    rationale?: string;
+    evidence?: string[];
+    policyDecision: Record<string, unknown>;
+    expiresAt: Date;
+    createdBy: string;
+  }
+) {
+  const target = input.target ?? {};
+  const payload = input.payload ?? {};
+  const contentHash = proposalHash({ actionType: input.actionType, target, payload, riskTier: input.riskTier });
+  const [proposal] = await db.insert(actionProposals).values({
+    organizationId: input.organizationId,
+    runId: input.runId ?? null,
+    stepId: input.stepId ?? null,
+    actionType: input.actionType,
+    target,
+    payload,
+    contentHash,
+    riskTier: input.riskTier,
+    rationale: input.rationale ?? "",
+    evidence: input.evidence ?? [],
+    policyDecision: input.policyDecision,
+    expiresAt: input.expiresAt,
+    createdBy: input.createdBy,
+    status: "proposed"
+  }).returning();
+  if (!proposal) throw new Error("Unable to create action proposal");
+  return proposal;
+}
+
+export async function decideActionProposal(
+  db: Db,
+  input: { organizationId: string; proposalId: string; actorId: string; decision: "approved" | "rejected"; rationale?: string; proposalHash: string }
+) {
+  return db.transaction(async (tx) => {
+    const [proposal] = await tx.select().from(actionProposals).where(and(
+      eq(actionProposals.organizationId, input.organizationId),
+      eq(actionProposals.id, input.proposalId)
+    )).limit(1);
+    if (!proposal) throw new Error("Action proposal not found");
+    if (proposal.createdBy === input.actorId) throw new Error("The proposing actor cannot approve its own action");
+    if (proposal.contentHash !== input.proposalHash) throw new Error("Action proposal changed after it was presented");
+    if (proposal.expiresAt.getTime() <= Date.now()) throw new Error("Action proposal has expired");
+    if (proposal.status !== "proposed") throw new Error("Action proposal is not awaiting a decision");
+    const [approval] = await tx.insert(approvals).values({
+      organizationId: input.organizationId,
+      proposalId: proposal.id,
+      decision: input.decision,
+      actorId: input.actorId,
+      rationale: input.rationale ?? "",
+      proposalHash: input.proposalHash
+    }).returning();
+    const [updated] = await tx.update(actionProposals).set({
+      status: input.decision === "approved" ? "approved" : "rejected"
+    }).where(and(
+      eq(actionProposals.id, proposal.id),
+      eq(actionProposals.status, "proposed")
+    )).returning();
+    if (!approval || !updated) throw new Error("Unable to record action decision");
+    return { proposal: updated, approval };
+  });
 }
 
 export async function getContactById(db: Db, organizationId: string, id: string) {

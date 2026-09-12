@@ -16,6 +16,8 @@ const crmLinks = [
   { to: "/forms", label: "Forms" },
   { to: "/workflows", label: "Workflows" },
   { to: "/agents", label: "Agents" },
+  { to: "/attention", label: "Attention" },
+  { to: "/digital-workers", label: "Digital workers" },
   { to: "/deliverability", label: "Deliverability" },
   { to: "/settings", label: "Settings" },
   { to: "/billing", label: "Billing" },
