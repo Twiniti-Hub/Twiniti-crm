@@ -585,6 +585,12 @@ export async function findCrmUserBySubject(db: Db, subject: string) {
   return rows[0] ?? null;
 }
 
+/** Resolve a legacy or pre-provisioned membership for a verified platform identity. */
+export async function findCrmUserByEmail(db: Db, email: string) {
+  const rows = await db.select().from(crmUsers).where(ilike(crmUsers.email, email.trim().toLowerCase())).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function getOrganizationById(db: Db, organizationId: string) {
   const rows = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
   return rows[0] ?? null;
