@@ -87,6 +87,15 @@ session. This supports production custom domains without blocking the initial
 | BCC email tracking + contact activity timeline | Live (requires Resend Receiving setup) |
 | Hardening runbooks | [docs/HARDENING.md](docs/HARDENING.md), [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) |
 
+## AI-native product plans
+
+The next agent platform increments are defined in two implementation plans:
+
+- [Digital Workers Platform](docs/architecture/digital-workers-platform-plan.md) — the shared mission, run, policy, approval, budget, memory, evaluation, and supervision control plane.
+- [Relationship Steward Agent](docs/architecture/relationship-steward-agent-plan.md) — the first supervised worker, providing evidence-backed relationship briefs, signals, next actions, and drafts.
+
+These documents describe planned work rather than currently available product features. The Digital Worker thin slice is the platform dependency for the Steward; the Steward can then progress from shadow mode to recommendations and drafts without autonomous external sending.
+
 ## User help
 
 The end-user guide is in [docs/help/README.md](docs/help/README.md). It covers onboarding, contacts, companies, imports, audiences, campaigns, forms, workflows, agents, deliverability, settings, billing, and Super Admin workspace selection.

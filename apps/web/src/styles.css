@@ -54,6 +54,22 @@ button { border: 0; cursor: pointer; }.primary, .secondary, .quiet { padding: 11
 .banner.error { background: #fdeceb; border: 1px solid #f0c2bd; color: #8a2f2a; }
 .banner.info { background: #eaf6f1; border: 1px solid #c6e4d8; color: #24584c; }
 .stack-form { display: grid; gap: 14px; background: #fff; border: 1px solid #e4ece8; border-radius: 17px; padding: 18px; margin-bottom: 18px; box-shadow: 0 7px 22px rgba(30, 72, 63, .035); }
+.content-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; margin-top: 15px; }
+.content-grid .help-card { min-height: 0; }
+.list-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-top: 1px solid #edf2ef; }
+.list-row > div { min-width: 0; }
+.list-row strong, .list-row small { display: block; }
+.list-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.list-row small { color: #7c9290; font-size: 11px; margin-top: 3px; }
+.status-pill { flex: 0 0 auto; border-radius: 99px; padding: 5px 8px; background: #eef3f0; color: #5d746d; font-size: 10px; font-weight: 800; text-transform: capitalize; }
+.status-pill.active, .status-pill.approved, .status-pill.passed, .status-pill.succeeded { background: #e2f4e2; color: #30725e; }
+.status-pill.proposed, .status-pill.awaiting_approval, .status-pill.running { background: #fff6dc; color: #876b25; }
+.status-pill.failed, .status-pill.rejected, .status-pill.expired { background: #fde9e7; color: #a14d46; }
+.attention-card { min-height: 220px; }
+.attention-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.signal-list { display: grid; gap: .5rem; margin: 1rem 0; }
+.signal-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .7rem .8rem; border: 1px solid #e4ece8; border-radius: .6rem; }
+.signal-row small { display: block; color: #7c9290; margin-top: .2rem; }
 .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
 label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; color: #4f6763; }
 input, textarea, select { width: 100%; border: 1px solid #d5e1dc; border-radius: 9px; padding: 10px 12px; background: #fbfdfc; color: #192a38; }
@@ -125,7 +141,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
   .brand-loop-logo-light { display: none; }
   .brand-loop-logo-dark { display: block; }
 }
-@media (max-width: 850px) { .shell { flex-direction: column; }.sidebar { width: 100%; padding: 14px 16px 12px; }.brand { justify-content: flex-start; padding: 0 0 12px; }.sidebar .brand-loop-logo { width: 50px; height: 50px; flex-basis: 50px; }.company-chip { margin: 0 0 10px; } nav { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; } nav a { display: block; flex: 0 0 auto; padding: 10px 12px; white-space: nowrap; }.sidebar-footer { margin-top: 8px; padding: 8px 0 0; }.account-block { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }.sign-out { width: auto; }.content { width: 100%; padding: 26px 18px 50px; }.hero-orbit { display: none; }.split, .metrics, .property-grid { grid-template-columns: 1fr; }.table-heading-text, .table-cell-text { max-width: 160px; } }
+@media (max-width: 850px) { .shell { flex-direction: column; }.sidebar { width: 100%; padding: 14px 16px 12px; }.brand { justify-content: flex-start; padding: 0 0 12px; }.sidebar .brand-loop-logo { width: 50px; height: 50px; flex-basis: 50px; }.company-chip { margin: 0 0 10px; } nav { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; } nav a { display: block; flex: 0 0 auto; padding: 10px 12px; white-space: nowrap; }.sidebar-footer { margin-top: 8px; padding: 8px 0 0; }.account-block { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }.sign-out { width: auto; }.content { width: 100%; padding: 26px 18px 50px; }.hero-orbit { display: none; }.split, .metrics, .property-grid, .content-grid { grid-template-columns: 1fr; }.table-heading-text, .table-cell-text { max-width: 160px; } }
  .metric-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
