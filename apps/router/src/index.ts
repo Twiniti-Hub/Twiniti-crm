@@ -1,5 +1,6 @@
 export interface Env {
   DEFAULT_REGION: string;
+  DEPLOYMENT_ENV: string;
   WEB_ORIGIN: string;
   APP_ORIGIN: string;
   API_ORIGIN_US: string;
@@ -99,7 +100,11 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(request) });
     const url = new URL(request.url);
-    if (url.pathname === "/health") return Response.json({ ok: true, service: "twiniti-loop-router", environment: "development" });
+    if (url.pathname === "/health") return Response.json({
+      ok: true,
+      service: "twiniti-loop-router",
+      environment: env.DEPLOYMENT_ENV
+    });
     if (!url.pathname.startsWith("/api/")) return proxyWeb(request, env);
 
     const workspaceId = request.headers.get("X-Twiniti-Workspace-Id");
