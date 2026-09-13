@@ -79,6 +79,14 @@ worker. Because Render does not re-prompt for existing `sync: false` values
 during a Blueprint update, add newly introduced secrets manually in the
 Dashboard.
 
+For the Production canonical-router cutover, update `WEB_ORIGIN` directly on
+each existing Production API service to `https://loop.twiniti.ai` after the
+approved Production release is deployed. The Blueprint records the intended
+state, but existing Dashboard values must be reconciled explicitly. Retire the
+unused landing `VITE_APP_URL_US`, `VITE_APP_URL_EU`, and `VITE_APP_URL_UK`
+values at the same time; the landing build uses same-origin `/sign-in` and
+`/sign-up` paths.
+
 ## Current implementation boundary
 
 The canonical Loop URL now provides the login entry point. Country selection
