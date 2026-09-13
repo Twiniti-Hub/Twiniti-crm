@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Align Development E2E coverage with canonical Loop routing: signup now enters
+  same-origin `/sign-up` before choosing a workspace country, and existing-user
+  smoke uses the current sign-in control.
 - Configure the Production Loop router as a separate Cloudflare Worker with a
   Production-only workspace directory and `loop.twiniti.ai/*` route; the
   route is deployed only through the approved Production promotion.
