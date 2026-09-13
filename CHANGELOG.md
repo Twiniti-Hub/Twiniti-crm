@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Configure the Production Loop router as a separate Cloudflare Worker with a
+  Production-only workspace directory and `loop.twiniti.ai/*` route; the
+  route is deployed only through the approved Production promotion.
 - Reorganize Loop navigation into Workspace, Growth, Agent workforce, and Workspace administration; clarify agent-facing labels and replace the mobile horizontal menu with a sectional disclosure menu.
 - Show the active workspace, region, and role persistently in the sidebar, with a direct Super Admin return path for platform operators.
 - Update Help documentation and in-app Help copy for the canonical Loop URL, country-based workspace placement, regional API routing, and the Render landing-site boundary.
