@@ -65,7 +65,9 @@ landing service, and one worker service:
 - Landing: separate static marketing service; it does not own CRM auth routes
 - Router: Cloudflare Worker at the canonical Loop hostname; `/sign-in` and
   `/sign-up` go to the canonical app origin and `/api/*` resolves the workspace
-  to its regional service
+  to its regional service. Development uses `loop-dev.twiniti.ai`; Production
+  uses `loop.twiniti.ai`. Each environment has its own Worker and
+  `WORKSPACE_DIRECTORY` KV namespace.
 - Worker: all three database URLs for that environment
 
 The Blueprint files contain secret placeholders only. Populate the
