@@ -2,7 +2,7 @@ import { useHexclaveApp, useUser } from "@hexclave/react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router";
 import { authConfigured } from "../hexclave/client";
-import { api } from "../lib/api";
+import { api, setWorkspaceContextId } from "../lib/api";
 import type { Me } from "../lib/me";
 import { Brand } from "./Brand";
 
@@ -54,7 +54,11 @@ export function Shell() {
 
   useEffect(() => {
     api("/api/v1/me")
-      .then((res) => setMe(res.data as Me))
+      .then((res) => {
+        const nextMe = res.data as Me;
+        if (nextMe.organizationId) setWorkspaceContextId(nextMe.organizationId);
+        setMe(nextMe);
+      })
       .catch(() => setMe(null))
       .finally(() => setMeLoading(false));
   }, []);

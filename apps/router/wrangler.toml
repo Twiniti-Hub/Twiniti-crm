@@ -1,0 +1,26 @@
+name = "twiniti-loop-router-dev"
+main = "src/index.ts"
+compatibility_date = "2026-09-13"
+
+[vars]
+DEFAULT_REGION = "us"
+WEB_ORIGIN = "https://twiniti-crm-dev-landing.onrender.com"
+APP_ORIGIN = "https://twiniti-crm-dev-us.onrender.com"
+API_ORIGIN_US = "https://twiniti-crm-dev-us.onrender.com"
+API_ORIGIN_EU = "https://twiniti-crm-dev-eu.onrender.com"
+API_ORIGIN_UK = "https://twiniti-crm-dev-uk.onrender.com"
+
+[[kv_namespaces]]
+binding = "WORKSPACE_DIRECTORY"
+id = "204cd9e62ee84fa09219d7eb45e4aa6f"
+
+[env.production]
+name = "twiniti-loop-router"
+
+[env.production.vars]
+DEFAULT_REGION = "us"
+WEB_ORIGIN = "https://twiniti-crm-prod-landing.onrender.com"
+APP_ORIGIN = "https://twiniti-crm-prod-us.onrender.com"
+API_ORIGIN_US = "https://twiniti-crm-prod-us.onrender.com"
+API_ORIGIN_EU = "https://twiniti-crm-prod-eu.onrender.com"
+API_ORIGIN_UK = "https://twiniti-crm-prod-uk.onrender.com"

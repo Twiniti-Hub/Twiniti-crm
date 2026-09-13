@@ -19,7 +19,7 @@ services:
       - key: REGION_CODE
         value: us
       - key: WEB_ORIGIN
-        value: https://twiniti-crm-dev-us.onrender.com
+        value: https://loop-dev.twiniti.ai
       - key: DATABASE_URL_Dev_US
         sync: false
       - key: REGIONAL_APP_URL
@@ -85,7 +85,7 @@ services:
       - key: REGION_CODE
         value: eu
       - key: WEB_ORIGIN
-        value: https://twiniti-crm-dev-eu.onrender.com
+        value: https://loop-dev.twiniti.ai
       - key: DATABASE_URL_Dev_EU
         sync: false
       - key: REGIONAL_APP_URL
@@ -151,7 +151,7 @@ services:
       - key: REGION_CODE
         value: uk
       - key: WEB_ORIGIN
-        value: https://twiniti-crm-dev-uk.onrender.com
+        value: https://loop-dev.twiniti.ai
       - key: DATABASE_URL_Dev_UK
         sync: false
       - key: REGIONAL_APP_URL
@@ -216,12 +216,6 @@ services:
         source: /*
         destination: /index.html
     envVars:
-      - key: VITE_APP_URL_US
-        value: https://twiniti-crm-dev-us.onrender.com
-      - key: VITE_APP_URL_EU
-        value: https://twiniti-crm-dev-eu.onrender.com
-      - key: VITE_APP_URL_UK
-        value: https://twiniti-crm-dev-uk.onrender.com
       - key: VITE_ENVIRONMENT_LABEL
         value: Development preview
       - key: VITE_GOOGLE_ANALYTICS_ID

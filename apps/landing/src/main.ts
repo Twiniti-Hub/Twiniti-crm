@@ -1,5 +1,4 @@
 import "./styles.css";
-import "./regional-links.css";
 import "./logo-overrides.css";
 import "./analytics-consent.css";
 import {
@@ -10,23 +9,6 @@ import {
   trackPageView
 } from "@twiniti/analytics";
 
-const defaultRegionalAppUrls = {
-  us: "https://loop.us.twiniti.ai",
-  eu: "https://loop.eu.twiniti.ai",
-  uk: "https://loop.uk.twiniti.ai"
-} as const;
-
-const regionalAppUrls = {
-  us: (import.meta.env.VITE_APP_URL_US || defaultRegionalAppUrls.us).replace(/\/$/, ""),
-  eu: (import.meta.env.VITE_APP_URL_EU || defaultRegionalAppUrls.eu).replace(/\/$/, ""),
-  uk: (import.meta.env.VITE_APP_URL_UK || defaultRegionalAppUrls.uk).replace(/\/$/, "")
-} as const;
-
-const regions = [
-  { key: "us", label: "United States" },
-  { key: "eu", label: "European Union" },
-  { key: "uk", label: "United Kingdom" }
-] as const;
 const environmentLabel = import.meta.env.VITE_ENVIRONMENT_LABEL || "Preview";
 const googleAnalyticsId =
   import.meta.env.VITE_GOOGLE_ANALYTICS_ID?.trim() || import.meta.env.Google_Analytics?.trim() || "";
@@ -35,25 +17,8 @@ const analyticsConfigured = Boolean(googleAnalyticsId || microsoftClarityId);
 const darkLogoPath = "/branding/loop-logo-dark.png";
 const lightLogoPath = "/branding/loop-logo-light.png";
 
-function link(region: keyof typeof regionalAppUrls, path: string) {
-  return `${regionalAppUrls[region]}${path}`;
-}
-
-function regionalMenu(label: string, path: string, className: string) {
-  const links = regions
-    .map(
-      ({ key, label: regionLabel }) =>
-        `<a href="${link(key, path)}"><span>${regionLabel}</span><small>${regionalAppUrls[key].replace(/^https?:\/\//, "")}</small></a>`
-    )
-    .join("");
-
-  return `<details class="region-menu ${className}">
-    <summary>${label}</summary>
-    <div class="region-menu-panel" aria-label="Choose your region">
-      <strong>Choose your region</strong>
-      ${links}
-    </div>
-  </details>`;
+function appLink(label: string, path: string, className: string) {
+  return `<a class="${className}" href="${path}">${label}</a>`;
 }
 
 document.querySelector<HTMLDivElement>("#root")!.innerHTML = `
@@ -66,7 +31,7 @@ document.querySelector<HTMLDivElement>("#root")!.innerHTML = `
         <a href="#product">Product</a>
         <a href="#why-loop">Why Loop</a>
         <span class="environment-badge">${environmentLabel}</span>
-        ${regionalMenu('Sign in <span aria-hidden="true">↗</span>', "/sign-in", "region-menu-nav")}
+        ${appLink('Sign in <span aria-hidden="true">↗</span>', "/sign-in", "nav-signin")}
       </div>
     </nav>
 
@@ -77,8 +42,8 @@ document.querySelector<HTMLDivElement>("#root")!.innerHTML = `
           <h1>Keep every customer conversation <em>moving.</em></h1>
           <p class="hero-lede">Twiniti Loop gives growing teams one clear place for contacts, companies, campaigns, and the workflows that turn relationships into momentum.</p>
           <div class="hero-actions">
-            ${regionalMenu('Start your workspace <span aria-hidden="true">→</span>', "/sign-up", "region-menu-hero button button-primary")}
-            ${regionalMenu("I already use Loop", "/sign-in", "region-menu-hero button button-ghost")}
+            ${appLink('Start your workspace <span aria-hidden="true">→</span>', "/sign-up", "button button-primary")}
+            ${appLink("I already use Loop", "/sign-in", "button button-ghost")}
           </div>
           <p class="hero-note"><span aria-hidden="true">✦</span> Choose your country at signup. Your workspace is placed in the right data region and stays there.</p>
         </div>
@@ -109,10 +74,10 @@ document.querySelector<HTMLDivElement>("#root")!.innerHTML = `
 
       <section id="why-loop" class="why-section"><div class="container why-inner"><div><img class="section-logo" src="${lightLogoPath}" alt="" aria-hidden="true" /><p class="eyebrow">Built for trust</p><h2>Your customer data should work <em>with</em> your team.</h2></div><div class="why-points"><div><strong>01</strong><p><b>Clarity by default</b><br />A focused workspace that makes the next useful action easier to see.</p></div><div><strong>02</strong><p><b>Human approval where it matters</b><br />Automate the busywork while keeping important outbound decisions accountable.</p></div><div><strong>03</strong><p><b>Regional by design</b><br />Country-based workspace placement keeps your data boundary explicit from day one.</p></div></div></div></section>
 
-      <section class="closing-cta container"><div class="cta-panel"><div><p class="eyebrow">Start your next loop</p><h2>Give your team a clearer way forward.</h2><p>Set up your workspace, invite your team, and make the next customer conversation count.</p></div>${regionalMenu('Create your workspace <span aria-hidden="true">→</span>', "/sign-up", "region-menu-cta button button-light")}</div></section>
+      <section class="closing-cta container"><div class="cta-panel"><div><p class="eyebrow">Start your next loop</p><h2>Give your team a clearer way forward.</h2><p>Set up your workspace, invite your team, and make the next customer conversation count.</p></div>${appLink('Create your workspace <span aria-hidden="true">→</span>', "/sign-up", "button button-light")}</div></section>
     </main>
 
-    <footer class="footer container"><a class="brand" href="#top" aria-label="Twiniti Loop home"><img class="brand-logo" src="${darkLogoPath}" alt="" aria-hidden="true" /></a><div>${regionalMenu("Sign in", "/sign-in", "region-menu-footer")} ${regionalMenu("Sign up", "/sign-up", "region-menu-footer")}<span>© 2026 Twiniti Loop</span></div></footer>
+    <footer class="footer container"><a class="brand" href="#top" aria-label="Twiniti Loop home"><img class="brand-logo" src="${darkLogoPath}" alt="" aria-hidden="true" /></a><div>${appLink("Sign in", "/sign-in", "footer-link")} ${appLink("Sign up", "/sign-up", "footer-link")}<span>© 2026 Twiniti Loop</span></div></footer>
   </div>
 `;
 

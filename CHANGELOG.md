@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Route the Development single Loop URL between the marketing landing site, canonical CRM app, and regional APIs; use a surface cookie to keep shared asset paths correct.
+- Make Development landing-page authentication links same-origin and move the region choice into CRM onboarding; set regional Render `WEB_ORIGIN` values to the canonical Loop URL.
 - Add the DW-7 Relationship Steward foundation: organization-scoped relationship profiles, evidence-backed facts and signals, supervised queue/profile APIs, and a draft-only Attention view.
 - Keep autonomous external communication disabled while Relationship Steward rollout and human approval workflows are validated.
 - Add the DW-8 run credential foundation: audience-bound, expiring and revocable worker-run credentials plus untrusted external tool metadata assessment with side effects disabled by default.
@@ -415,4 +417,6 @@ Twiniti CRM is currently pre-1.0. Versions use the `0.10.x` series while the pro
 - Removed the legacy `VITE_APP_URL` landing override that could send US auth links to Render's `onrender.com` host.
 ## Unreleased
 
+- Added the Development Cloudflare Worker router scaffold for single-URL, region-aware CRM routing.
+- Persist the resolved workspace context after authentication so same-origin requests can be routed to the correct region.
 - Refresh live License API decisions in the SuperAdmin organization dashboard so provisioned organizations no longer remain `pending · unknown` after provisioning.

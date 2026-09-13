@@ -2,7 +2,7 @@ import { useUser } from "@hexclave/react";
 import { HexclaveHandler } from "@hexclave/react";
 import { useEffect, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router";
-import { api, setBrowserAuthorizationHeader } from "../lib/api";
+import { api, setBrowserAuthorizationHeader, setWorkspaceContextId } from "../lib/api";
 import type { Me } from "../lib/me";
 import { hexclaveApp } from "../hexclave/client";
 import { AcceptInvitePage } from "../pages/AcceptInvitePage";
@@ -46,7 +46,9 @@ export function AuthGate() {
         .then((res) => {
           if (cancelled) return;
           settled = true;
-          setMe(res.data as Me);
+           const nextMe = res.data as Me;
+           if (nextMe.organizationId) setWorkspaceContextId(nextMe.organizationId);
+           setMe(nextMe);
           setMeError(null);
         })
         .catch((err) => {
