@@ -62,10 +62,10 @@ landing service, and one worker service:
 - API US: `REGION_CODE=us`
 - API EU: `REGION_CODE=eu`
 - API UK: `REGION_CODE=uk` in Render Frankfurt
-- Landing: separate static service with explicit US, EU, and UK choices for the
-  CRM app's `/sign-up` and `/sign-in` routes; configure the three
-  `VITE_APP_URL_*` values and assign the public DNS name to this service in
-  Render
+- Landing: separate static marketing service; it does not own CRM auth routes
+- Router: Cloudflare Worker at the canonical Loop hostname; `/sign-in` and
+  `/sign-up` go to the canonical app origin and `/api/*` resolves the workspace
+  to its regional service
 - Worker: all three database URLs for that environment
 
 The Blueprint files contain secret placeholders only. Populate the
@@ -79,6 +79,6 @@ Dashboard.
 
 ## Current implementation boundary
 
-The landing page now provides the regional login handoff. The remaining
-runtime boundary is wrong-region rejection and per-cell API/worker database
-selection after a user enters a regional application.
+The canonical Loop URL now provides the login entry point. Country selection
+happens during signup, and the router stores workspace-to-region resolution in
+Cloudflare KV so subsequent API requests reach the correct regional service.

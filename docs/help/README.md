@@ -4,11 +4,22 @@ Twiniti Loop is a shared marketing CRM workspace. Use the sidebar to move betwee
 
 ## Start here
 
-1. Open **Overview** to confirm that your workspace is available.
-2. Add or import your companies and contacts.
-3. Create a segment to define an audience.
-4. Build a form, campaign, or workflow for that audience.
-5. Review deliverability and activity before sending customer-facing email.
+1. Open the canonical Loop URL for your environment and choose **Sign in** or **Start your workspace**.
+2. During signup, select the country for the workspace; Loop places the workspace in the matching data region.
+3. Open **Overview** to confirm that your workspace is available.
+4. Add or import your companies and contacts.
+5. Create a segment, form, campaign, or workflow for that audience.
+6. Review deliverability and activity before sending customer-facing email.
+
+## Loop URLs and regional routing
+
+- Development: `https://loop-dev.twiniti.ai`
+- Production: `https://loop.twiniti.ai`
+
+Use `/sign-in` and `/sign-up` on the canonical Loop URL. The router sends API
+requests to the US, EU, or UK service for the selected workspace. The Render
+landing hostname is a marketing origin only; do not use
+`twiniti-crm-dev-landing.onrender.com/sign-in` as the CRM login address.
 
 ## Help pages
 
