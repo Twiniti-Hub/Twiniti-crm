@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Reorganize Loop navigation into Workspace, Growth, Agent workforce, and Workspace administration; clarify agent-facing labels and replace the mobile horizontal menu with a sectional disclosure menu.
+- Show the active workspace, region, and role persistently in the sidebar, with a direct Super Admin return path for platform operators.
+- Update Help documentation and in-app Help copy for the canonical Loop URL, country-based workspace placement, regional API routing, and the Render landing-site boundary.
+- Attach the Development Cloudflare Worker to the `loop-dev.twiniti.ai/*` zone route and validate landing, sign-in, sign-up, and health endpoints through the canonical hostname.
 - Route the Development single Loop URL between the marketing landing site, canonical CRM app, and regional APIs; use a surface cookie to keep shared asset paths correct.
 - Make Development landing-page authentication links same-origin and move the region choice into CRM onboarding; set regional Render `WEB_ORIGIN` values to the canonical Loop URL.
 - Add the DW-7 Relationship Steward foundation: organization-scoped relationship profiles, evidence-backed facts and signals, supervised queue/profile APIs, and a draft-only Attention view.

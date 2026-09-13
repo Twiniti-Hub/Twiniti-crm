@@ -35,7 +35,7 @@ export function DigitalWorkersPage() {
       <header className="topbar">
         <div>
           <p className="eyebrow">Agent workforce</p>
-          <h1>Digital workers</h1>
+          <h1>Digital workforce</h1>
           <p className="muted">Supervise roles, missions, runs, approvals, budgets, and evaluation evidence.</p>
         </div>
       </header>

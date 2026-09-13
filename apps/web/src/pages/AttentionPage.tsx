@@ -24,7 +24,7 @@ export function AttentionPage() {
       <header className="topbar">
         <div>
           <p className="eyebrow">Relationship Steward</p>
-          <h1>Attention</h1>
+          <h1>Priority queue</h1>
           <p className="muted">Evidence-backed relationship priorities for human review. Draft-only during supervised rollout.</p>
         </div>
       </header>

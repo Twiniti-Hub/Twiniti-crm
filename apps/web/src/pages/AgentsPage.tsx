@@ -167,7 +167,7 @@ export function AgentsPage() {
       <header className="topbar">
         <div>
           <p className="eyebrow">Agent platform</p>
-          <h1>Agents</h1>
+          <h1>Agent access</h1>
         </div>
       </header>
       {error ? <div className="banner error">{error}</div> : null}
