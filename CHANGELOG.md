@@ -7,6 +7,8 @@
   route is deployed only through the approved Production promotion.
 - Route Production EU and UK workspaces to their live regional API origins and
   identify the router environment correctly in its health response.
+- Use the canonical `loop.twiniti.ai` browser origin for all Production CRM
+  regions and retire unused landing-page regional sign-in configuration.
 - Reorganize Loop navigation into Workspace, Growth, Agent workforce, and Workspace administration; clarify agent-facing labels and replace the mobile horizontal menu with a sectional disclosure menu.
 - Show the active workspace, region, and role persistently in the sidebar, with a direct Super Admin return path for platform operators.
 - Update Help documentation and in-app Help copy for the canonical Loop URL, country-based workspace placement, regional API routing, and the Render landing-site boundary.
