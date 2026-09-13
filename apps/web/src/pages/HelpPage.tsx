@@ -44,10 +44,10 @@ const topics = [
     action: "Open Forms"
   },
   {
-    title: "Agents and API access",
+    title: "Agent access",
     description: "Create scoped machine credentials and manage integration access securely.",
     to: "/agents",
-    action: "Open Agents"
+    action: "Open Agent access"
   },
   {
     title: "Deliverability and tracking",

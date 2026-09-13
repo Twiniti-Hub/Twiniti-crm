@@ -31,7 +31,10 @@ landing hostname is a marketing origin only; do not use
 - [Campaigns](campaigns.md)
 - [Forms](forms.md)
 - [Workflows](workflows.md)
-- [Agents and API access](agents.md)
+- [Agent access](agents.md)
+- Priority queue and Digital workforce are supervised agent-work areas; use the
+  queue to review relationship priorities and the workforce area to supervise
+  roles, runs, approvals, and evaluations.
 - [Deliverability and email tracking](deliverability.md)
 - [Settings and team access](settings.md)
 - [Billing](billing.md)
@@ -43,4 +46,7 @@ landing hostname is a marketing origin only; do not use
 - Contact imports run in the background; large files may remain in progress after you leave the page.
 - Campaign sending is approval-gated. Preview and request approval before sending.
 - A company admin can invite members and change their roles.
+- The sidebar groups work into Workspace, Growth, Agent workforce, and Workspace
+  administration. Super Admins can select the workspace context from the
+  persistent workspace control.
 
