@@ -9,6 +9,7 @@ routes = [
 
 [vars]
 DEFAULT_REGION = "us"
+DEPLOYMENT_ENV = "development"
 WEB_ORIGIN = "https://twiniti-crm-dev-landing.onrender.com"
 APP_ORIGIN = "https://twiniti-crm-dev-us.onrender.com"
 API_ORIGIN_US = "https://twiniti-crm-dev-us.onrender.com"
@@ -27,11 +28,12 @@ routes = [
 
 [env.production.vars]
 DEFAULT_REGION = "us"
+DEPLOYMENT_ENV = "production"
 WEB_ORIGIN = "https://twiniti-crm-prod-landing.onrender.com"
 APP_ORIGIN = "https://twiniti-crm-prod-us.onrender.com"
 API_ORIGIN_US = "https://twiniti-crm-prod-us.onrender.com"
-API_ORIGIN_EU = "https://twiniti-crm-prod-eu.onrender.com"
-API_ORIGIN_UK = "https://twiniti-crm-prod-uk.onrender.com"
+API_ORIGIN_EU = "https://twiniti-crm-eu.onrender.com"
+API_ORIGIN_UK = "https://twiniti-crm-uk.onrender.com"
 
 [[env.production.kv_namespaces]]
 binding = "WORKSPACE_DIRECTORY"
