@@ -1,6 +1,7 @@
 # Twiniti Loop global router
 
 This Cloudflare Worker provides the single Development URL for Loop and routes API requests to the regional CRM services.
+Non-API requests are proxied to the Development landing site, so the same hostname can serve both the web application and its API.
 
 ## Development setup
 

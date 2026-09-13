@@ -1,5 +1,6 @@
 export interface Env {
   DEFAULT_REGION: string;
+  WEB_ORIGIN: string;
   API_ORIGIN_US: string;
   API_ORIGIN_EU: string;
   API_ORIGIN_UK: string;
@@ -37,13 +38,18 @@ function withRouterHeaders(response: Response, request: Request, region: Region)
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
-async function proxy(request: Request, env: Env, region: Region) {
+async function proxyOrigin(request: Request, origin: string) {
   const target = new URL(request.url);
-  target.hostname = new URL(originFor(env, region)).hostname;
+  target.hostname = new URL(origin).hostname;
   target.protocol = "https:";
   target.port = "";
   target.pathname = target.pathname.replace(/^\/router/, "") || "/";
   const response = await fetch(target, new Request(request, { headers: new Headers(request.headers) }));
+  return response;
+}
+
+async function proxy(request: Request, env: Env, region: Region) {
+  const response = await proxyOrigin(request, originFor(env, region));
   return withRouterHeaders(response, request, region);
 }
 
@@ -68,6 +74,7 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(request) });
     const url = new URL(request.url);
     if (url.pathname === "/health") return Response.json({ ok: true, service: "twiniti-loop-router", environment: "development" });
+    if (!url.pathname.startsWith("/api/")) return proxyOrigin(request, env.WEB_ORIGIN);
 
     const workspaceId = request.headers.get("X-Twiniti-Workspace-Id");
     if (!workspaceId && url.pathname === "/api/v1/me") return discoverWorkspace(request, env);
