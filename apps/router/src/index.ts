@@ -1,6 +1,7 @@
 export interface Env {
   DEFAULT_REGION: string;
   WEB_ORIGIN: string;
+  APP_ORIGIN: string;
   API_ORIGIN_US: string;
   API_ORIGIN_EU: string;
   API_ORIGIN_UK: string;
@@ -48,6 +49,31 @@ async function proxyOrigin(request: Request, origin: string) {
   return response;
 }
 
+function withSurfaceCookie(response: Response, surface: "landing" | "app") {
+  const headers = new Headers(response.headers);
+  headers.append("Set-Cookie", `twiniti_surface=${surface}; Path=/; Secure; SameSite=Lax`);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+function cookieValue(request: Request, name: string) {
+  return request.headers.get("Cookie")?.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${name}=`))?.slice(name.length + 1);
+}
+
+function isLandingPath(pathname: string) {
+  return pathname === "/" || pathname === "/robots.txt" || pathname === "/sitemap.xml" || pathname.startsWith("/branding/");
+}
+
+async function proxyWeb(request: Request, env: Env) {
+  const url = new URL(request.url);
+  const surface = isLandingPath(url.pathname)
+    ? "landing"
+    : url.pathname.startsWith("/assets/")
+      ? (cookieValue(request, "twiniti_surface") === "app" ? "app" : "landing")
+      : "app";
+  const response = await proxyOrigin(request, surface === "app" ? env.APP_ORIGIN : env.WEB_ORIGIN);
+  return withSurfaceCookie(response, surface);
+}
+
 async function proxy(request: Request, env: Env, region: Region) {
   const response = await proxyOrigin(request, originFor(env, region));
   return withRouterHeaders(response, request, region);
@@ -74,7 +100,7 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(request) });
     const url = new URL(request.url);
     if (url.pathname === "/health") return Response.json({ ok: true, service: "twiniti-loop-router", environment: "development" });
-    if (!url.pathname.startsWith("/api/")) return proxyOrigin(request, env.WEB_ORIGIN);
+    if (!url.pathname.startsWith("/api/")) return proxyWeb(request, env);
 
     const workspaceId = request.headers.get("X-Twiniti-Workspace-Id");
     if (!workspaceId && url.pathname === "/api/v1/me") return discoverWorkspace(request, env);

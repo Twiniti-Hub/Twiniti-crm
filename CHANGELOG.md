@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Route the Development single Loop URL between the marketing landing site, canonical CRM app, and regional APIs; use a surface cookie to keep shared asset paths correct.
+- Make Development landing-page authentication links same-origin and move the region choice into CRM onboarding; set regional Render `WEB_ORIGIN` values to the canonical Loop URL.
 - Add the DW-7 Relationship Steward foundation: organization-scoped relationship profiles, evidence-backed facts and signals, supervised queue/profile APIs, and a draft-only Attention view.
 - Keep autonomous external communication disabled while Relationship Steward rollout and human approval workflows are validated.
 - Add the DW-8 run credential foundation: audience-bound, expiring and revocable worker-run credentials plus untrusted external tool metadata assessment with side effects disabled by default.
