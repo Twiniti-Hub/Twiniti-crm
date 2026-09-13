@@ -413,3 +413,6 @@ Twiniti CRM is currently pre-1.0. Versions use the `0.10.x` series while the pro
 - Confirmed production landing redirects for US, EU, and UK application sign-in/signup entry points.
 - Added a seven-day trial days-remaining indicator to the authenticated billing page.
 - Removed the legacy `VITE_APP_URL` landing override that could send US auth links to Render's `onrender.com` host.
+## Unreleased
+
+- Refresh live License API decisions in the SuperAdmin organization dashboard so provisioned organizations no longer remain `pending · unknown` after provisioning.

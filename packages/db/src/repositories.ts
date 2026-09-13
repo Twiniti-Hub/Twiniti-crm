@@ -624,6 +624,7 @@ export async function getSuperAdminDashboard(db: Db, regionCode: RegionCode) {
       trialKind: organizationBilling.trialKind,
       trialEnd: organizationBilling.trialEnd,
       trialConvertedAt: organizationBilling.trialConvertedAt,
+      licenseProvisioningStatus: organizationBilling.licenseProvisioningStatus,
       licenseStatus: organizationBilling.licenseStatus,
       licenseDecision: organizationBilling.licenseDecision,
       lastStripeEventCreatedAt: organizationBilling.lastStripeEventCreatedAt,
