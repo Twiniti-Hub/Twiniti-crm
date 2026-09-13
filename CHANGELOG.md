@@ -415,4 +415,6 @@ Twiniti CRM is currently pre-1.0. Versions use the `0.10.x` series while the pro
 - Removed the legacy `VITE_APP_URL` landing override that could send US auth links to Render's `onrender.com` host.
 ## Unreleased
 
+- Added the Development Cloudflare Worker router scaffold for single-URL, region-aware CRM routing.
+- Persist the resolved workspace context after authentication so same-origin requests can be routed to the correct region.
 - Refresh live License API decisions in the SuperAdmin organization dashboard so provisioned organizations no longer remain `pending · unknown` after provisioning.

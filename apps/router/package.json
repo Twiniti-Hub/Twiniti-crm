@@ -1,0 +1,16 @@
+{
+  "name": "@twiniti/router",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250913.0",
+    "typescript": "^5.8.3",
+    "wrangler": "^4.36.0"
+  }
+}
