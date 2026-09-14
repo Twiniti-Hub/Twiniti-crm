@@ -19,6 +19,9 @@ migration chain, schema objects, RLS policies, and runtime role contract.
   a partially migrated rollout.
 - Production migration requires backup/PITR evidence, an approved change
   reference, protected credentials, and a migration receipt.
+- Organization-scoped migrations must create or verify every RLS helper they
+  reference in the canonical chain; a regional database must not depend on an
+  out-of-band function created in another environment.
 
 ## Current reconciliation gate
 
