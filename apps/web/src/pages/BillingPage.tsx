@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import type { Me } from "../lib/me";
 import { Brand } from "../components/Brand";
 
 type Billing = {
@@ -20,19 +21,45 @@ function trialDaysRemaining(billing: Billing | null): number | null {
   const remaining = new Date(end).getTime() - Date.now();
   return Math.max(0, Math.ceil(remaining / (24 * 60 * 60 * 1000)));
 }
+
+function isStripeActive(billing: Billing | null): boolean {
+  return billing?.status === "active" || billing?.status === "trialing";
+}
+
+function isWorkspaceUnlocked(me: Me | null, billing: Billing | null): boolean {
+  if (me?.billingStatus) {
+    return ["active", "trialing"].includes(me.billingStatus);
+  }
+  // Fall back only before /me has loaded.
+  return isStripeActive(billing)
+    && (!billing?.licenseDecision || billing.licenseDecision === "allow");
+}
+
 export function BillingPage() {
   const [billing, setBilling] = useState<Billing | null>(null);
+  const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const params = new URLSearchParams(window.location.search);
   const canceled = params.get("canceled") === "1";
   const success = params.get("success") === "1";
   const [confirming, setConfirming] = useState(success);
+  const unlocked = isWorkspaceUnlocked(me, billing);
+  const licenseExpired = billing?.licenseStatus === "expired"
+    || billing?.licenseReasonCode === "LICENSE_EXPIRED"
+    || me?.licenseReasonCode === "LICENSE_EXPIRED";
+  const trialRemaining = trialDaysRemaining(billing);
+  const effectiveStatus = me?.billingStatus ?? billing?.status ?? "loading";
+  const licenseReason = me?.licenseReasonCode ?? billing?.licenseReasonCode ?? null;
 
   async function load() {
     try {
-      const result = await api("/api/v1/billing");
-      setBilling(result.data as Billing);
+      const [billingResult, meResult] = await Promise.all([
+        api("/api/v1/billing"),
+        api("/api/v1/me")
+      ]);
+      setBilling(billingResult.data as Billing);
+      setMe(meResult.data as Me);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load billing status.");
@@ -60,6 +87,13 @@ export function BillingPage() {
     void poll();
     return () => { cancelled = true; };
   }, [success]);
+
+  useEffect(() => {
+    if (!unlocked) return;
+    // AuthGate cages on a cached /me billingStatus. Hard-navigate so /me
+    // reloads and the CRM shell unlocks once Stripe/License are active.
+    window.location.assign("/");
+  }, [unlocked]);
 
   async function startCheckout() {
     setBusy(true);
@@ -91,11 +125,9 @@ export function BillingPage() {
     }
   }
 
-  const active = (billing?.status === "active" || billing?.status === "trialing")
-    && (!billing?.licenseDecision || billing.licenseDecision === "allow");
-  const licenseExpired = billing?.licenseStatus === "expired"
-    || billing?.licenseReasonCode === "LICENSE_EXPIRED";
-  const trialRemaining = trialDaysRemaining(billing);
+  function enterWorkspace() {
+    window.location.assign("/");
+  }
 
   return (
     <div className="auth-page">
@@ -104,7 +136,7 @@ export function BillingPage() {
         <div className="stack-form">
           <div>
             <p className="eyebrow">Client billing</p>
-            <h1>{active ? "Billing is active" : licenseExpired ? "Your subscription has expired" : "Activate your client workspace"}</h1>
+            <h1>{unlocked ? "Billing is active" : licenseExpired ? "Your subscription has expired" : "Activate your client workspace"}</h1>
             {licenseExpired ? (
               <p className="muted">
                 Restart your subscription to pick up where you left off. Your client workspace and CRM data are still here.
@@ -116,22 +148,34 @@ export function BillingPage() {
             )}
           </div>
           {canceled ? <div className="banner warning">Checkout was canceled. Your workspace remains locked until billing is completed.</div> : null}
-          {success && confirming && !active ? <div className="banner info">Checkout returned successfully. We are waiting for Stripe to confirm your trial or subscription.</div> : null}
-          {success && !confirming && !active ? <div className="banner warning">Stripe has not confirmed the subscription yet. Please retry checkout or contact support if this persists.</div> : null}
+          {success && confirming && !unlocked ? <div className="banner info">Checkout returned successfully. We are waiting for Stripe to confirm your trial or subscription.</div> : null}
+          {success && !confirming && !unlocked ? <div className="banner warning">Stripe has not confirmed the subscription yet. Please retry checkout or contact support if this persists.</div> : null}
+          {!unlocked && isStripeActive(billing) && effectiveStatus !== "trialing" && effectiveStatus !== "active" ? (
+            <div className="banner warning">
+              Stripe shows {billing?.status}, but workspace access is still {effectiveStatus}
+              {licenseReason ? ` (${licenseReason})` : ""}. Refresh after licensing catches up, or contact support.
+            </div>
+          ) : null}
           {error ? <div className="banner error">{error}</div> : null}
           <div className="panel">
-            <strong>Status: {billing?.status ?? "loading"}</strong>
+            <strong>Status: {effectiveStatus}</strong>
+            {billing?.status && billing.status !== effectiveStatus ? (
+              <p className="muted">Stripe status: {billing.status}</p>
+            ) : null}
             {trialRemaining !== null ? (
               <p className="muted">
                 {billing?.trialKind === "three_month" ? "Three-month promotional trial" : "7-day free trial"} · {trialRemaining} {trialRemaining === 1 ? "day" : "days"} remaining
               </p>
             ) : null}
-            {!active && !confirming ? <p className="muted">A payment method is required in Stripe Checkout. You can enter a promotion code there.</p> : null}
+            {!unlocked && !confirming && !isStripeActive(billing) ? <p className="muted">A payment method is required in Stripe Checkout. You can enter a promotion code there.</p> : null}
             {billing?.currentPeriodEnd ? <p className="muted">Current period ends {new Date(billing.currentPeriodEnd).toLocaleDateString()}.</p> : null}
-            {billing?.licenseReasonCode ? <p className="muted">License status: {billing.licenseReasonCode}</p> : null}
+            {licenseReason ? <p className="muted">License status: {licenseReason}</p> : null}
           </div>
-          {active ? (
-            <button className="secondary" type="button" onClick={() => void openPortal()} disabled={busy}>Manage billing</button>
+          {unlocked ? (
+            <>
+              <button className="primary" type="button" onClick={enterWorkspace}>Enter workspace</button>
+              <button className="secondary" type="button" onClick={() => void openPortal()} disabled={busy}>Manage billing</button>
+            </>
           ) : (
             <button className="primary" type="button" onClick={() => void startCheckout()} disabled={busy}>
               {busy ? "Opening checkout…" : licenseExpired ? "Restart subscription" : "Continue to secure checkout"}

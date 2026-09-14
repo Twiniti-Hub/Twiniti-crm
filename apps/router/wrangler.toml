@@ -1,0 +1,40 @@
+name = "twiniti-loop-router-dev"
+main = "src/index.ts"
+compatibility_date = "2026-09-13"
+workers_dev = true
+
+routes = [
+  { pattern = "loop-dev.twiniti.ai/*", zone_name = "twiniti.ai" }
+]
+
+[vars]
+DEFAULT_REGION = "us"
+DEPLOYMENT_ENV = "development"
+WEB_ORIGIN = "https://twiniti-crm-dev-landing.onrender.com"
+APP_ORIGIN = "https://twiniti-crm-dev-us.onrender.com"
+API_ORIGIN_US = "https://twiniti-crm-dev-us.onrender.com"
+API_ORIGIN_EU = "https://twiniti-crm-dev-eu.onrender.com"
+API_ORIGIN_UK = "https://twiniti-crm-dev-uk.onrender.com"
+
+[[kv_namespaces]]
+binding = "WORKSPACE_DIRECTORY"
+id = "204cd9e62ee84fa09219d7eb45e4aa6f"
+
+[env.production]
+name = "twiniti-loop-router"
+routes = [
+  { pattern = "loop.twiniti.ai/*", zone_name = "twiniti.ai" }
+]
+
+[env.production.vars]
+DEFAULT_REGION = "us"
+DEPLOYMENT_ENV = "production"
+WEB_ORIGIN = "https://twiniti-crm-prod-landing.onrender.com"
+APP_ORIGIN = "https://twiniti-crm-prod-us.onrender.com"
+API_ORIGIN_US = "https://twiniti-crm-prod-us.onrender.com"
+API_ORIGIN_EU = "https://twiniti-crm-eu.onrender.com"
+API_ORIGIN_UK = "https://twiniti-crm-uk.onrender.com"
+
+[[env.production.kv_namespaces]]
+binding = "WORKSPACE_DIRECTORY"
+id = "9423a9430186417da48814bd43ca6de9"

@@ -19,6 +19,7 @@ export const hexclaveApp = authConfigured
       urls: {
         signIn: "/sign-in",
         signUp: "/sign-up",
+        forgotPassword: "/forgot-password",
         afterSignIn: "/",
         afterSignUp: "/",
         afterSignOut: "/",

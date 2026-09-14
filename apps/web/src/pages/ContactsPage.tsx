@@ -170,7 +170,8 @@ function renderPropertyInput(
 }
 
 export function ContactsPage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialQuery = searchParams.get("q")?.trim() ?? "";
   const isListView = searchParams.get("view") === "list";
   const createDialogRef = useRef<HTMLDialogElement>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -187,10 +188,10 @@ export function ContactsPage() {
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(25);
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState<ContactsMeta | null>(null);
-  const [searchInput, setSearchInput] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [boardSearchInput, setBoardSearchInput] = useState("");
-  const [boardSearchQuery, setBoardSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState(initialQuery);
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
+  const [boardSearchInput, setBoardSearchInput] = useState(initialQuery);
+  const [boardSearchQuery, setBoardSearchQuery] = useState(initialQuery);
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
   const [boardViewId, setBoardViewId] = useState<string | null>(null);
   const [canManageShared, setCanManageShared] = useState(false);
@@ -302,6 +303,22 @@ export function ContactsPage() {
       cancelled = true;
     };
   }, [page, pageSize, searchQuery, isListView]);
+
+  useEffect(() => {
+    const nextQuery = searchParams.get("q")?.trim() ?? "";
+    setSearchInput(nextQuery);
+    setSearchQuery(nextQuery);
+    setBoardSearchInput(nextQuery);
+    setBoardSearchQuery(nextQuery);
+  }, [searchParams]);
+
+  function syncQueryParam(nextQuery: string) {
+    const params = new URLSearchParams(searchParams);
+    const trimmed = nextQuery.trim();
+    if (trimmed) params.set("q", trimmed);
+    else params.delete("q");
+    setSearchParams(params, { replace: true });
+  }
 
   useEffect(() => {
     api("/api/v1/me")
@@ -603,10 +620,15 @@ export function ContactsPage() {
             value={boardSearchInput}
             appliedValue={boardSearchQuery}
             onChange={setBoardSearchInput}
-            onApply={() => setBoardSearchQuery(boardSearchInput.trim())}
+            onApply={() => {
+              const nextQuery = boardSearchInput.trim();
+              setBoardSearchQuery(nextQuery);
+              syncQueryParam(nextQuery);
+            }}
             onClear={() => {
               setBoardSearchInput("");
               setBoardSearchQuery("");
+              syncQueryParam("");
             }}
           />
           <KanbanBoard
@@ -631,7 +653,9 @@ export function ContactsPage() {
                 if (e.key === "Enter") {
                   e.preventDefault();
                   setPage(1);
-                  setSearchQuery(searchInput.trim());
+                  const nextQuery = searchInput.trim();
+                  setSearchQuery(nextQuery);
+                  syncQueryParam(nextQuery);
                 }
               }}
               placeholder="Search by name, email, phone, or company"
@@ -646,7 +670,9 @@ export function ContactsPage() {
               type="button"
               onClick={() => {
                 setPage(1);
-                setSearchQuery(searchInput.trim());
+                const nextQuery = searchInput.trim();
+                setSearchQuery(nextQuery);
+                syncQueryParam(nextQuery);
               }}
             >
               Apply filter
@@ -676,6 +702,7 @@ export function ContactsPage() {
                 setSearchInput("");
                 setSearchQuery("");
                 setPage(1);
+                syncQueryParam("");
               }}
             >
               Clear
@@ -714,7 +741,11 @@ export function ContactsPage() {
             ))}
             {!contacts.length ? (
               <tr>
-                <td colSpan={4 + listColumns.length}>No contacts yet. Import a CSV file to get started.</td>
+                <td colSpan={4 + listColumns.length}>
+                  {searchQuery
+                    ? `No contacts match "${searchQuery}". Try a different filter.`
+                    : "No contacts yet. Import a CSV file to get started."}
+                </td>
               </tr>
             ) : null}
           </tbody>

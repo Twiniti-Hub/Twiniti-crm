@@ -1,14 +1,17 @@
 import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 // neon-http workers use optimistic claim rather than SKIP LOCKED transactions
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Db } from "./client.js";
+import { compileFilterAst, parseFilterAst } from "./filters.js";
 import {
   mapHubspotPropertyType,
   normalizeHubspotInternalName,
   type PropertyDataType
 } from "./hubspot.js";
 import {
+  actionProposals,
   agentIdentities,
+  approvals,
   auditEvents,
   campaigns,
   companies,
@@ -17,11 +20,13 @@ import {
   contactIdentities,
   crmUsers,
   customerEvents,
+  digitalWorkers,
   emailActivities,
   emailTrackingAddresses,
   externalRecordIds,
   forms,
   jobs,
+  listMemberships,
   organizationBilling,
   organizationResendDomains,
   organizationInvitations,
@@ -33,11 +38,14 @@ import {
   stripeEvents,
   suppressionEntries,
   workflows,
-  webhookEvents
+  webhookEvents,
+  workerMissions,
+  workerRuns,
+  workerRunSteps
 } from "./schema.js";
 
 export async function listOrganizationResendDomains(db: Db, organizationId: string) {
-  return db.select({
+  const rows = await db.select({
     id: organizationResendDomains.id,
     organizationId: organizationResendDomains.organizationId,
     domain: organizationResendDomains.domain,
@@ -51,8 +59,13 @@ export async function listOrganizationResendDomains(db: Db, organizationId: stri
     lastValidatedAt: organizationResendDomains.lastValidatedAt,
     rotatedAt: organizationResendDomains.rotatedAt,
     createdAt: organizationResendDomains.createdAt,
-    updatedAt: organizationResendDomains.updatedAt
+    updatedAt: organizationResendDomains.updatedAt,
+    webhookSecretCiphertext: organizationResendDomains.webhookSecretCiphertext
   }).from(organizationResendDomains).where(eq(organizationResendDomains.organizationId, organizationId));
+  return rows.map(({ webhookSecretCiphertext, ...domain }) => ({
+    ...domain,
+    webhookSecretConfigured: Boolean(webhookSecretCiphertext)
+  }));
 }
 
 export async function getOrganizationResendDomain(db: Db, organizationId: string, id: string) {
@@ -284,6 +297,33 @@ const CONTACT_COMPANY_PROPERTY_KEYS = [
   "primary_company",
   "primary_company_name"
 ] as const;
+
+const CONTACT_EMAIL_DOMAIN_PROPERTY_KEYS = [
+  "email_domain",
+  "hs_email_domain"
+] as const;
+
+export function extractEmailDomainFromAddress(email: string | null | undefined): string | null {
+  if (!email) return null;
+  const at = email.lastIndexOf("@");
+  if (at <= 0 || at >= email.length - 1) return null;
+  return normalizeDomain(email.slice(at + 1));
+}
+
+export function extractContactEmailDomain(
+  email: string | null | undefined,
+  properties: Record<string, unknown> | null | undefined
+): string | null {
+  if (properties) {
+    for (const key of CONTACT_EMAIL_DOMAIN_PROPERTY_KEYS) {
+      const value = properties[key];
+      if (typeof value === "string" && value.trim()) {
+        return normalizeDomain(value);
+      }
+    }
+  }
+  return extractEmailDomainFromAddress(email);
+}
 
 export function extractContactCompanyName(properties: Record<string, unknown> | null | undefined): string | null {
   if (!properties) return null;
@@ -545,6 +585,12 @@ export async function findCrmUserBySubject(db: Db, subject: string) {
   return rows[0] ?? null;
 }
 
+/** Resolve a legacy or pre-provisioned membership for a verified platform identity. */
+export async function findCrmUserByEmail(db: Db, email: string) {
+  const rows = await db.select().from(crmUsers).where(ilike(crmUsers.email, email.trim().toLowerCase())).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function getOrganizationById(db: Db, organizationId: string) {
   const rows = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
   return rows[0] ?? null;
@@ -578,6 +624,7 @@ export async function getSuperAdminDashboard(db: Db, regionCode: RegionCode) {
       trialKind: organizationBilling.trialKind,
       trialEnd: organizationBilling.trialEnd,
       trialConvertedAt: organizationBilling.trialConvertedAt,
+      licenseProvisioningStatus: organizationBilling.licenseProvisioningStatus,
       licenseStatus: organizationBilling.licenseStatus,
       licenseDecision: organizationBilling.licenseDecision,
       lastStripeEventCreatedAt: organizationBilling.lastStripeEventCreatedAt,
@@ -995,14 +1042,18 @@ export async function resolveContactCompanyAssociation(
     contactId: string;
     companyName?: string | null;
     companyIndustry?: string | null;
+    contactEmail?: string | null;
+    contactProperties?: Record<string, unknown> | null;
   }
 ) {
   const companyName = input.companyName?.trim();
   if (!companyName) return null;
+  const domain = extractContactEmailDomain(input.contactEmail, input.contactProperties);
   const company = await upsertCompanyByName(db, {
     organizationId: input.organizationId,
     name: companyName,
-    industry: input.companyIndustry ?? undefined
+    industry: input.companyIndustry ?? undefined,
+    domain: domain ?? undefined
   });
   await setPrimaryCompanyAssociation(db, {
     organizationId: input.organizationId,
@@ -1027,6 +1078,7 @@ export async function reconcileContactCompanyAssociations(
   let createdCompanies = 0;
   let cleanedProperties = 0;
   let skipped = 0;
+  let domainsFilled = 0;
 
   for (const contact of rows) {
     const companyName = extractContactCompanyName((contact.properties ?? {}) as Record<string, unknown>);
@@ -1039,7 +1091,9 @@ export async function reconcileContactCompanyAssociations(
     const company = await resolveContactCompanyAssociation(db, {
       organizationId: input.organizationId,
       contactId: contact.id,
-      companyName
+      companyName,
+      contactEmail: contact.email,
+      contactProperties: (contact.properties ?? {}) as Record<string, unknown>
     });
     if (!company) {
       skipped += 1;
@@ -1047,6 +1101,7 @@ export async function reconcileContactCompanyAssociations(
     }
     matched += 1;
     if (!existingCompany) createdCompanies += 1;
+    else if (!existingCompany.domain && company.domain) domainsFilled += 1;
 
     const stripped = stripContactCompanyProperties((contact.properties ?? {}) as Record<string, unknown>);
     if (stripped.removed) {
@@ -1062,7 +1117,76 @@ export async function reconcileContactCompanyAssociations(
     }
   }
 
-  return { scanned: rows.length, matched, createdCompanies, cleanedProperties, skipped };
+  const domainBackfill = await backfillCompanyDomainsFromContacts(db, input);
+
+  return {
+    scanned: rows.length,
+    matched,
+    createdCompanies,
+    cleanedProperties,
+    skipped,
+    domainsFilled: domainsFilled + domainBackfill.updated
+  };
+}
+
+export async function backfillCompanyDomainsFromContacts(
+  db: Db,
+  input: { organizationId: string }
+) {
+  const rows = await db
+    .select({
+      companyId: companies.id,
+      companyDomain: companies.domain,
+      contactEmail: contacts.email,
+      contactProperties: contacts.properties
+    })
+    .from(companies)
+    .innerJoin(
+      contactCompanyAssociations,
+      and(
+        eq(contactCompanyAssociations.companyId, companies.id),
+        eq(contactCompanyAssociations.organizationId, input.organizationId),
+        eq(contactCompanyAssociations.label, "primary")
+      )
+    )
+    .innerJoin(
+      contacts,
+      and(
+        eq(contacts.id, contactCompanyAssociations.contactId),
+        eq(contacts.organizationId, input.organizationId),
+        isNull(contacts.archivedAt)
+      )
+    )
+    .where(and(
+      eq(companies.organizationId, input.organizationId),
+      isNull(companies.archivedAt),
+      isNull(companies.domain)
+    ));
+
+  let updated = 0;
+  const seen = new Set<string>();
+
+  for (const row of rows) {
+    if (seen.has(row.companyId)) continue;
+    const domain = extractContactEmailDomain(
+      row.contactEmail,
+      (row.contactProperties ?? {}) as Record<string, unknown>
+    );
+    if (!domain) continue;
+    seen.add(row.companyId);
+    const [company] = await db.update(companies).set({
+      domain,
+      domainNormalized: normalizeDomain(domain),
+      updatedAt: new Date()
+    }).where(and(
+      eq(companies.id, row.companyId),
+      eq(companies.organizationId, input.organizationId),
+      isNull(companies.domain)
+    )).returning({ id: companies.id });
+    if (company) updated += 1;
+  }
+
+  return { scanned: seen.size, updated };
 }
 
 export async function findContactByEmail(db: Db, organizationId: string, email: string) {
@@ -1182,6 +1306,172 @@ export async function completeJob(db: Db, id: string, error?: string, options?: 
   }).where(eq(jobs.id, id));
 }
 
+function workerInputHash(input: unknown) {
+  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
+}
+
+export async function createWorkerMission(
+  db: Db,
+  input: {
+    organizationId: string;
+    workerId: string;
+    goal: string;
+    missionInput?: Record<string, unknown>;
+    successCriteria?: string[];
+    priority?: number;
+    budget?: Record<string, unknown>;
+    requestedBy: string;
+    dueAt?: Date | null;
+  }
+) {
+  return db.transaction(async (tx) => {
+    const [worker] = await tx.select({ id: digitalWorkers.id }).from(digitalWorkers).where(and(
+      eq(digitalWorkers.id, input.workerId),
+      eq(digitalWorkers.organizationId, input.organizationId),
+      eq(digitalWorkers.status, "active")
+    )).limit(1);
+    if (!worker) throw new Error("Digital worker is not active or not found");
+    const missionInput = input.missionInput ?? {};
+    const [mission] = await tx.insert(workerMissions).values({
+      organizationId: input.organizationId,
+      workerId: input.workerId,
+      goal: input.goal,
+      input: missionInput,
+      successCriteria: input.successCriteria ?? [],
+      priority: input.priority ?? 100,
+      budget: input.budget ?? {},
+      requestedBy: input.requestedBy,
+      dueAt: input.dueAt ?? null,
+      status: "active"
+    }).returning();
+    if (!mission) throw new Error("Unable to create worker mission");
+    const inputHash = workerInputHash(missionInput);
+    const [run] = await tx.insert(workerRuns).values({
+      organizationId: input.organizationId,
+      missionId: mission.id,
+      attempt: 1,
+      trigger: "manual",
+      inputSnapshot: missionInput,
+      inputHash,
+      status: "queued"
+    }).returning();
+    if (!run) throw new Error("Unable to create worker run");
+    await tx.insert(jobs).values({
+      organizationId: input.organizationId,
+      kind: "digital_worker.run",
+      payload: { runId: run.id, missionId: mission.id, workerId: input.workerId },
+      dedupeKey: `worker-run:${run.id}`,
+      priority: input.priority ?? 100
+    });
+    return { mission, run };
+  });
+}
+
+export async function getWorkerRun(db: Db, organizationId: string, runId: string) {
+  const [run] = await db.select().from(workerRuns).where(and(
+    eq(workerRuns.organizationId, organizationId),
+    eq(workerRuns.id, runId)
+  )).limit(1);
+  if (!run) return null;
+  const steps = await db.select().from(workerRunSteps).where(and(
+    eq(workerRunSteps.organizationId, organizationId),
+    eq(workerRunSteps.runId, runId)
+  )).orderBy(asc(workerRunSteps.sequence));
+  return { run, steps };
+}
+
+export async function heartbeatWorkerRun(db: Db, organizationId: string, runId: string, leaseToken: string, leaseMs = 120_000) {
+  const now = new Date();
+  const [run] = await db.update(workerRuns).set({
+    heartbeatAt: now,
+    leaseExpiresAt: new Date(now.getTime() + leaseMs),
+    status: "running"
+  }).where(and(
+    eq(workerRuns.organizationId, organizationId),
+    eq(workerRuns.id, runId),
+    eq(workerRuns.leaseToken, leaseToken),
+    inArray(workerRuns.status, ["planning", "running"])
+  )).returning();
+  return run ?? null;
+}
+
+function proposalHash(input: { actionType: string; target: unknown; payload: unknown; riskTier: string }) {
+  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
+}
+
+export async function createActionProposal(
+  db: Db,
+  input: {
+    organizationId: string;
+    runId?: string | null;
+    stepId?: string | null;
+    actionType: string;
+    target?: Record<string, unknown>;
+    payload?: Record<string, unknown>;
+    riskTier: string;
+    rationale?: string;
+    evidence?: string[];
+    policyDecision: Record<string, unknown>;
+    expiresAt: Date;
+    createdBy: string;
+  }
+) {
+  const target = input.target ?? {};
+  const payload = input.payload ?? {};
+  const contentHash = proposalHash({ actionType: input.actionType, target, payload, riskTier: input.riskTier });
+  const [proposal] = await db.insert(actionProposals).values({
+    organizationId: input.organizationId,
+    runId: input.runId ?? null,
+    stepId: input.stepId ?? null,
+    actionType: input.actionType,
+    target,
+    payload,
+    contentHash,
+    riskTier: input.riskTier,
+    rationale: input.rationale ?? "",
+    evidence: input.evidence ?? [],
+    policyDecision: input.policyDecision,
+    expiresAt: input.expiresAt,
+    createdBy: input.createdBy,
+    status: "proposed"
+  }).returning();
+  if (!proposal) throw new Error("Unable to create action proposal");
+  return proposal;
+}
+
+export async function decideActionProposal(
+  db: Db,
+  input: { organizationId: string; proposalId: string; actorId: string; decision: "approved" | "rejected"; rationale?: string; proposalHash: string }
+) {
+  return db.transaction(async (tx) => {
+    const [proposal] = await tx.select().from(actionProposals).where(and(
+      eq(actionProposals.organizationId, input.organizationId),
+      eq(actionProposals.id, input.proposalId)
+    )).limit(1);
+    if (!proposal) throw new Error("Action proposal not found");
+    if (proposal.createdBy === input.actorId) throw new Error("The proposing actor cannot approve its own action");
+    if (proposal.contentHash !== input.proposalHash) throw new Error("Action proposal changed after it was presented");
+    if (proposal.expiresAt.getTime() <= Date.now()) throw new Error("Action proposal has expired");
+    if (proposal.status !== "proposed") throw new Error("Action proposal is not awaiting a decision");
+    const [approval] = await tx.insert(approvals).values({
+      organizationId: input.organizationId,
+      proposalId: proposal.id,
+      decision: input.decision,
+      actorId: input.actorId,
+      rationale: input.rationale ?? "",
+      proposalHash: input.proposalHash
+    }).returning();
+    const [updated] = await tx.update(actionProposals).set({
+      status: input.decision === "approved" ? "approved" : "rejected"
+    }).where(and(
+      eq(actionProposals.id, proposal.id),
+      eq(actionProposals.status, "proposed")
+    )).returning();
+    if (!approval || !updated) throw new Error("Unable to record action decision");
+    return { proposal: updated, approval };
+  });
+}
+
 export async function getContactById(db: Db, organizationId: string, id: string) {
   const rows = await db.select().from(contacts).where(and(
     eq(contacts.organizationId, organizationId),
@@ -1287,8 +1577,8 @@ export async function upsertCompanyByName(
   }
 
   const [row] = await db.update(companies).set({
-    domain: input.domain === undefined ? existing.domain : input.domain,
-    domainNormalized: input.domain === undefined ? existing.domainNormalized : normalizeDomain(input.domain),
+    domain: existing.domain ?? input.domain ?? null,
+    domainNormalized: existing.domainNormalized ?? normalizeDomain(input.domain),
     industry: input.industry === undefined ? existing.industry : input.industry,
     properties: {
       ...((existing.properties ?? {}) as Record<string, unknown>),
@@ -1300,8 +1590,97 @@ export async function upsertCompanyByName(
   return { row, created: false as const };
 }
 
+export async function resolveCampaignRecipients(
+  db: Db,
+  organizationId: string,
+  campaign: { segmentId: string | null; listId: string | null }
+) {
+  if (campaign.segmentId) {
+    const segment = await getSegmentById(db, organizationId, campaign.segmentId);
+    if (!segment) return [];
+    const filter = compileFilterAst(parseFilterAst(segment.filterAst));
+    return db.select().from(contacts).where(and(eq(contacts.organizationId, organizationId), filter));
+  }
+  if (campaign.listId) {
+    const rows = await db.select({ contact: contacts }).from(listMemberships).innerJoin(
+      contacts,
+      eq(listMemberships.contactId, contacts.id)
+    ).where(and(
+      eq(listMemberships.listId, campaign.listId),
+      eq(listMemberships.organizationId, organizationId),
+      eq(contacts.organizationId, organizationId)
+    ));
+    return rows.map((row) => row.contact);
+  }
+  return [];
+}
+
+export async function resolveCampaignAllowedRecipients(
+  db: Db,
+  organizationId: string,
+  campaign: { segmentId: string | null; listId: string | null }
+) {
+  const recipients = await resolveCampaignRecipients(db, organizationId, campaign);
+  const allowed = [];
+  for (const contact of recipients) {
+    if (!(await isEmailSuppressed(db, organizationId, contact.email))) {
+      allowed.push(contact);
+    }
+  }
+  return allowed;
+}
+
+export function buildImportedMarketingTimelineEvents(
+  contactId: string,
+  organizationId: string,
+  properties: Record<string, unknown>,
+  existingDedupeKeys: Set<string>
+) {
+  const dedupeKey = `import:${contactId}:marketing-summary`;
+  if (existingDedupeKeys.has(dedupeKey)) return [];
+
+  const deliveredRaw = properties.marketing_emails_delivered ?? properties.hs_email_delivered;
+  const lastName = properties.last_marketing_email_name ?? properties.hs_email_last_email_name;
+  const lastSendDate = properties.hs_email_last_send_date ?? properties.last_marketing_email_sent_date;
+
+  const deliveredCount = typeof deliveredRaw === "number" ? deliveredRaw : Number(deliveredRaw);
+  const hasDelivered = Number.isFinite(deliveredCount) && deliveredCount > 0;
+  const hasLastName = typeof lastName === "string" && lastName.trim().length > 0;
+  if (!hasDelivered && !hasLastName) return [];
+
+  let occurredAt = new Date();
+  if (typeof lastSendDate === "string" && lastSendDate.trim()) {
+    const parsed = new Date(lastSendDate);
+    if (!Number.isNaN(parsed.getTime())) occurredAt = parsed;
+  }
+
+  return [{
+    id: dedupeKey,
+    organizationId,
+    contactId,
+    companyId: null,
+    eventType: "email.sent",
+    source: "hubspot.import",
+    occurredAt,
+    payload: {
+      direction: "outbound",
+      activityType: "sent",
+      provider: "import",
+      subject: hasLastName ? lastName.trim() : "Marketing email",
+      metadata: {
+        imported: true,
+        marketingEmailsDelivered: hasDelivered ? deliveredCount : undefined
+      }
+    },
+    dedupeKey,
+    privacyClass: "standard",
+    createdAt: occurredAt
+  }];
+}
+
 export async function getContactTimeline(db: Db, organizationId: string, contactId: string) {
-  const [events, activities] = await Promise.all([
+  const [contact, events, activities] = await Promise.all([
+    getContactById(db, organizationId, contactId),
     db.select().from(customerEvents).where(and(
       eq(customerEvents.organizationId, organizationId),
       eq(customerEvents.contactId, contactId)
@@ -1339,7 +1718,22 @@ export async function getContactTimeline(db: Db, organizationId: string, contact
     privacyClass: "standard",
     createdAt: activity.createdAt
   }));
-  return [...events, ...emailEvents]
+  const existingDedupeKeys = new Set<string>();
+  for (const activity of activities) {
+    if (activity.dedupeKey) existingDedupeKeys.add(activity.dedupeKey);
+  }
+  for (const event of events) {
+    if (event.dedupeKey) existingDedupeKeys.add(event.dedupeKey);
+  }
+  const importedEvents = contact
+    ? buildImportedMarketingTimelineEvents(
+      contactId,
+      organizationId,
+      (contact.properties ?? {}) as Record<string, unknown>,
+      existingDedupeKeys
+    )
+    : [];
+  return [...events, ...emailEvents, ...importedEvents]
     .sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime())
     .slice(0, 100);
 }

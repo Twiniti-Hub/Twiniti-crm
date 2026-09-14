@@ -5,6 +5,7 @@ import { createLicenseApiClient, type LicenseCheck } from "@twiniti/license-api"
 import {
   ensureBootstrapOrg,
   findAgentByCredentialHash,
+  findCrmUserByEmail,
   findCrmUserBySubject,
   findOrCreateCrmUser,
   getOrganizationBilling,
@@ -212,12 +213,28 @@ async function checkOrganizationLicense(
   localStatus: string
 ) {
   const client = createLicenseApiClient(env);
+  const billingActive = localStatus === "active" || localStatus === "trialing";
+  const billing = await getOrganizationBilling(db, input.organizationId);
+  const provisioned =
+    Boolean(billing?.licenseId)
+    && billing?.licenseProvisioningStatus === "provisioned";
+
+  // Stripe-active/trialing orgs that already completed License_API provisioning
+  // must not stay permanently caged when a regional API is missing License_API
+  // secrets or the check endpoint is temporarily unreachable.
   if (!client.configured) {
+    if (!client.required) {
+      return { billingStatus: localStatus, check: null as LicenseCheck | null };
+    }
+    if (billingActive && provisioned) {
+      return { billingStatus: localStatus, check: null as LicenseCheck | null };
+    }
     return {
-      billingStatus: client.required ? "license_unavailable" : localStatus,
+      billingStatus: "license_unavailable",
       check: null as LicenseCheck | null
     };
   }
+
   const check = await client.checkUserLicense({
     externalOrganizationId: input.organizationId,
     externalUserId: input.userId ?? null,
@@ -229,20 +246,24 @@ async function checkOrganizationLicense(
   await updateOrganizationLicense(db, input.organizationId, {
     licenseDecision: check.decision,
     licenseStatus: check.licenseStatus ?? null,
-    licenseId: check.licenseId ?? null,
+    licenseId: check.licenseId ?? billing?.licenseId ?? null,
     licenseReasonCode: check.reasonCode,
     licenseOrganizationId: check.organizationId,
     licenseExpiresAt: parseLicenseDate(check.expiresAt),
     licenseGraceCutoff: parseLicenseDate(check.graceCutoff),
     lastLicenseCheckedAt: new Date()
   });
-  const billingActive = localStatus === "active" || localStatus === "trialing";
+
+  if (check.decision === "allow" && billingActive) {
+    return { billingStatus: localStatus, check };
+  }
+  if (check.decision === "retry" && billingActive && provisioned) {
+    return { billingStatus: localStatus, check };
+  }
   return {
-    billingStatus: check.decision === "allow" && billingActive
-      ? localStatus
-      : check.decision === "restricted"
-        ? "restricted"
-        : check.decision === "deny" ? "license_denied" : "license_unavailable",
+    billingStatus: check.decision === "restricted"
+      ? "restricted"
+      : check.decision === "deny" ? "license_denied" : "license_unavailable",
     check
   };
 }
@@ -333,7 +354,11 @@ export async function resolveRequestActor(
     ?? null;
   const displayName = (user as { displayName?: string | null }).displayName ?? null;
   const superAdmin = isSuperAdminEmail(email, env);
-  const crmUser = await findCrmUserBySubject(db, subject);
+  const crmUserBySubject = await findCrmUserBySubject(db, subject);
+  // Super Admins may predate subject-bound CRM provisioning. If their verified
+  // platform email already belongs to an active CRM membership, use that
+  // membership as the default workspace rather than forcing a blank console.
+  const crmUser = crmUserBySubject ?? (superAdmin && email ? await findCrmUserByEmail(db, email) : null);
 
   // A platform super admin must explicitly choose a workspace. The database
   // lookup below is the authorization boundary; an arbitrary client-supplied

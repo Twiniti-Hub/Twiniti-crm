@@ -87,6 +87,15 @@ session. This supports production custom domains without blocking the initial
 | BCC email tracking + contact activity timeline | Live (requires Resend Receiving setup) |
 | Hardening runbooks | [docs/HARDENING.md](docs/HARDENING.md), [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) |
 
+## AI-native product plans
+
+The next agent platform increments are defined in two implementation plans:
+
+- [Digital Workers Platform](docs/architecture/digital-workers-platform-plan.md) — the shared mission, run, policy, approval, budget, memory, evaluation, and supervision control plane.
+- [Relationship Steward Agent](docs/architecture/relationship-steward-agent-plan.md) — the first supervised worker, providing evidence-backed relationship briefs, signals, next actions, and drafts.
+
+These documents describe planned work rather than currently available product features. The Digital Worker thin slice is the platform dependency for the Steward; the Steward can then progress from shadow mode to recommendations and drafts without autonomous external sending.
+
 ## User help
 
 The end-user guide is in [docs/help/README.md](docs/help/README.md). It covers onboarding, contacts, companies, imports, audiences, campaigns, forms, workflows, agents, deliverability, settings, billing, and Super Admin workspace selection.
@@ -97,9 +106,10 @@ The end-user guide is in [docs/help/README.md](docs/help/README.md). It covers o
 regional worker from `development`. Secrets use `sync: false`.
 
 The production Blueprint is [render.production.yaml](render.production.yaml).
-Both Blueprints define US, EU, and UK API services, one static landing service,
-and one worker that processes all three regional queues. The landing service
-offers explicit US, EU, and UK choices for Hexclave sign-up and sign-in.
+Both Blueprints define US, EU, and UK API services, one static marketing landing
+service, and one worker that processes all three regional queues. Development
+CRM authentication and API access use the canonical Cloudflare-routed Loop URL;
+country selection during signup determines the workspace region.
 Configure `VITE_APP_URL_US`, `VITE_APP_URL_EU`, and `VITE_APP_URL_UK` on the
 landing service when regional domains differ; the checked-in production values are
 `loop.us.twiniti.ai`, `loop.eu.twiniti.ai`, and `loop.uk.twiniti.ai`.
@@ -154,7 +164,7 @@ The companies list now matches the contacts list with `25`, `50`, or `100` row p
 
 ## Email activity tracking
 
-Each signed-in user can copy a personal BCC address from Settings once the organization has connected a verified Resend domain. The address uses that organization's default Resend domain (`log_{token}@{your-domain}`). BCCing that address records the email against matching contacts, including replies, and shows it in the contact timeline. The Resend domain must have receiving enabled (MX records) and an `email.received` webhook pointed at `/api/v1/webhooks/resend?domain={your-domain}`. The worker uses Resend's receiving API to retrieve message content after the webhook arrives.
+Each signed-in user can copy a personal BCC address from Settings once the organization has connected a verified Resend domain. The address uses that organization's default Resend domain (`log_{token}@{your-domain}`). BCCing that address records the email against matching contacts, including replies, and shows it in the contact timeline. The Resend domain must have receiving enabled (MX records) and an `email.received` webhook pointed at `https://{regional-loop-host}/api/v1/webhooks/resend?domain={your-domain}`. Do not use the Loop homepage URL. Save the Resend signing secret on that domain in Settings. The worker uses Resend's receiving API to retrieve message content after the webhook arrives.
 
 ## Security principles
 

@@ -39,7 +39,7 @@ jobs:
           set -euo pipefail
           base="${E2E_BASE_URL%/}"
           for i in $(seq 1 36); do
-            if curl -fsS "$base/health" | grep -q '"status":"ok"'; then
+            if curl -fsS "$base/health" | grep -Eq '"status":"ok"|"ok":true'; then
               echo "Development health ok"
               exit 0
             fi

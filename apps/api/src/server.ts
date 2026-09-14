@@ -13,8 +13,12 @@ import { registerMcpRoutes } from "./mcp.js";
 import { registerBillingRoutes } from "./routes/billing.js";
 import { registerBoardRoutes } from "./routes/boards.js";
 import { registerCrmRoutes } from "./routes/crm.js";
+import { registerDigitalWorkerRoutes } from "./routes/digital-workers.js";
+import { registerRelationshipStewardRoutes } from "./routes/relationship-steward.js";
+import { registerRunCredentialRoutes } from "./routes/run-credentials.js";
 import { registerMarketingRoutes } from "./routes/marketing.js";
 import { registerOrganizationRoutes } from "./routes/organizations.js";
+import { registerResendWebhookRoutes } from "./routes/resend-webhook.js";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 loadDotenv({ path: path.join(rootDir, ".env") });
@@ -76,7 +80,11 @@ await registerOrganizationRoutes(app, db, env);
 await registerBillingRoutes(app, db, env);
 await registerCrmRoutes(app, db);
 await registerBoardRoutes(app, db);
+await registerDigitalWorkerRoutes(app, db);
+await registerRelationshipStewardRoutes(app, db);
+await registerRunCredentialRoutes(app, db);
 await registerMarketingRoutes(app, db, env);
+registerResendWebhookRoutes(app, db, env);
 await registerMcpRoutes(app, db, env, pool);
 
 app.get("/docs", async (_, reply) => reply.redirect("/documentation"));

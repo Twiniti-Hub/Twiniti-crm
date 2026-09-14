@@ -44,10 +44,10 @@ const topics = [
     action: "Open Forms"
   },
   {
-    title: "Agents and API access",
+    title: "Agent access",
     description: "Create scoped machine credentials and manage integration access securely.",
     to: "/agents",
-    action: "Open Agents"
+    action: "Open Agent access"
   },
   {
     title: "Deliverability and tracking",
@@ -83,7 +83,8 @@ export function HelpPage() {
         <h2>Make the most of Twiniti Loop</h2>
         <p className="muted">
           Use these guides to manage your CRM data, build audiences, and run marketing
-          operations. Choose a topic below to jump directly to the relevant workspace.
+          operations. Sign in through the canonical Loop URL; choose a topic below to jump
+          directly to the relevant workspace.
         </p>
       </section>
 
@@ -105,7 +106,8 @@ export function HelpPage() {
         <p className="eyebrow">Good to know</p>
         <p className="muted">
           Imports run in the background, campaign sending is approval-gated, and workspace
-          data belongs to the company selected for the current session.
+          data belongs to the company selected for the current session. New workspaces choose
+          their country during signup; Loop routes each workspace to its regional data service.
         </p>
       </section>
     </>

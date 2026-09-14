@@ -21,6 +21,10 @@ LICENSE_API_REQUIRED=true
 
 On License_API, set the same key as `TWINITI_CRM_API_KEY`. The License_API public and admin authentication helpers recognize this variable as the `Twiniti CRM` application identity. The key value must match the CRM secret, but the CRM key must remain distinct from `PRAXIS_API_KEY`.
 
+## SuperAdmin status refresh
+
+The SuperAdmin organization dashboard refreshes the License API decision for provisioned organizations when the dashboard is opened. This keeps `licenseDecision`, `licenseStatus`, and `licenseReasonCode` current even though SuperAdmin authentication itself does not run the normal member license check.
+
 ## Render setup
 
 `render.yaml` declares the required CRM API and worker variables. Because the values are secrets or deployment-specific, Render will require the `sync: false` values to be supplied in the service environment:

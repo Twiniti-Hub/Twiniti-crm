@@ -15,12 +15,14 @@ import {
   ensureOrganizationBilling,
   findInvitationByToken,
   getOrganizationById,
+  getOrganizationBilling,
   listOrganizations,
   listOrgMembers,
   listPendingInvitations,
   getSuperAdminDashboard,
   withServiceRls,
   updateMemberRole,
+  updateOrganizationLicense,
   writeAudit,
   organizationResendDomains,
   listOrganizationResendDomains,
@@ -41,6 +43,47 @@ import {
 } from "../auth-hook.js";
 import { createOrganizationCheckoutSession } from "./billing.js";
 import { enqueueLicenseProvisioning } from "../license-jobs.js";
+import { createLicenseApiClient } from "@twiniti/license-api";
+
+async function refreshSuperAdminLicenseStatuses(
+  db: Db,
+  env: AppEnv,
+  rows: Awaited<ReturnType<typeof getSuperAdminDashboard>>,
+  log: { warn: (context: unknown, message: string) => void }
+) {
+  const client = createLicenseApiClient(env);
+  if (!client.configured) return;
+
+  await Promise.all(rows.map(async (row) => {
+    if (row.licenseProvisioningStatus !== "provisioned") return;
+    const billing = await getOrganizationBilling(db, row.id);
+    if (!billing || !["active", "trialing"].includes(billing.status)) return;
+    const members = await listOrgMembers(db, row.id);
+    const member = members.find((candidate) => candidate.active && ["owner", "admin"].includes(candidate.role ?? ""))
+      ?? members.find((candidate) => candidate.active);
+    if (!member) return;
+
+    try {
+      const check = await client.checkUserLicense({
+        externalOrganizationId: row.id,
+        externalUserId: member.id,
+        email: member.email,
+        productCode: env.LICENSE_API_PRODUCT_CODE,
+        source: "twiniti-crm"
+      });
+      await updateOrganizationLicense(db, row.id, {
+        licenseDecision: check.decision,
+        licenseStatus: check.licenseStatus ?? null,
+        licenseId: check.licenseId ?? billing.licenseId ?? null,
+        licenseReasonCode: check.reasonCode,
+        licenseOrganizationId: check.organizationId,
+        lastLicenseCheckedAt: new Date()
+      });
+    } catch (error) {
+      log.warn({ error, organizationId: row.id }, "SuperAdmin license status refresh failed");
+    }
+  }));
+}
 
 async function sendInviteEmail(
   env: AppEnv,
@@ -62,6 +105,95 @@ async function sendInviteEmail(
     text: `You've been invited to join ${input.organizationName} as a ${input.role}.\n\nAccept: ${inviteUrl}`
   });
   return { inviteUrl, sent: true as const };
+}
+
+export function buildSignupSupportNotification(input: {
+  organizationId: string;
+  organizationName: string;
+  adminEmail: string | null;
+  adminDisplayName: string | null;
+  countryCode: string;
+  regionCode: string;
+  deploymentEnv: string;
+}) {
+  const adminLabel = input.adminDisplayName?.trim() || input.adminEmail || "unknown";
+  const subject = `[${input.deploymentEnv}] New Twiniti Loop signup: ${input.organizationName}`;
+  const text = [
+    "A new user signed up for Twiniti Loop.",
+    "",
+    `Organization: ${input.organizationName}`,
+    `Organization ID: ${input.organizationId}`,
+    `Admin: ${adminLabel}`,
+    `Admin email: ${input.adminEmail ?? "unknown"}`,
+    `Country: ${input.countryCode}`,
+    `Region: ${input.regionCode}`,
+    `Environment: ${input.deploymentEnv}`
+  ].join("\n");
+  const html = `<p>A new user signed up for Twiniti Loop.</p>
+<ul>
+<li><strong>Organization:</strong> ${escapeHtml(input.organizationName)}</li>
+<li><strong>Organization ID:</strong> ${escapeHtml(input.organizationId)}</li>
+<li><strong>Admin:</strong> ${escapeHtml(adminLabel)}</li>
+<li><strong>Admin email:</strong> ${escapeHtml(input.adminEmail ?? "unknown")}</li>
+<li><strong>Country:</strong> ${escapeHtml(input.countryCode)}</li>
+<li><strong>Region:</strong> ${escapeHtml(input.regionCode)}</li>
+<li><strong>Environment:</strong> ${escapeHtml(input.deploymentEnv)}</li>
+</ul>`;
+  return { subject, text, html };
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+async function notifySupportOfSignup(
+  env: AppEnv,
+  input: {
+    organizationId: string;
+    organizationName: string;
+    adminEmail: string | null;
+    adminDisplayName: string | null;
+    countryCode: string;
+    regionCode: string;
+  },
+  log?: { warn: (obj: unknown, msg?: string) => void }
+) {
+  if (!env.RESEND_API_KEY || !env.PLATFORM_EMAIL_FROM || !env.SUPPORT_EMAIL) {
+    log?.warn(
+      { organizationId: input.organizationId },
+      "Skipping signup support notification; platform email is not configured"
+    );
+    return { sent: false as const, reason: "not_configured" as const };
+  }
+
+  const content = buildSignupSupportNotification({
+    ...input,
+    deploymentEnv: env.DEPLOYMENT_ENV
+  });
+
+  try {
+    await sendEmail({
+      apiKey: env.RESEND_API_KEY,
+      from: env.PLATFORM_EMAIL_FROM,
+      to: env.SUPPORT_EMAIL,
+      subject: content.subject,
+      html: content.html,
+      text: content.text,
+      idempotencyKey: `signup-support:${input.organizationId}`
+    });
+    return { sent: true as const };
+  } catch (error) {
+    log?.warn(
+      { err: error, organizationId: input.organizationId },
+      "Failed to send signup support notification"
+    );
+    return { sent: false as const, reason: "send_failed" as const };
+  }
 }
 
 function mapMember(row: {
@@ -353,6 +485,21 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         metadata: { name: created.organization.name, joinedAsAdmin: joinAsAdmin }
       });
 
+      if (created.created && joinAsAdmin && actor.needsSetup) {
+        await notifySupportOfSignup(
+          env,
+          {
+            organizationId: created.organization.id,
+            organizationName: created.organization.name,
+            adminEmail: created.admin?.email ?? actor.email ?? null,
+            adminDisplayName: created.admin?.displayName ?? actor.displayName ?? null,
+            countryCode: input.countryCode,
+            regionCode: created.organization.residencyRegion
+          },
+          request.log
+        );
+      }
+
       return {
         data: {
           id: created.organization.id,
@@ -399,7 +546,11 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       const regions: RegionCode[] = ["us", "eu", "uk"];
       const regionalDbs = regions.map((region) => ({ region, db: getDb(regionalDatabaseUrl(env, region)) }));
       const regionalRows = await Promise.all(
-        regionalDbs.map(({ region, db: regionalDb }) => withServiceRls(regionalDb, null, (serviceDb) => getSuperAdminDashboard(serviceDb, region)))
+        regionalDbs.map(({ region, db: regionalDb }) => withServiceRls(regionalDb, null, async (serviceDb) => {
+          const rows = await getSuperAdminDashboard(serviceDb, region);
+          await refreshSuperAdminLicenseStatuses(serviceDb, env, rows, request.log);
+          return getSuperAdminDashboard(serviceDb, region);
+        }))
       );
       const organizations = regionalRows.flat();
       const now = Date.now();

@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { Me } from "../lib/me";
 import { authConfigured } from "../hexclave/client";
+import { buildResendWebhookUrl } from "../lib/resendWebhookUrl";
 
 type Member = {
   id: string;
@@ -21,13 +22,9 @@ type Invitation = {
 };
 
 type TrackingAddress = { address: string; domain: string; resendDomainId?: string };
-type ResendDomain = { id: string; domain: string; fromEmail: string; fromName: string | null; verificationStatus: string; isDefault: boolean; active: boolean };
+type ResendDomain = { id: string; domain: string; fromEmail: string; fromName: string | null; verificationStatus: string; isDefault: boolean; active: boolean; webhookSecretConfigured?: boolean };
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
-
-function resendWebhookUrl(domain: string) {
-  return `${API_BASE}/api/v1/webhooks/resend?domain=${encodeURIComponent(domain)}`;
-}
 
 export function SettingsPage() {
   const [me, setMe] = useState<Me | null>(null);
@@ -41,6 +38,7 @@ export function SettingsPage() {
   const [trackingAddress, setTrackingAddress] = useState<TrackingAddress | null>(null);
   const [trackingResendRequired, setTrackingResendRequired] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedWebhook, setCopiedWebhook] = useState<string | null>(null);
   const [resendDomains, setResendDomains] = useState<ResendDomain[]>([]);
   const [resendDomain, setResendDomain] = useState("");
   const [resendApiKey, setResendApiKey] = useState("");
@@ -309,7 +307,7 @@ export function SettingsPage() {
         ) : trackingResendRequired ? (
           <p className="muted">
             {isAdmin
-              ? "Connect a verified Resend domain in Email delivery below to enable your personal BCC tracking address. Configure receiving (MX records) and an email.received webhook for that domain."
+              ? "Connect a verified Resend domain in Email delivery below to enable your personal BCC tracking address. Configure receiving (MX records) and paste the full webhook URL from Email delivery into Resend."
               : "Email tracking is unavailable until a company admin connects a verified Resend domain in Email delivery."}
           </p>
         ) : (
@@ -324,6 +322,7 @@ export function SettingsPage() {
           <p className="muted">
             Connect verified Resend domains for this organization. Each domain uses its own API key.
             BCC tracking and campaign sending use the <strong>default</strong> domain.
+            Paste the full webhook URL into Resend (not the Loop homepage). Save the matching signing secret here.
           </p>
           {resendDomains.length > 0 ? (
             <div className="table-wrap" style={{ marginBottom: 16 }}>
@@ -346,7 +345,27 @@ export function SettingsPage() {
                       <td>{domain.verificationStatus}</td>
                       <td>{domain.isDefault ? "Yes" : "—"}</td>
                       <td>
-                        <code style={{ fontSize: 12 }}>{resendWebhookUrl(domain.domain)}</code>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 360 }}>
+                          <code style={{ fontSize: 12, overflowWrap: "anywhere" }}>
+                            {buildResendWebhookUrl(domain.domain, API_BASE, window.location.origin)}
+                          </code>
+                          <div className="row-actions">
+                            <button
+                              className="secondary"
+                              type="button"
+                              onClick={() => {
+                                void navigator.clipboard?.writeText(buildResendWebhookUrl(domain.domain, API_BASE, window.location.origin));
+                                setCopiedWebhook(domain.id);
+                                window.setTimeout(() => setCopiedWebhook(null), 1600);
+                              }}
+                            >
+                              {copiedWebhook === domain.id ? "Copied" : "Copy URL"}
+                            </button>
+                          </div>
+                          {domain.webhookSecretConfigured === false ? (
+                            <span className="muted">Webhook secret missing — Edit and save the Resend signing secret or events will be rejected.</span>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="row-actions">
                         <button className="secondary" type="button" disabled={busy} onClick={() => startEditResendDomain(domain)}>Edit</button>
@@ -398,7 +417,7 @@ export function SettingsPage() {
                   <input type="password" value={editApiKey} onChange={(e) => setEditApiKey(e.target.value)} placeholder="Leave blank to keep current" />
                 </label>
                 <label style={{ flex: 1 }}>
-                  New webhook secret
+                  New webhook signing secret
                   <input type="password" value={editWebhookSecret} onChange={(e) => setEditWebhookSecret(e.target.value)} placeholder="Leave blank to keep current" />
                 </label>
               </div>
@@ -418,7 +437,7 @@ export function SettingsPage() {
               <label>From email<input type="email" value={resendFromEmail} onChange={(e) => setResendFromEmail(e.target.value)} placeholder="hello@mail.example.com" required /></label>
               <label>From name<input value={resendFromName} onChange={(e) => setResendFromName(e.target.value)} placeholder="Twiniti Loop" /></label>
             </div>
-            <label>Webhook secret<input type="password" value={resendWebhookSecret} onChange={(e) => setResendWebhookSecret(e.target.value)} placeholder="whsec_…" /></label>
+            <label>Webhook signing secret<input type="password" value={resendWebhookSecret} onChange={(e) => setResendWebhookSecret(e.target.value)} placeholder="whsec_…" /></label>
             {resendDomains.length > 0 ? (
               <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <input type="checkbox" checked={addResendAsDefault} onChange={(e) => setAddResendAsDefault(e.target.checked)} />

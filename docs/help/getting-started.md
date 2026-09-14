@@ -2,7 +2,24 @@
 
 ## Sign in and choose a workspace
 
-Sign in through the regional Loop address supplied for your organization. If you are a Super Admin, open **Super Admin**, select a workspace, and choose **Open workspace** before using CRM pages.
+Use the canonical Loop URL for your environment:
+
+- Development: `https://loop-dev.twiniti.ai/sign-in`
+- Production: `https://loop.twiniti.ai/sign-in`
+
+Loop uses one public URL. You do not need to choose a regional hostname. New
+workspaces select their country during signup; Loop assigns the workspace to
+the corresponding US, EU, or UK data service. If you are a Super Admin, open
+**Super Admin**, select a workspace, and choose **Open workspace** before using
+CRM pages.
+
+After signing in, Loop loads the workspace session before showing CRM pages. If
+the page does not render, reload the canonical Loop URL and contact an
+administrator if the issue persists; do not use a regional or Render service
+URL directly.
+
+The Render landing-site address is for marketing pages only. If a direct
+`onrender.com/sign-in` link returns Not Found, return to the canonical Loop URL.
 
 ## Create your first records
 

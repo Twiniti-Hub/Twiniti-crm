@@ -18,6 +18,13 @@
     {"file":"0011_organization_resend_domains.sql","status":"journaled","sha256":"2e21dec3b958b4d56dca5df4619b4e75b0f6bdaeba451514482f28f8dbc709b0"},
     {"file":"0012_reconcile_resend_domain_verification.sql","status":"journaled","sha256":"6a3f8674eaf2cd04b16215186264cde88738ef55b5d4ac0f631aae40d374eedf"},
     {"file":"0013_enforce_organization_rls.sql","status":"journaled","sha256":"a8177d2d427e6291d5683d10d3e7bbb4289c93b8d82dd89eb45d03b2ae3b0ba1"},
-    {"file":"0014_contacts_companies_kanban.sql","status":"journaled","sha256":"a3b0f5c34bef146b80367d792befda0c37bc3790a2e6a0beaf2657b18bad4702"}
+    {"file":"0014_contacts_companies_kanban.sql","status":"journaled","sha256":"a3b0f5c34bef146b80367d792befda0c37bc3790a2e6a0beaf2657b18bad4702"},
+    {"file":"0015_digital_workers_registry.sql","status":"journaled","sha256":"3f4ae5ed3eb061622631ea7646f01a85908129ea0db7a6aae5cc349d6397e06e"},
+    {"file":"0016_worker_run_engine.sql","status":"journaled","sha256":"2b25c3cf5ec71df6e349bfbe213d98c800ce7f405aab1f91d8f47f5297d18e50"},
+    {"file":"0017_tool_policy_approvals.sql","status":"journaled","sha256":"f44ad499dfe0e7fac258e8467ff901807129ac5aab4720b1c32c1f24d7ac7c94"},
+    {"file":"0018_ai_usage_entitlements.sql","status":"journaled","sha256":"a6e8deb784b7c6ffe81b065bac6271357a1090a1761025d59d65d4a889ec565d"},
+    {"file":"0019_worker_memory_evaluation.sql","status":"journaled","sha256":"037c93b2399500e7078c061aeeaaa922ceecc5f46f553d29af3b40728b35ff4f"},
+    {"file":"0020_relationship_steward.sql","status":"journaled","sha256":"136ce74b8d0ba4e4fe820a4356da0471a60c834fbf15d2e7c7ad67a5b414a49b"},
+    {"file":"0021_run_credentials.sql","status":"journaled","sha256":"428b5c37c11feb4173a9232cca41c50180034d5aee5ca4afe479bdabbe16901f"}
   ]
 }

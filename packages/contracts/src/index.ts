@@ -350,6 +350,259 @@ const agentScopesSchema = z.array(agentScopeSchema).min(1).max(30);
 
 export type AgentScope = z.infer<typeof agentScopeSchema>;
 
+export const workerStatusSchema = z.enum(["draft", "active", "paused", "retired"]);
+export const workerAutonomyLevelSchema = z.enum(["observe", "recommend", "draft", "bounded_execute"]);
+export const workerRoleSchema = z.string().trim().min(1).max(80);
+export const workerBudgetSchema = z.object({
+  maxRuns: z.number().int().nonnegative().optional(),
+  maxModelCalls: z.number().int().nonnegative().optional(),
+  maxCostCents: z.number().int().nonnegative().optional()
+}).strict();
+
+export const createDigitalWorkerSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  slug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(120),
+  description: z.string().trim().max(2000).default(""),
+  role: workerRoleSchema,
+  ownerUserId: z.string().uuid().nullable().optional(),
+  agentIdentityId: z.string().uuid().nullable().optional(),
+  autonomyLevel: workerAutonomyLevelSchema.default("observe"),
+  featureKey: z.string().trim().max(120).nullable().optional(),
+  defaultBudget: workerBudgetSchema.default({})
+});
+
+export const updateDigitalWorkerSchema = createDigitalWorkerSchema.partial().extend({
+  status: workerStatusSchema.optional(),
+  version: z.number().int().positive()
+});
+
+export const digitalWorkerSchema = createDigitalWorkerSchema.extend({
+  id: z.string().uuid(),
+  status: workerStatusSchema,
+  version: z.number().int().positive(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime()
+});
+
+export type DigitalWorker = z.infer<typeof digitalWorkerSchema>;
+export type CreateDigitalWorker = z.infer<typeof createDigitalWorkerSchema>;
+export type UpdateDigitalWorker = z.infer<typeof updateDigitalWorkerSchema>;
+
+export const missionStatusSchema = z.enum(["draft", "active", "completed", "cancelled", "failed"]);
+export const runStatusSchema = z.enum(["queued", "planning", "running", "awaiting_approval", "succeeded", "failed", "cancelled", "expired"]);
+export const runStepStatusSchema = z.enum(["pending", "running", "succeeded", "failed", "skipped", "awaiting_approval", "cancelled"]);
+export const runStepTypeSchema = z.enum(["plan", "model", "tool", "decision", "approval", "handoff", "completion"]);
+
+export const createWorkerMissionSchema = z.object({
+  workerId: z.string().uuid(),
+  goal: z.string().trim().min(1).max(4000),
+  input: z.record(z.string(), z.unknown()).default({}),
+  successCriteria: z.array(z.string().trim().min(1).max(500)).max(20).default([]),
+  priority: z.number().int().min(0).max(1000).default(100),
+  budget: workerBudgetSchema.default({}),
+  dueAt: z.string().datetime().nullable().optional()
+});
+
+export const workerMissionSchema = createWorkerMissionSchema.extend({
+  id: z.string().uuid(),
+  organizationId: z.string().uuid(),
+  status: missionStatusSchema,
+  requestedBy: z.string().min(1),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime()
+});
+
+export const workerRunStepSchema = z.object({
+  sequence: z.number().int().nonnegative(),
+  type: runStepTypeSchema,
+  status: runStepStatusSchema,
+  idempotencyKey: z.string().min(1).max(255),
+  input: z.record(z.string(), z.unknown()),
+  output: z.record(z.string(), z.unknown())
+});
+
+export const workerRunSchema = z.object({
+  id: z.string().uuid(),
+  organizationId: z.string().uuid(),
+  missionId: z.string().uuid(),
+  attempt: z.number().int().positive(),
+  trigger: z.string().min(1).max(80),
+  inputHash: z.string().min(1).max(128),
+  status: runStatusSchema,
+  currentStep: z.number().int().nonnegative(),
+  steps: z.array(workerRunStepSchema),
+  createdAt: z.string().datetime()
+});
+
+export type CreateWorkerMission = z.infer<typeof createWorkerMissionSchema>;
+export type WorkerMission = z.infer<typeof workerMissionSchema>;
+export type WorkerRun = z.infer<typeof workerRunSchema>;
+
+export const runCredentialAudienceSchema = z.string().trim().min(1).max(160);
+export const runCredentialSchema = z.object({
+  id: z.string().uuid(),
+  runId: z.string().uuid(),
+  workerId: z.string().uuid(),
+  audience: runCredentialAudienceSchema,
+  scopes: z.array(z.string().min(1)).max(100),
+  allowedTools: z.array(z.string().min(1)).max(100),
+  issuedAt: z.string().datetime(),
+  expiresAt: z.string().datetime(),
+  revokedAt: z.string().datetime().nullable()
+});
+export const externalToolMetadataSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  version: z.string().trim().min(1).max(40),
+  adapter: z.enum(["internal", "mcp", "https"]),
+  declaredScopes: z.array(z.string().min(1)).max(100).default([]),
+  sideEffectClass: z.enum(["none", "internal_write", "external"]).default("none"),
+  metadata: z.record(z.string(), z.unknown()).default({})
+});
+export const toolTrustDecisionSchema = z.object({
+  trusted: z.boolean(),
+  reasonCodes: z.array(z.string().min(1)).max(20),
+  allowedScopes: z.array(z.string().min(1)).max(100),
+  allowSideEffects: z.literal(false)
+});
+export type RunCredential = z.infer<typeof runCredentialSchema>;
+export type ExternalToolMetadata = z.infer<typeof externalToolMetadataSchema>;
+export type ToolTrustDecision = z.infer<typeof toolTrustDecisionSchema>;
+
+export const riskTierSchema = z.enum(["read", "internal_write", "external", "restricted"]);
+export const policyEffectSchema = z.enum(["allow", "deny", "require_approval"]);
+export const actionProposalStatusSchema = z.enum(["proposed", "approved", "rejected", "expired", "executed", "cancelled"]);
+export const approvalDecisionSchema = z.enum(["approved", "rejected"]);
+
+export const policyDecisionSchema = z.object({
+  effect: policyEffectSchema,
+  reasonCodes: z.array(z.string().min(1)).max(20),
+  riskTier: riskTierSchema,
+  constraints: z.record(z.string(), z.unknown()),
+  policyVersion: z.string().min(1),
+  entitlementDecisionRef: z.string().optional(),
+  expiresAt: z.string().datetime()
+});
+
+export const createActionProposalSchema = z.object({
+  runId: z.string().uuid().nullable().optional(),
+  stepId: z.string().uuid().nullable().optional(),
+  actionType: z.string().trim().min(1).max(120),
+  target: z.record(z.string(), z.unknown()).default({}),
+  payload: z.record(z.string(), z.unknown()).default({}),
+  riskTier: riskTierSchema,
+  rationale: z.string().trim().max(4000).default(""),
+  evidence: z.array(z.string().min(1)).max(100).default([]),
+  policyDecision: policyDecisionSchema,
+  expiresAt: z.string().datetime()
+});
+
+export const decideActionProposalSchema = z.object({
+  decision: approvalDecisionSchema,
+  rationale: z.string().trim().max(2000).default(""),
+  proposalHash: z.string().min(1).max(128)
+});
+
+export type PolicyDecision = z.infer<typeof policyDecisionSchema>;
+export type CreateActionProposal = z.infer<typeof createActionProposalSchema>;
+export type DecideActionProposal = z.infer<typeof decideActionProposalSchema>;
+
+export const aiEntitlementDecisionSchema = z.enum(["allow", "deny", "retry"]);
+export const modelRequestSchema = z.object({
+  profile: z.string().min(1).max(120),
+  input: z.record(z.string(), z.unknown()),
+  outputSchema: z.record(z.string(), z.unknown()),
+  maxOutputTokens: z.number().int().positive().max(100_000).default(4096),
+  timeoutMs: z.number().int().positive().max(120_000).default(30_000),
+  idempotencyKey: z.string().min(1).max(255)
+});
+
+export const modelUsageSchema = z.object({
+  providerAlias: z.string().min(1),
+  model: z.string().min(1),
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  estimatedCostCents: z.number().int().nonnegative()
+});
+
+export type ModelRequest = z.input<typeof modelRequestSchema>;
+export type ParsedModelRequest = z.output<typeof modelRequestSchema>;
+export type ModelUsage = z.infer<typeof modelUsageSchema>;
+
+export const workerMemorySchema = z.object({
+  id: z.string().uuid(),
+  workerId: z.string().uuid(),
+  subjectType: z.string().max(40).nullable(),
+  subjectId: z.string().uuid().nullable(),
+  memoryType: z.string().min(1).max(80),
+  content: z.record(z.string(), z.unknown()),
+  provenance: z.array(z.string().min(1)).max(100),
+  confidence: z.number().int().min(0).max(100),
+  sensitivity: z.enum(["normal", "sensitive", "restricted"]),
+  validFrom: z.string().datetime(),
+  expiresAt: z.string().datetime().nullable()
+});
+
+export const createWorkerMemorySchema = workerMemorySchema.omit({ id: true, validFrom: true }).extend({
+  workerId: z.string().uuid(),
+  validFrom: z.string().datetime().optional()
+});
+
+export const workerEvaluationSchema = z.object({
+  id: z.string().uuid(),
+  workerId: z.string().uuid(),
+  runId: z.string().uuid().nullable(),
+  fixtureKey: z.string().min(1).max(160),
+  rubricVersion: z.string().min(1).max(80),
+  evaluatorType: z.enum(["deterministic", "human", "model"]),
+  scores: z.record(z.string(), z.number().min(0).max(1)),
+  findings: z.array(z.string().min(1)).max(100),
+  passed: z.boolean()
+});
+
+export const replayRequestSchema = z.object({
+  runId: z.string().uuid(),
+  mode: z.enum(["replay", "simulate"]).default("simulate"),
+  allowSideEffects: z.literal(false).default(false)
+});
+
+export type WorkerMemory = z.infer<typeof workerMemorySchema>;
+export type CreateWorkerMemory = z.infer<typeof createWorkerMemorySchema>;
+export type WorkerEvaluation = z.infer<typeof workerEvaluationSchema>;
+export type ReplayRequest = z.infer<typeof replayRequestSchema>;
+
+export const relationshipHealthSchema = z.enum(["strong", "stable", "watch", "at_risk", "unknown"]);
+export const relationshipPrioritySchema = z.enum(["standard", "important", "strategic"]);
+export const relationshipSignalSeveritySchema = z.enum(["low", "medium", "high"]);
+export const relationshipProfileSchema = z.object({
+  id: z.string().uuid(),
+  contactId: z.string().uuid().nullable(),
+  companyId: z.string().uuid().nullable(),
+  priority: relationshipPrioritySchema,
+  summary: z.string(),
+  health: relationshipHealthSchema,
+  healthReasons: z.array(z.record(z.string(), z.unknown())),
+  nextActionSummary: z.string().nullable(),
+  generatedAt: z.string().datetime().nullable(),
+  expiresAt: z.string().datetime().nullable(),
+  version: z.number().int().positive()
+});
+
+export const relationshipSignalSchema = z.object({
+  id: z.string().uuid(),
+  profileId: z.string().uuid(),
+  signalType: z.string().min(1),
+  severity: relationshipSignalSeveritySchema,
+  title: z.string().min(1),
+  explanation: z.string(),
+  evidenceRefs: z.array(z.string()),
+  confidence: z.number().int().min(0).max(100),
+  status: z.enum(["open", "deferred", "dismissed", "actioned", "expired"]),
+  detectedAt: z.string().datetime()
+});
+
+export type RelationshipProfile = z.infer<typeof relationshipProfileSchema>;
+export type RelationshipSignal = z.infer<typeof relationshipSignalSchema>;
+
 export const agentIdentitySchema = z.object({
   name: z.string().trim().min(1).max(100),
   purpose: z.string().trim().min(1).max(500),

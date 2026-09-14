@@ -1,5 +1,46 @@
 # Changelog
 
+## [Unreleased]
+
+- Fix the post-login Hexclave session bootstrap crash by using the async
+  authorization-header API instead of the SDK's reactive token hook, preventing
+  a hook-order error from blanking the authenticated CRM shell.
+- Align Development E2E coverage with canonical Loop routing: signup now enters
+  same-origin `/sign-up` before choosing a workspace country, and existing-user
+  smoke uses the current sign-in control.
+- Configure the Production Loop router as a separate Cloudflare Worker with a
+  Production-only workspace directory and `loop.twiniti.ai/*` route; the
+  route is deployed only through the approved Production promotion.
+- Route Production EU and UK workspaces to their live regional API origins and
+  identify the router environment correctly in its health response.
+- Use the canonical `loop.twiniti.ai` browser origin for all Production CRM
+  regions and retire unused landing-page regional sign-in configuration.
+- Reorganize Loop navigation into Workspace, Growth, Agent workforce, and Workspace administration; clarify agent-facing labels and replace the mobile horizontal menu with a sectional disclosure menu.
+- Show the active workspace, region, and role persistently in the sidebar, with a direct Super Admin return path for platform operators.
+- Update Help documentation and in-app Help copy for the canonical Loop URL, country-based workspace placement, regional API routing, and the Render landing-site boundary.
+- Attach the Development Cloudflare Worker to the `loop-dev.twiniti.ai/*` zone route and validate landing, sign-in, sign-up, and health endpoints through the canonical hostname.
+- Route the Development single Loop URL between the marketing landing site, canonical CRM app, and regional APIs; use a surface cookie to keep shared asset paths correct.
+- Make Development landing-page authentication links same-origin and move the region choice into CRM onboarding; set regional Render `WEB_ORIGIN` values to the canonical Loop URL.
+- Add the DW-7 Relationship Steward foundation: organization-scoped relationship profiles, evidence-backed facts and signals, supervised queue/profile APIs, and a draft-only Attention view.
+- Keep autonomous external communication disabled while Relationship Steward rollout and human approval workflows are validated.
+- Add the DW-8 run credential foundation: audience-bound, expiring and revocable worker-run credentials plus untrusted external tool metadata assessment with side effects disabled by default.
+- Fix Super Admin navigation so CRM menus do not flash before workspace context loads; Super Admins now see a stable workspace-selection console until they explicitly open a workspace.
+- Resolve pre-provisioned Super Admin memberships by verified email when the current auth subject is not yet attached, allowing the existing Twiniti workspace membership to load correctly.
+
+## [0.10.55] - 2026-09-10
+
+- Accept Svix-signed Resend webhooks at the regional Loop origin (`POST /`) as well as `/api/v1/webhooks/resend`, so a dashboard endpoint pointed at `https://loop.us.twiniti.ai` can receive events.
+- Verify Resend webhooks with the Svix `id.timestamp.body` algorithm and the raw request body; infer the receiving domain from the payload when `?domain=` is omitted.
+- Settings copies an absolute webhook URL per domain and warns when the signing secret is missing.
+
+## [0.10.54] - 2026-09-04
+
+- Bump Fastify from 5.10.0 to 5.12.1 in the API and billing gateway to pick up
+  the GHSA-w2qp-rph6-63g4 and GHSA-3m5p-2c4r-xxw2 security fixes.
+- `Security / scan` skips Twiniti Security SARIF ingest on Dependabot runs,
+  which cannot access repository secrets, so required checks can pass without
+  hiding Semgrep or Gitleaks enforcement.
+
 ## [0.10.53] - 2026-08-21
 
 - Publish `/robots.txt` and `/sitemap.xml` on the Loop landing site so search
@@ -118,6 +159,31 @@
 
 ## Unreleased
 
+- Added DW-6 supervisor experience foundations: live read endpoints for worker
+  directories, runs, action proposals, approvals, and evaluations plus a
+  responsive Digital Workers workspace view at `/digital-workers`.
+- Added DW-5 foundations for provenance-aware worker memory, deterministic
+  evaluation records, fixture scoring, and no-side-effect replay/simulation.
+- Added DW-4 AI control-plane primitives: provider-neutral model gateway
+  boundary with timeout and fail-closed entitlement behavior, separate AI
+  entitlement records, and an idempotent token/cost usage ledger.
+- Added DW-3 control-plane primitives for versioned worker tools, risk tiers,
+  hash-bound action proposals, policy decisions, approval records, expiry, and
+  anti-self-approval checks. Side-effect execution remains intentionally gated.
+- Added the first durable Digital Worker mission/run/step engine primitives:
+  organization-scoped mission, run, and step records, explicit lifecycle
+  contracts, idempotency keys, lease heartbeats, and transactional run-job
+  enqueueing. Tool execution and approval transitions remain future milestones.
+- Added the first Digital Worker registry foundation: versioned worker
+  instructions and policy sets, model profiles, worker tool grants,
+  organization-scoped worker records with RLS, and observe-only typed worker
+  contracts. Run orchestration and side-effect execution remain gated for the
+  later milestones in the build plan.
+- Added implementation plans for the Digital Workers control plane and its
+  first supervised Relationship Steward worker, including phased delivery,
+  security, billing, resilience, evaluation, rollout, and coding-agent work
+  packets. This documentation-only change does not alter product version
+  `0.10.55`.
 - Added repository-enforced development-first promotion, required PR evidence,
   CODEOWNERS coverage, and production-source validation.
 - Added migration manifest/checksum validation, regional schema preflight and
@@ -366,3 +432,8 @@ Twiniti CRM is currently pre-1.0. Versions use the `0.10.x` series while the pro
 - Confirmed production landing redirects for US, EU, and UK application sign-in/signup entry points.
 - Added a seven-day trial days-remaining indicator to the authenticated billing page.
 - Removed the legacy `VITE_APP_URL` landing override that could send US auth links to Render's `onrender.com` host.
+## Unreleased
+
+- Added the Development Cloudflare Worker router scaffold for single-URL, region-aware CRM routing.
+- Persist the resolved workspace context after authentication so same-origin requests can be routed to the correct region.
+- Refresh live License API decisions in the SuperAdmin organization dashboard so provisioned organizations no longer remain `pending · unknown` after provisioning.

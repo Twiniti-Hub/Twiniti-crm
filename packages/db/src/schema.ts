@@ -532,6 +532,345 @@ export const agentIdentities = pgTable("agent_identities", {
   nameIndex: uniqueIndex("agent_identities_org_name_idx").on(table.organizationId, table.name)
 }));
 
+export const workerInstructionVersions = pgTable("worker_instruction_versions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  version: integer("version").notNull(),
+  instructions: text("instructions").notNull(),
+  inputSchema: jsonb("input_schema").notNull().default({}),
+  outputSchema: jsonb("output_schema").notNull().default({}),
+  checksum: varchar("checksum", { length: 128 }).notNull(),
+  createdBy: varchar("created_by", { length: 255 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  versionIndex: uniqueIndex("worker_instruction_versions_org_version_idx").on(table.organizationId, table.version)
+}));
+
+export const workerPolicySets = pgTable("worker_policy_sets", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  name: varchar("name", { length: 120 }).notNull(),
+  version: integer("version").notNull(),
+  policy: jsonb("policy").notNull().default({}),
+  checksum: varchar("checksum", { length: 128 }).notNull(),
+  createdBy: varchar("created_by", { length: 255 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  versionIndex: uniqueIndex("worker_policy_sets_org_name_version_idx").on(table.organizationId, table.name, table.version)
+}));
+
+export const modelProfiles = pgTable("model_profiles", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  name: varchar("name", { length: 120 }).notNull(),
+  providerAlias: varchar("provider_alias", { length: 120 }).notNull(),
+  capabilities: jsonb("capabilities").notNull().default([]),
+  settings: jsonb("settings").notNull().default({}),
+  status: varchar("status", { length: 40 }).notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  nameIndex: uniqueIndex("model_profiles_org_name_idx").on(table.organizationId, table.name)
+}));
+
+export const digitalWorkers = pgTable("digital_workers", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  name: varchar("name", { length: 120 }).notNull(),
+  slug: varchar("slug", { length: 120 }).notNull(),
+  description: text("description").notNull().default(""),
+  role: varchar("role", { length: 80 }).notNull(),
+  ownerUserId: uuid("owner_user_id").references(() => crmUsers.id),
+  agentIdentityId: uuid("agent_identity_id").references(() => agentIdentities.id),
+  status: varchar("status", { length: 40 }).notNull().default("draft"),
+  autonomyLevel: varchar("autonomy_level", { length: 40 }).notNull().default("observe"),
+  instructionVersionId: uuid("instruction_version_id").references(() => workerInstructionVersions.id),
+  policySetId: uuid("policy_set_id").references(() => workerPolicySets.id),
+  modelProfileId: uuid("model_profile_id").references(() => modelProfiles.id),
+  defaultBudget: jsonb("default_budget").notNull().default({}),
+  featureKey: varchar("feature_key", { length: 120 }),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  slugIndex: uniqueIndex("digital_workers_org_slug_idx").on(table.organizationId, table.slug),
+  statusIndex: index("digital_workers_org_status_idx").on(table.organizationId, table.status)
+}));
+
+export const workerToolGrants = pgTable("worker_tool_grants", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  workerId: uuid("worker_id").notNull().references(() => digitalWorkers.id),
+  toolName: varchar("tool_name", { length: 120 }).notNull(),
+  toolVersion: varchar("tool_version", { length: 40 }).notNull(),
+  constraints: jsonb("constraints").notNull().default({}),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  grantIndex: uniqueIndex("worker_tool_grants_org_worker_tool_version_idx").on(table.organizationId, table.workerId, table.toolName, table.toolVersion)
+}));
+
+export const workerTools = pgTable("worker_tools", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  name: varchar("name", { length: 120 }).notNull(),
+  version: varchar("version", { length: 40 }).notNull(),
+  adapter: varchar("adapter", { length: 40 }).notNull(),
+  inputSchema: jsonb("input_schema").notNull().default({}),
+  outputSchema: jsonb("output_schema").notNull().default({}),
+  requiredScopes: jsonb("required_scopes").notNull().default([]),
+  riskTier: varchar("risk_tier", { length: 40 }).notNull().default("read"),
+  sideEffectClass: varchar("side_effect_class", { length: 40 }).notNull().default("none"),
+  status: varchar("status", { length: 40 }).notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  toolIndex: uniqueIndex("worker_tools_org_name_version_idx").on(table.organizationId, table.name, table.version)
+}));
+
+export const workerMissions = pgTable("worker_missions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  workerId: uuid("worker_id").notNull().references(() => digitalWorkers.id),
+  goal: text("goal").notNull(),
+  input: jsonb("input").notNull().default({}),
+  successCriteria: jsonb("success_criteria").notNull().default([]),
+  status: varchar("status", { length: 40 }).notNull().default("draft"),
+  priority: integer("priority").notNull().default(100),
+  budget: jsonb("budget").notNull().default({}),
+  requestedBy: varchar("requested_by", { length: 255 }).notNull(),
+  dueAt: timestamp("due_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  queueIndex: index("worker_missions_org_status_priority_idx").on(table.organizationId, table.status, table.priority),
+  workerIndex: index("worker_missions_org_worker_idx").on(table.organizationId, table.workerId)
+}));
+
+export const workerRuns = pgTable("worker_runs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  missionId: uuid("mission_id").notNull().references(() => workerMissions.id),
+  attempt: integer("attempt").notNull().default(1),
+  trigger: varchar("trigger", { length: 80 }).notNull().default("manual"),
+  inputSnapshot: jsonb("input_snapshot").notNull().default({}),
+  inputHash: varchar("input_hash", { length: 128 }).notNull(),
+  status: varchar("status", { length: 40 }).notNull().default("queued"),
+  currentStep: integer("current_step").notNull().default(0),
+  leaseToken: varchar("lease_token", { length: 128 }),
+  leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+  heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }),
+  usage: jsonb("usage").notNull().default({}),
+  terminalReason: text("terminal_reason"),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  statusIndex: index("worker_runs_org_status_created_idx").on(table.organizationId, table.status, table.createdAt),
+  missionAttemptIndex: uniqueIndex("worker_runs_mission_attempt_idx").on(table.missionId, table.attempt)
+}));
+
+export const workerRunCredentials = pgTable("worker_run_credentials", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  runId: uuid("run_id").notNull().references(() => workerRuns.id),
+  workerId: uuid("worker_id").notNull().references(() => digitalWorkers.id),
+  tokenHash: varchar("token_hash", { length: 128 }).notNull(),
+  audience: varchar("audience", { length: 160 }).notNull(),
+  scopes: jsonb("scopes").notNull().default([]),
+  allowedTools: jsonb("allowed_tools").notNull().default([]),
+  issuedAt: timestamp("issued_at", { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true })
+}, (table) => ({
+  tokenIndex: uniqueIndex("worker_run_credentials_org_token_idx").on(table.organizationId, table.tokenHash),
+  runIndex: index("worker_run_credentials_org_run_expiry_idx").on(table.organizationId, table.runId, table.expiresAt)
+}));
+
+export const workerRunSteps = pgTable("worker_run_steps", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  runId: uuid("run_id").notNull().references(() => workerRuns.id),
+  sequence: integer("sequence").notNull(),
+  type: varchar("type", { length: 40 }).notNull(),
+  status: varchar("status", { length: 40 }).notNull().default("pending"),
+  idempotencyKey: varchar("idempotency_key", { length: 255 }).notNull(),
+  input: jsonb("input").notNull().default({}),
+  output: jsonb("output").notNull().default({}),
+  errorCode: varchar("error_code", { length: 80 }),
+  errorMessage: text("error_message"),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  sequenceIndex: uniqueIndex("worker_run_steps_run_sequence_idx").on(table.runId, table.sequence),
+  idempotencyIndex: uniqueIndex("worker_run_steps_org_idempotency_idx").on(table.organizationId, table.idempotencyKey)
+}));
+
+export const actionProposals = pgTable("action_proposals", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  runId: uuid("run_id").references(() => workerRuns.id),
+  stepId: uuid("step_id").references(() => workerRunSteps.id),
+  actionType: varchar("action_type", { length: 120 }).notNull(),
+  target: jsonb("target").notNull().default({}),
+  payload: jsonb("payload").notNull().default({}),
+  contentHash: varchar("content_hash", { length: 128 }).notNull(),
+  riskTier: varchar("risk_tier", { length: 40 }).notNull(),
+  rationale: text("rationale").notNull().default(""),
+  evidence: jsonb("evidence").notNull().default([]),
+  policyDecision: jsonb("policy_decision").notNull().default({}),
+  status: varchar("status", { length: 40 }).notNull().default("proposed"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdBy: varchar("created_by", { length: 255 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  statusIndex: index("action_proposals_org_status_expiry_idx").on(table.organizationId, table.status, table.expiresAt),
+  hashIndex: index("action_proposals_org_hash_idx").on(table.organizationId, table.contentHash)
+}));
+
+export const approvals = pgTable("approvals", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  proposalId: uuid("proposal_id").notNull().references(() => actionProposals.id),
+  decision: varchar("decision", { length: 40 }).notNull(),
+  actorId: varchar("actor_id", { length: 255 }).notNull(),
+  rationale: text("rationale").notNull().default(""),
+  proposalHash: varchar("proposal_hash", { length: 128 }).notNull(),
+  decidedAt: timestamp("decided_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  proposalIndex: uniqueIndex("approvals_org_proposal_idx").on(table.organizationId, table.proposalId)
+}));
+
+export const aiEntitlements = pgTable("ai_entitlements", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  featureKey: varchar("feature_key", { length: 120 }).notNull(),
+  decision: varchar("decision", { length: 40 }).notNull(),
+  reasonCode: varchar("reason_code", { length: 120 }).notNull(),
+  sourceRef: varchar("source_ref", { length: 255 }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  lookupIndex: uniqueIndex("ai_entitlements_org_feature_idx").on(table.organizationId, table.featureKey)
+}));
+
+export const aiUsageLedger = pgTable("ai_usage_ledger", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  workerId: uuid("worker_id").references(() => digitalWorkers.id),
+  missionId: uuid("mission_id").references(() => workerMissions.id),
+  runId: uuid("run_id").references(() => workerRuns.id),
+  stepId: uuid("step_id").references(() => workerRunSteps.id),
+  providerAlias: varchar("provider_alias", { length: 120 }).notNull(),
+  model: varchar("model", { length: 160 }).notNull(),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  estimatedCostCents: integer("estimated_cost_cents").notNull().default(0),
+  settledCostCents: integer("settled_cost_cents"),
+  entitlementRef: varchar("entitlement_ref", { length: 255 }),
+  idempotencyKey: varchar("idempotency_key", { length: 255 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  idempotencyIndex: uniqueIndex("ai_usage_ledger_org_idempotency_idx").on(table.organizationId, table.idempotencyKey),
+  usageIndex: index("ai_usage_ledger_org_created_idx").on(table.organizationId, table.createdAt)
+}));
+
+export const workerMemories = pgTable("worker_memories", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  workerId: uuid("worker_id").notNull().references(() => digitalWorkers.id),
+  subjectType: varchar("subject_type", { length: 40 }),
+  subjectId: uuid("subject_id"),
+  memoryType: varchar("memory_type", { length: 80 }).notNull(),
+  content: jsonb("content").notNull().default({}),
+  provenance: jsonb("provenance").notNull().default([]),
+  confidence: integer("confidence").notNull().default(0),
+  sensitivity: varchar("sensitivity", { length: 40 }).notNull().default("normal"),
+  validFrom: timestamp("valid_from", { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  supersededBy: uuid("superseded_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  retrievalIndex: index("worker_memories_org_worker_subject_idx").on(table.organizationId, table.workerId, table.subjectType, table.subjectId),
+  expiryIndex: index("worker_memories_org_expiry_idx").on(table.organizationId, table.expiresAt)
+}));
+
+export const workerEvaluations = pgTable("worker_evaluations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  workerId: uuid("worker_id").notNull().references(() => digitalWorkers.id),
+  runId: uuid("run_id").references(() => workerRuns.id),
+  fixtureKey: varchar("fixture_key", { length: 160 }).notNull(),
+  rubricVersion: varchar("rubric_version", { length: 80 }).notNull(),
+  evaluatorType: varchar("evaluator_type", { length: 40 }).notNull().default("deterministic"),
+  scores: jsonb("scores").notNull().default({}),
+  findings: jsonb("findings").notNull().default([]),
+  passed: boolean("passed").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  workerFixtureIndex: index("worker_evaluations_org_worker_fixture_idx").on(table.organizationId, table.workerId, table.fixtureKey),
+  runIndex: index("worker_evaluations_org_run_idx").on(table.organizationId, table.runId)
+}));
+
+export const relationshipProfiles = pgTable("relationship_profiles", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  contactId: uuid("contact_id").references(() => contacts.id),
+  companyId: uuid("company_id").references(() => companies.id),
+  priority: varchar("priority", { length: 40 }).notNull().default("standard"),
+  summary: text("summary").notNull().default(""),
+  health: varchar("health", { length: 40 }).notNull().default("unknown"),
+  healthReasons: jsonb("health_reasons").notNull().default([]),
+  nextActionSummary: text("next_action_summary"),
+  nextActionProposalId: uuid("next_action_proposal_id").references(() => actionProposals.id),
+  sourceWatermark: timestamp("source_watermark", { withTimezone: true }),
+  analysisVersion: varchar("analysis_version", { length: 80 }),
+  generatedAt: timestamp("generated_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  version: integer("version").notNull().default(1),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  contactIndex: uniqueIndex("relationship_profiles_org_contact_idx").on(table.organizationId, table.contactId),
+  companyIndex: uniqueIndex("relationship_profiles_org_company_idx").on(table.organizationId, table.companyId),
+  queueIndex: index("relationship_profiles_org_priority_health_idx").on(table.organizationId, table.priority, table.health)
+}));
+
+export const relationshipFacts = pgTable("relationship_facts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  profileId: uuid("profile_id").notNull().references(() => relationshipProfiles.id),
+  factType: varchar("fact_type", { length: 100 }).notNull(),
+  value: jsonb("value").notNull().default({}),
+  assertion: varchar("assertion", { length: 40 }).notNull().default("inferred"),
+  confidence: integer("confidence").notNull().default(0),
+  evidenceRefs: jsonb("evidence_refs").notNull().default([]),
+  validFrom: timestamp("valid_from", { withTimezone: true }).defaultNow().notNull(),
+  validTo: timestamp("valid_to", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  profileIndex: index("relationship_facts_org_profile_idx").on(table.organizationId, table.profileId)
+}));
+
+export const relationshipSignals = pgTable("relationship_signals", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  profileId: uuid("profile_id").notNull().references(() => relationshipProfiles.id),
+  signalType: varchar("signal_type", { length: 100 }).notNull(),
+  severity: varchar("severity", { length: 40 }).notNull().default("low"),
+  title: varchar("title", { length: 200 }).notNull(),
+  explanation: text("explanation").notNull().default(""),
+  evidenceRefs: jsonb("evidence_refs").notNull().default([]),
+  confidence: integer("confidence").notNull().default(0),
+  status: varchar("status", { length: 40 }).notNull().default("open"),
+  dedupeKey: varchar("dedupe_key", { length: 255 }).notNull(),
+  detectedAt: timestamp("detected_at", { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true })
+}, (table) => ({
+  dedupeIndex: uniqueIndex("relationship_signals_org_dedupe_idx").on(table.organizationId, table.dedupeKey),
+  queueIndex: index("relationship_signals_org_status_severity_idx").on(table.organizationId, table.status, table.severity)
+}));
+
 export const workflows = pgTable("workflows", {
   id: uuid("id").defaultRandom().primaryKey(),
   organizationId: uuid("organization_id").notNull().references(() => organizations.id),
@@ -723,6 +1062,25 @@ export const schema = {
   emailActivities,
   webhookEvents,
   agentIdentities,
+  workerInstructionVersions,
+  workerPolicySets,
+  modelProfiles,
+  digitalWorkers,
+  workerToolGrants,
+  workerMissions,
+  workerRuns,
+  workerRunCredentials,
+  workerRunSteps,
+  workerTools,
+  actionProposals,
+  approvals,
+  aiEntitlements,
+  aiUsageLedger,
+  workerMemories,
+  workerEvaluations,
+  relationshipProfiles,
+  relationshipFacts,
+  relationshipSignals,
   workflows,
   workflowEnrollments,
   workflowRuns,

@@ -19,11 +19,14 @@ import {
   createCompanyRecord,
   createContact,
   customerEvents,
+  enqueueJob,
+  extractContactEmailDomain,
   findContactByEmail,
   getContactById,
   getContactPropertyHistory,
   getContactTimeline,
   listCompanies,
+  normalizeDomain,
   normalizeEmail,
   searchContacts,
   suppressionEntries,
@@ -355,6 +358,31 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
     }
   });
 
+  app.post("/api/v1/companies/reconcile-domains", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireUserRole(actor, "admin");
+      const organizationId = requireOrgId(actor);
+      const job = await enqueueJob(db, {
+        organizationId,
+        kind: "contacts.reconcile_companies",
+        payload: { organizationId },
+        dedupeKey: `contacts.reconcile_companies:${organizationId}`
+      });
+      await audit(db, actor, "company.reconcile_domains", "organization", organizationId, { jobId: job.id });
+      reply.code(202);
+      return {
+        data: {
+          jobId: job.id,
+          kind: job.kind,
+          message: "Company association and domain reconciliation queued"
+        }
+      };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
   app.post("/api/v1/contacts/:id/associate-company", async (request, reply) => {
     try {
       const actor = requireActor(request);
@@ -362,11 +390,18 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
       const { id } = request.params as { id: string };
       const body = z.object({ companyId: z.string().uuid(), label: z.string().trim().max(80).optional() }).parse(request.body);
       const organizationId = requireOrgId(actor);
-      const [contact] = await db.select({ id: contactsTable.id }).from(contactsTable).where(andOp(
+      const [contact] = await db.select({
+        id: contactsTable.id,
+        email: contactsTable.email,
+        properties: contactsTable.properties
+      }).from(contactsTable).where(andOp(
         eqOp(contactsTable.id, id),
         eqOp(contactsTable.organizationId, organizationId)
       )).limit(1);
-      const [company] = await db.select({ id: companies.id }).from(companies).where(andOp(
+      const [company] = await db.select({
+        id: companies.id,
+        domain: companies.domain
+      }).from(companies).where(andOp(
         eqOp(companies.id, body.companyId),
         eqOp(companies.organizationId, organizationId)
       )).limit(1);
@@ -377,6 +412,23 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
         companyId: body.companyId,
         label: body.label ?? "primary"
       }).returning();
+      if (!company.domain) {
+        const domain = extractContactEmailDomain(
+          contact.email,
+          (contact.properties ?? {}) as Record<string, unknown>
+        );
+        if (domain) {
+          await db.update(companies).set({
+            domain,
+            domainNormalized: normalizeDomain(domain),
+            updatedAt: new Date()
+          }).where(andOp(
+            eqOp(companies.id, body.companyId),
+            eqOp(companies.organizationId, organizationId),
+            isNull(companies.domain)
+          ));
+        }
+      }
       await audit(db, actor, "contact.associate_company", "contact", id, { companyId: body.companyId });
       reply.code(201);
       return { data: row };

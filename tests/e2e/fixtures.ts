@@ -23,7 +23,7 @@ export const test = base.extend<{ signedInPage: Page }>({
     await page.goto("/sign-in", { waitUntil: "domcontentloaded" });
     await page.getByLabel(/email/i).fill(email);
     await page.getByRole("textbox", { name: /password/i }).fill(password);
-    await page.getByRole("button", { name: "Sign In", exact: true }).click();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await waitForAuthenticatedShell(page);
     await use(page);
   }

@@ -99,16 +99,62 @@ export async function getReceivedEmail(input: { apiKey: string; emailId: string 
   return { data: body.data ?? null, error: null };
 }
 
+const SVIX_TOLERANCE_SECONDS = 300;
+
+export type ResendWebhookSignedHeaders = {
+  id?: string;
+  timestamp?: string;
+  nowSeconds?: number;
+};
+
+function signatureCandidates(signatureHeader: string): string[] {
+  const tokens: string[] = [];
+  for (const spacePart of signatureHeader.split(/\s+/)) {
+    const trimmed = spacePart.trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith("v1=") || trimmed.startsWith("v0=")) {
+      tokens.push(trimmed.slice(3));
+      continue;
+    }
+    if (trimmed.startsWith("v1,") || trimmed.startsWith("v0,")) {
+      tokens.push(trimmed.slice(3));
+      continue;
+    }
+    tokens.push(trimmed);
+  }
+  return tokens.filter((part) => part !== "v1" && part !== "v0");
+}
+
+function svixSigningKey(secret: string): Buffer {
+  if (secret.startsWith("whsec_")) {
+    return Buffer.from(secret.slice("whsec_".length), "base64");
+  }
+  return Buffer.from(secret, "utf8");
+}
+
+function timingSafeEqualUtf8(left: string, right: string): boolean {
+  const expected = Buffer.from(left, "utf8");
+  const provided = Buffer.from(right, "utf8");
+  if (expected.length !== provided.length) return false;
+  return timingSafeEqual(expected, provided);
+}
+
+function matchesSignature(expected: string, signatureHeader: string, candidates: string[]): boolean {
+  if (timingSafeEqualUtf8(signatureHeader, expected)) return true;
+  return candidates.some((candidate) => timingSafeEqualUtf8(candidate, expected));
+}
+
 /**
- * Lightweight webhook signature check for local/dev.
- * Production should use Resend's official Svix verification (svix library / Resend helpers).
- * Accepts either an exact hex digest match or a header that includes the HMAC-SHA256 hex digest
- * (Svix-style `v1,<hex>` lists).
+ * Verifies Resend/Svix webhook signatures.
+ * Production Resend webhooks sign `${svix-id}.${svix-timestamp}.${rawBody}` with the
+ * base64 `whsec_` key and send `v1,<base64>` signatures. Legacy hex HMAC of the body
+ * remains accepted for local tests.
  */
 export function verifyResendWebhookSignature(
   payload: string,
   signatureHeader: string | undefined,
-  secret: string
+  secret: string,
+  signedHeaders?: ResendWebhookSignedHeaders
 ): boolean {
   if (!secret) {
     return process.env.NODE_ENV !== "production";
@@ -117,29 +163,65 @@ export function verifyResendWebhookSignature(
     return false;
   }
 
-  const digest = createHmac("sha256", secret).update(payload, "utf8").digest("hex");
-  const candidates = signatureHeader
-    .split(" ")
-    .flatMap((part) => part.split(","))
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => (part.includes("=") ? part.slice(part.indexOf("=") + 1) : part));
-
-  if (signatureHeader === digest || candidates.includes(digest)) {
-    return true;
-  }
-
-  try {
-    const expected = Buffer.from(digest, "utf8");
-    const provided = Buffer.from(signatureHeader, "utf8");
-    if (expected.length === provided.length && timingSafeEqual(expected, provided)) {
+  const candidates = signatureCandidates(signatureHeader);
+  const id = signedHeaders?.id?.trim();
+  const timestamp = signedHeaders?.timestamp?.trim();
+  if (id && timestamp) {
+    const timestampSeconds = Number(timestamp);
+    const nowSeconds = signedHeaders?.nowSeconds ?? Math.floor(Date.now() / 1000);
+    if (!Number.isFinite(timestampSeconds) || Math.abs(nowSeconds - timestampSeconds) > SVIX_TOLERANCE_SECONDS) {
+      return false;
+    }
+    const expectedBase64 = createHmac("sha256", svixSigningKey(secret))
+      .update(`${id}.${timestamp}.${payload}`, "utf8")
+      .digest("base64");
+    if (matchesSignature(expectedBase64, signatureHeader, candidates)) {
       return true;
     }
-  } catch {
-    return false;
   }
 
-  return false;
+  const digest = createHmac("sha256", secret).update(payload, "utf8").digest("hex");
+  return matchesSignature(digest, signatureHeader, candidates);
+}
+
+function collectAddressValues(value: unknown, into: string[]): void {
+  if (typeof value === "string") {
+    into.push(value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectAddressValues(item, into);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  const record = value as Record<string, unknown>;
+  if (typeof record.email === "string") into.push(record.email);
+  if (typeof record.address === "string") into.push(record.address);
+}
+
+function domainsFromAddressText(value: string): string[] {
+  const matches = value.match(/[A-Z0-9._%+-]+@([A-Z0-9.-]+\.[A-Z]{2,})/gi) ?? [];
+  return matches.map((match) => {
+    const at = match.lastIndexOf("@");
+    return match.slice(at + 1).toLowerCase();
+  });
+}
+
+export function extractResendWebhookDomains(payload: Record<string, unknown>): string[] {
+  const data = payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)
+    ? payload.data as Record<string, unknown>
+    : payload;
+  const bags: unknown[] = [data.to, data.from, data.cc, data.bcc, data.reply_to, data.received_for];
+  if (data.headers && typeof data.headers === "object") {
+    bags.push(Object.values(data.headers as Record<string, unknown>));
+  }
+  const addresses: string[] = [];
+  for (const bag of bags) collectAddressValues(bag, addresses);
+  const domains = new Set<string>();
+  for (const address of addresses) {
+    for (const domain of domainsFromAddressText(address)) domains.add(domain);
+  }
+  return [...domains];
 }
 
 export function renderTemplate(html: string, tokens: Record<string, string>): string {
