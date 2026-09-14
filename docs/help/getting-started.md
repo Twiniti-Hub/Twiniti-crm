@@ -13,6 +13,11 @@ the corresponding US, EU, or UK data service. If you are a Super Admin, open
 **Super Admin**, select a workspace, and choose **Open workspace** before using
 CRM pages.
 
+After signing in, Loop loads the workspace session before showing CRM pages. If
+the page does not render, reload the canonical Loop URL and contact an
+administrator if the issue persists; do not use a regional or Render service
+URL directly.
+
 The Render landing-site address is for marketing pages only. If a direct
 `onrender.com/sign-in` link returns Not Found, return to the canonical Loop URL.
 

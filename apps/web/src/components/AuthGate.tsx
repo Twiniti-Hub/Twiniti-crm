@@ -17,9 +17,8 @@ import { CrmRoutes } from "./CrmRoutes";
 /** Guests see landing + auth pages; signed-in users get setup gates or CRM shell. */
 export function AuthGate() {
   const user = useUser();
-  const authorizationHeader = hexclaveApp?.useAuthorizationHeader() ?? null;
-  setBrowserAuthorizationHeader(authorizationHeader);
   const location = useLocation();
+  const [authorizationHeader, setAuthorizationHeader] = useState<string | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [meError, setMeError] = useState<string | null>(null);
   const meRef = useRef<Me | null>(null);
@@ -30,6 +29,42 @@ export function AuthGate() {
       : user
         ? "signed-in"
         : null;
+
+  // Avoid the SDK's reactive token hook here. In @hexclave/react 1.0.70,
+  // useAuthorizationHeader() can conditionally call React's `use()` while a
+  // session is refreshing, which changes hook order and crashes the whole
+  // authenticated tree. The async API is stable across that transition.
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!userId || !hexclaveApp) {
+      setAuthorizationHeader(null);
+      setBrowserAuthorizationHeader(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setAuthorizationHeader(null);
+    setBrowserAuthorizationHeader(null);
+    void hexclaveApp
+      .getAuthorizationHeader()
+      .then((header) => {
+        if (cancelled) return;
+        setAuthorizationHeader(header);
+        setBrowserAuthorizationHeader(header);
+      })
+      .catch(() => {
+        // /me can still authenticate through the Hexclave session cookie.
+        if (cancelled) return;
+        setAuthorizationHeader(null);
+        setBrowserAuthorizationHeader(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) {
