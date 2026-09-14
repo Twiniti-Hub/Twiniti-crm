@@ -64,5 +64,7 @@ session, which leaves the authenticated page blank after a successful login.
 
 If the persistent authenticated test account is onboarding- or billing-gated,
 route and contact tests report the unavailable scenarios as skipped. The
-generated signup journey remains required and covers workspace creation,
-Stripe test-mode billing, authenticated CRM access, and contact creation.
+generated signup journey still covers workspace creation, Stripe test-mode
+billing, authenticated CRM access, and contact creation, but its result is
+tracked separately from the authenticated CRM promotion gate because hosted
+Checkout availability depends on external Stripe state.
