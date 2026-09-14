@@ -1,3 +1,22 @@
+-- Keep the policy helper available when this migration is the first RLS
+-- migration applied to a regional database. Older Development databases may
+-- already have it from the original rollout, but Production must be able to
+-- build the Relationship Steward policies from the canonical chain alone.
+CREATE OR REPLACE FUNCTION twiniti_organization_isolation(candidate_organization_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+  SELECT current_setting('twiniti.service_context', true) = 'true'
+    OR (
+      twiniti_current_organization_id() IS NOT NULL
+      AND candidate_organization_id = twiniti_current_organization_id()
+      AND twiniti_is_active_member(candidate_organization_id, twiniti_current_subject())
+    )
+$$;
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "relationship_facts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"organization_id" uuid NOT NULL,
