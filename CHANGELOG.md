@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Fix the post-login Hexclave session bootstrap crash by using the async
+  authorization-header API instead of the SDK's reactive token hook, preventing
+  a hook-order error from blanking the authenticated CRM shell.
 - Align Development E2E coverage with canonical Loop routing: signup now enters
   same-origin `/sign-up` before choosing a workspace country, and existing-user
   smoke uses the current sign-in control.

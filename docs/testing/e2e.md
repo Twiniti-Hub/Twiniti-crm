@@ -57,6 +57,11 @@ declares its own public return origin.
 Hosted route URLs are constructed from a trailing-slash-normalized base URL so
 the final Contacts CRUD assertion reaches `/contacts`, never `//contacts`.
 
+The web AuthGate obtains the browser authorization header through Hexclave's
+async API. Do not replace this with `useAuthorizationHeader()` in the gate:
+Hexclave React 1.0.70 can change its internal hook order while refreshing a
+session, which leaves the authenticated page blank after a successful login.
+
 If the persistent authenticated test account is onboarding- or billing-gated,
 route and contact tests report the unavailable scenarios as skipped. The
 generated signup journey remains required and covers workspace creation,
