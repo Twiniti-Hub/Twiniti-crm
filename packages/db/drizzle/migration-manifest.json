@@ -24,7 +24,7 @@
     {"file":"0017_tool_policy_approvals.sql","status":"journaled","sha256":"f44ad499dfe0e7fac258e8467ff901807129ac5aab4720b1c32c1f24d7ac7c94"},
     {"file":"0018_ai_usage_entitlements.sql","status":"journaled","sha256":"a6e8deb784b7c6ffe81b065bac6271357a1090a1761025d59d65d4a889ec565d"},
     {"file":"0019_worker_memory_evaluation.sql","status":"journaled","sha256":"037c93b2399500e7078c061aeeaaa922ceecc5f46f553d29af3b40728b35ff4f"},
-    {"file":"0020_relationship_steward.sql","status":"journaled","sha256":"136ce74b8d0ba4e4fe820a4356da0471a60c834fbf15d2e7c7ad67a5b414a49b"},
+    {"file":"0020_relationship_steward.sql","status":"journaled","sha256":"aa08b66ea4247e61d57df3ef7b58e0fe432474434abb2be71bdbb002a62e1d77"},
     {"file":"0021_run_credentials.sql","status":"journaled","sha256":"428b5c37c11feb4173a9232cca41c50180034d5aee5ca4afe479bdabbe16901f"}
   ]
 }

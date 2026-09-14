@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Repair the Relationship Steward migration chain so Production creates the
+  `twiniti_organization_isolation(uuid)` RLS helper before applying its
+  organization policies.
 - Fix the post-login Hexclave session bootstrap crash by using the async
   authorization-header API instead of the SDK's reactive token hook, preventing
   a hook-order error from blanking the authenticated CRM shell.
