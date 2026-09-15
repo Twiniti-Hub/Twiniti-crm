@@ -1,7 +1,7 @@
 # Twiniti Loop global router
 
 This Cloudflare Worker provides the single Loop URL for each environment and routes API requests to the regional CRM services.
-Marketing requests are proxied to the environment's landing site, CRM/auth requests to its canonical app origin, and API requests to the regional CRM services. A short-lived surface cookie keeps landing and app asset requests separated while both builds use `/assets/*`.
+Marketing requests are proxied to the environment's landing site, CRM/auth requests to its canonical app origin, and API requests to the regional CRM services. A short-lived surface cookie keeps landing and app asset requests separated while both builds use `/assets/*`. When a Hexclave session cookie is present, `/` is served from the CRM app so post-login does not bounce back to the marketing Sign in page. Shared `/branding/*` requests preserve the current surface instead of forcing landing.
 
 ## Development setup
 
