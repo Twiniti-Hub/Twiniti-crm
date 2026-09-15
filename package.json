@@ -14,7 +14,7 @@
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
     "e2e:install": "playwright install chromium",
-    "test": "pnpm --filter @twiniti/db test && pnpm --filter @twiniti/email test && pnpm --filter @twiniti/license-api test && pnpm --filter @twiniti/api test && pnpm --filter @twiniti/billing-gateway test && pnpm --filter @twiniti/web test && pnpm --filter @twiniti/landing test",
+    "test": "pnpm --filter @twiniti/db test && pnpm --filter @twiniti/email test && pnpm --filter @twiniti/license-api test && pnpm --filter @twiniti/api test && pnpm --filter @twiniti/billing-gateway test && pnpm --filter @twiniti/web test && pnpm --filter @twiniti/landing test && pnpm --filter @twiniti/router test",
     "policy:check": "node scripts/policy/check-release-policy.mjs",
     "policy:identity-test": "node --test scripts/policy/github-bot-identity.test.mjs",
     "policy:db-chain": "node scripts/policy/check-migration-chain.mjs",

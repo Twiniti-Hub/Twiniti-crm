@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fix Loop double sign-in on the canonical hostname: after a successful login,
+  `/` is served from the CRM app when a Hexclave session cookie is present, and
+  shared `/branding/*` requests no longer flip `twiniti_surface` to landing
+  (which caused app `/assets/*` misses). Sign-in completes with a same-origin
+  full navigation so the router re-resolves the post-auth destination once.
 - Repair the Relationship Steward migration chain so Production creates the
   `twiniti_organization_isolation(uuid)` RLS helper before applying its
   organization policies.
