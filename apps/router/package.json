@@ -5,11 +5,14 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/surface.test.ts",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250913.0",
+    "@types/node": "^22.15.0",
+    "tsx": "^4.19.4",
     "typescript": "^5.8.3",
     "wrangler": "^4.36.0"
   }

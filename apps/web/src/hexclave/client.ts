@@ -20,8 +20,8 @@ export const hexclaveApp = authConfigured
         signIn: "/sign-in",
         signUp: "/sign-up",
         forgotPassword: "/forgot-password",
-        afterSignIn: "/",
-        afterSignUp: "/",
+        afterSignIn: "/overview",
+        afterSignUp: "/overview",
         afterSignOut: "/",
         home: "/"
       }

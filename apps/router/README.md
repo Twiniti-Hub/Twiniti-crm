@@ -1,7 +1,7 @@
 # Twiniti Loop global router
 
 This Cloudflare Worker provides the single Loop URL for each environment and routes API requests to the regional CRM services.
-Marketing requests are proxied to the environment's landing site, CRM/auth requests to its canonical app origin, and API requests to the regional CRM services. A short-lived surface cookie keeps landing and app asset requests separated while both builds use `/assets/*`.
+Marketing requests are proxied to the environment's landing site, CRM/auth requests to its canonical app origin, and API requests to the regional CRM services. A short-lived surface cookie keeps landing and app asset requests separated while both builds use `/assets/*`. When a Hexclave session cookie is present, `/` is served from the CRM app so post-login does not bounce back to the marketing Sign in page. Shared `/branding/*` requests preserve the current surface instead of forcing landing.
 
 ## Development setup
 
@@ -14,7 +14,8 @@ pnpm --filter @twiniti/router exec wrangler kv namespace create WORKSPACE_DIRECT
 
 3. Replace `REPLACE_WITH_DEVELOPMENT_KV_NAMESPACE_ID` in `wrangler.toml` with the returned namespace ID.
 4. Set `APP_ORIGIN` to the canonical CRM web service and add the Cloudflare route `loop-dev.twiniti.ai/*` to this Worker.
-5. Deploy:
+5. Deploy manually or merge to `development` (the `Deploy Loop router` workflow
+   runs when `apps/router/**` changes and `CLOUDFLARE_API_TOKEN` is configured):
 
 ```powershell
 pnpm --filter @twiniti/router deploy

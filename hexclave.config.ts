@@ -12,8 +12,8 @@ export default {
     signUp: "/sign-up",
     forgotPassword: "/forgot-password",
     home: "/",
-    afterSignIn: "/",
-    afterSignUp: "/",
+    afterSignIn: "/overview",
+    afterSignUp: "/overview",
     afterSignOut: "/"
   }
 };

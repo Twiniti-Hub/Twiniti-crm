@@ -1,3 +1,5 @@
+import { resolveWebSurface, type Surface } from "./surface";
+
 export interface Env {
   DEFAULT_REGION: string;
   DEPLOYMENT_ENV: string;
@@ -50,27 +52,15 @@ async function proxyOrigin(request: Request, origin: string) {
   return response;
 }
 
-function withSurfaceCookie(response: Response, surface: "landing" | "app") {
+function withSurfaceCookie(response: Response, surface: Surface) {
   const headers = new Headers(response.headers);
   headers.append("Set-Cookie", `twiniti_surface=${surface}; Path=/; Secure; SameSite=Lax`);
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
-function cookieValue(request: Request, name: string) {
-  return request.headers.get("Cookie")?.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${name}=`))?.slice(name.length + 1);
-}
-
-function isLandingPath(pathname: string) {
-  return pathname === "/" || pathname === "/robots.txt" || pathname === "/sitemap.xml" || pathname.startsWith("/branding/");
-}
-
 async function proxyWeb(request: Request, env: Env) {
   const url = new URL(request.url);
-  const surface = isLandingPath(url.pathname)
-    ? "landing"
-    : url.pathname.startsWith("/assets/")
-      ? (cookieValue(request, "twiniti_surface") === "app" ? "app" : "landing")
-      : "app";
+  const surface = resolveWebSurface(url.pathname, request.headers.get("Cookie"));
   const response = await proxyOrigin(request, surface === "app" ? env.APP_ORIGIN : env.WEB_ORIGIN);
   return withSurfaceCookie(response, surface);
 }
@@ -123,3 +113,5 @@ export default {
     return proxy(request, env, region);
   }
 };
+
+export { resolveWebSurface, hasHexclaveSessionCookie, cookieValue } from "./surface";
