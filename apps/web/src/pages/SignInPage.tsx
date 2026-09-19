@@ -2,14 +2,7 @@ import { useHexclaveApp } from "@hexclave/react";
 import { FormEvent, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { Brand } from "../components/Brand";
-
-/** Same-origin relative path only; reject protocol-relative open redirects. */
-function safeAfterPath(value: string | null): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) {
-    return "/";
-  }
-  return value;
-}
+import { navigateAfterCredentialSignIn, safeAfterSignInPath } from "../lib/postAuthNavigation";
 
 export function SignInPage() {
   const app = useHexclaveApp();
@@ -46,9 +39,9 @@ export function SignInPage() {
         setError(result.error.message || "Sign-in failed.");
         return;
       }
-      // Full navigation so the Loop router re-resolves `/` with the new Hexclave
-      // session cookie and serves the CRM app instead of the marketing site.
-      window.location.replace(safeAfterPath(searchParams.get("after")));
+      // Full navigation after the refresh cookie is visible so the Loop router
+      // lands on the CRM app surface instead of the marketing site.
+      await navigateAfterCredentialSignIn(safeAfterSignInPath(searchParams.get("after")));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed.");
     } finally {

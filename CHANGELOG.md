@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Fix Development E2E smoke false-pass on the marketing landing page: credential
+  sign-in waits for the Hexclave refresh cookie, marks `twiniti_surface=app`,
+  and full-navigates to `/overview` so canonical Loop routing always lands in
+  the CRM shell; smoke now requires Workspace navigation instead of body text
+  that matches marketing copy.
+- Deploy the Development Loop router automatically when `apps/router` changes
+  (requires `CLOUDFLARE_API_TOKEN`) so signed-in `/` serves the CRM app per #96.
 - Fix Loop double sign-in on the canonical hostname: after a successful login,
   `/` is served from the CRM app when a Hexclave session cookie is present, and
   shared `/branding/*` requests no longer flip `twiniti_surface` to landing

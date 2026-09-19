@@ -7,8 +7,10 @@ import { test, expect, waitForAuthenticatedShell } from "./fixtures";
 test.describe("Twiniti CRM authenticated application", () => {
   test("logs in and reaches a valid workspace state", async ({ signedInPage: page }) => {
     await expect(page).not.toHaveURL(/sign-in/);
+    await expect(page.getByRole("navigation", { name: "Primary navigation" })).not.toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Workspace navigation" })).toBeVisible();
     await expect(page.locator("body")).not.toContainText(/failed to load session|unauthorized|Timed out loading workspace/i);
-    await expect(page.locator("body")).toContainText(/Onboarding|Billing|Overview|Contacts|Companies|Super Admin|Sign out/i);
+    await expect(page.locator("body")).toContainText(/Onboarding|Billing|Overview|Super Admin|Sign out/i);
   });
 
   test("opens Contacts and Companies boards", async ({ signedInPage: page }) => {
