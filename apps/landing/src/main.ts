@@ -77,7 +77,7 @@ document.querySelector<HTMLDivElement>("#root")!.innerHTML = `
       <section class="closing-cta container"><div class="cta-panel"><div><p class="eyebrow">Start your next loop</p><h2>Give your team a clearer way forward.</h2><p>Set up your workspace, invite your team, and make the next customer conversation count.</p></div>${appLink('Create your workspace <span aria-hidden="true">→</span>', "/sign-up", "button button-light")}</div></section>
     </main>
 
-    <footer class="footer container"><a class="brand" href="#top" aria-label="Twiniti Loop home"><img class="brand-logo" src="${darkLogoPath}" alt="" aria-hidden="true" /></a><div>${appLink("Sign in", "/sign-in", "footer-link")} ${appLink("Sign up", "/sign-up", "footer-link")}<span>© 2026 Twiniti Loop</span></div></footer>
+    <footer class="footer container"><a class="brand" href="#top" aria-label="Twiniti Loop home"><img class="brand-logo" src="${darkLogoPath}" alt="" aria-hidden="true" /></a><div class="footer-meta">${appLink("Sign in", "/sign-in", "footer-link")} ${appLink("Sign up", "/sign-up", "footer-link")}<span>© 2026 Twiniti Loop</span><a class="maker-map-badge" href="https://www.makermap.lol/broadbent_mg"><img src="https://www.makermap.lol/badge/broadbent_mg.svg" alt="Connect with me on Maker Map" width="262" height="54" /></a></div></footer>
   </div>
 `;
 
