@@ -14,7 +14,8 @@ pnpm --filter @twiniti/router exec wrangler kv namespace create WORKSPACE_DIRECT
 
 3. Replace `REPLACE_WITH_DEVELOPMENT_KV_NAMESPACE_ID` in `wrangler.toml` with the returned namespace ID.
 4. Set `APP_ORIGIN` to the canonical CRM web service and add the Cloudflare route `loop-dev.twiniti.ai/*` to this Worker.
-5. Deploy:
+5. Deploy manually or merge to `development` (the `Deploy Loop router` workflow
+   runs when `apps/router/**` changes and `CLOUDFLARE_API_TOKEN` is configured):
 
 ```powershell
 pnpm --filter @twiniti/router deploy

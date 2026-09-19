@@ -44,3 +44,8 @@ test("detects Hexclave and legacy Stack refresh cookies", () => {
   assert.equal(hasHexclaveSessionCookie("twiniti_surface=app"), false);
   assert.equal(hasHexclaveSessionCookie(null), false);
 });
+
+test("signed-in /overview stays on the CRM app for post-login redirects", () => {
+  assert.equal(resolveWebSurface("/overview", null), "app");
+  assert.equal(resolveWebSurface("/overview", sessionCookie), "app");
+});
