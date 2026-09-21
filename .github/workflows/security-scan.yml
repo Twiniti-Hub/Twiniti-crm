@@ -5,7 +5,17 @@ on:
     - cron: "0 7 * * 1"
   workflow_dispatch:
   pull_request:
+  # Feature-branch pushes already run this workflow through pull_request.
+  # Limit push to integration branches so the same commit is not scanned twice.
+  # schedule and workflow_dispatch still scan full Git history.
   push:
+    branches:
+      - development
+      - Development
+      - production
+      - main
+      - master
+      - develop
 
 # Dependabot PRs cannot read repository secrets, so ingest uploads are skipped
 # for that actor. Semgrep/Gitleaks still run and the required check still
@@ -63,9 +73,45 @@ jobs:
       - name: Run Gitleaks
         id: gitleaks
         shell: bash
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
         run: |
           set +e
-          gitleaks detect --source . --report-format sarif --report-path gitleaks.sarif
+          # Full history on the weekly schedule and manual runs.
+          # Pull requests and integration pushes scan only the new commits.
+          log_opts=()
+          case "$GITHUB_EVENT_NAME" in
+            schedule|workflow_dispatch)
+              ;;
+            pull_request)
+              base="${PR_BASE_SHA}"
+              head="${PR_HEAD_SHA}"
+              if [ -n "$base" ] && [ -n "$head" ]; then
+                git cat-file -e "${base}^{commit}" 2>/dev/null || git fetch --no-tags origin "$base" || true
+                git cat-file -e "${head}^{commit}" 2>/dev/null || git fetch --no-tags origin "$head" || true
+              fi
+              if [ -n "$base" ] && [ -n "$head" ] \
+                && git cat-file -e "${base}^{commit}" 2>/dev/null \
+                && git cat-file -e "${head}^{commit}" 2>/dev/null \
+                && [ "$(git rev-list --count "${base}..${head}")" != "0" ]; then
+                log_opts=(--log-opts="${base}..${head}")
+              else
+                log_opts=(--no-git)
+              fi
+              ;;
+            push)
+              before="${PUSH_BEFORE}"
+              if [ -n "$before" ] && [ "$before" != "0000000000000000000000000000000000000000" ]; then
+                git cat-file -e "${before}^{commit}" 2>/dev/null || git fetch --no-tags origin "$before" || true
+                if git cat-file -e "${before}^{commit}" 2>/dev/null; then
+                  log_opts=(--log-opts="${before}..${GITHUB_SHA}")
+                fi
+              fi
+              ;;
+          esac
+          gitleaks detect --source . "${log_opts[@]}" --report-format sarif --report-path gitleaks.sarif
           scanner_status=$?
           set -e
 
