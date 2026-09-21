@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Add free-form contact notes on the contact detail page (no email required) and
+  group the field-change audit trail into expandable change sets with Show more
+  instead of an endless raw JSON table.
 - Fix Development E2E smoke false-pass on the marketing landing page: credential
   sign-in waits for the Hexclave refresh cookie, marks `twiniti_surface=app`,
   and full-navigates to `/overview` so canonical Loop routing always lands in

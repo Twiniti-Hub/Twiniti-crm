@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { assertScope, hasScope } from "@twiniti/auth";
 import {
   contactSearchSchema,
+  createContactNoteSchema,
   createContactSchema,
   createCompanySchema,
   companySearchSchema,
@@ -147,8 +148,61 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
       const actor = requireActor(request);
       if (actor.type === "agent") assertScope(actor, "contacts:read");
       const { id } = request.params as { id: string };
-      const data = await getContactPropertyHistory(db, requireOrgId(actor), id);
-      return { data };
+      const rows = await getContactPropertyHistory(db, requireOrgId(actor), id);
+      return {
+        data: rows.map((row) => ({
+          id: row.id,
+          propertyName: row.propertyName,
+          oldValue: row.oldValue,
+          newValue: row.newValue,
+          changeSetId: row.changeSetId ?? null,
+          actorType: row.actorType,
+          actorId: row.actorId,
+          source: row.source,
+          createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt
+        }))
+      };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.post("/api/v1/contacts/:id/notes", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      if (actor.type === "agent") assertScope(actor, "contacts:update");
+      else requireUserRole(actor, "member");
+      const { id } = request.params as { id: string };
+      const input = createContactNoteSchema.parse(request.body);
+      const organizationId = requireOrgId(actor);
+      const contact = await getContactById(db, organizationId, id);
+      if (!contact) {
+        return reply.code(404).send({ error: { code: "not_found", message: "Contact not found" } });
+      }
+      const occurredAt = new Date();
+      const [row] = await db.insert(customerEvents).values({
+        organizationId,
+        contactId: id,
+        eventType: "note.created",
+        source: "ui",
+        occurredAt,
+        payload: {
+          body: input.body,
+          authorId: actor.id,
+          authorEmail: actor.email ?? null
+        }
+      }).returning();
+      await audit(db, actor, "contact.note.create", "contact", id, { noteLength: input.body.length });
+      reply.code(201);
+      return {
+        data: {
+          id: row.id,
+          eventType: row.eventType,
+          source: row.source,
+          occurredAt: row.occurredAt.toISOString(),
+          payload: row.payload as Record<string, unknown>
+        }
+      };
     } catch (error) {
       return sendError(reply, error);
     }

@@ -122,6 +122,11 @@ export const updateContactSchema = createContactSchema.partial().extend({
   version: z.number().int().nonnegative().optional()
 });
 
+/** Free-form contact note captured in the CRM UI (stored as a timeline event). */
+export const createContactNoteSchema = z.object({
+  body: z.string().trim().min(1).max(8000)
+});
+
 export const upsertContactSchema = createContactSchema.extend({
   id: z.string().uuid().optional()
 });
@@ -918,6 +923,7 @@ export type DuplicateEmailConflict = z.infer<typeof duplicateEmailConflictSchema
 export type Contact = z.infer<typeof contactSchema>;
 export type CreateContact = z.infer<typeof createContactSchema>;
 export type UpdateContact = z.infer<typeof updateContactSchema>;
+export type CreateContactNote = z.infer<typeof createContactNoteSchema>;
 export type UpsertContact = z.infer<typeof upsertContactSchema>;
 export type ContactSearch = z.infer<typeof contactSearchSchema>;
 export type SegmentSearch = z.infer<typeof segmentSearchSchema>;
