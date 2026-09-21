@@ -112,6 +112,15 @@ export function assertScope(actor: AuthActor, scope: string): void {
   }
 }
 
+/** Requires email_events:write plus contacts:create or contacts:update for Graph outbound logging. */
+export function assertLogOutboundEmailScopes(actor: AuthActor): void {
+  if (actor.type !== "agent") return;
+  assertScope(actor, "email_events:write");
+  if (!hasScope(actor, "contacts:create") && !hasScope(actor, "contacts:update")) {
+    assertScope(actor, "contacts:update");
+  }
+}
+
 export function assertOrganization(actor: AuthActor): string {
   if (!actor.organizationId) {
     const error = new Error("Company setup required") as Error & { statusCode: number };

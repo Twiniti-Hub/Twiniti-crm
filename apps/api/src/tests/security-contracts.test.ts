@@ -79,6 +79,9 @@ test("agent scope updates require at least one supported scope", () => {
   assert.deepEqual(updateAgentIdentitySchema.parse({ scopes: ["contacts:read"] }), {
     scopes: ["contacts:read"]
   });
+  assert.deepEqual(updateAgentIdentitySchema.parse({ scopes: ["email_events:write"] }), {
+    scopes: ["email_events:write"]
+  });
   assert.throws(() => updateAgentIdentitySchema.parse({ scopes: [] }));
   assert.throws(() => updateAgentIdentitySchema.parse({ scopes: ["contacts:delete"] }));
   assert.deepEqual(agentIdentitySchema.parse({

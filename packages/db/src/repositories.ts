@@ -117,7 +117,7 @@ function normalizeIdentityValue(identityType: string, value: string): string {
   return value.trim();
 }
 
-type ContactChangeContext = {
+export type ContactChangeContext = {
   actorType?: string;
   actorId?: string;
   source?: string;

@@ -9,12 +9,13 @@ import {
   ListToolsRequestSchema,
   ReadResourceRequestSchema
 } from "@modelcontextprotocol/sdk/types.js";
-import { assertOrganization, assertScope, resolveRequestActor, type AuthActor } from "@twiniti/auth";
+import { assertLogOutboundEmailScopes, assertOrganization, assertScope, resolveRequestActor, type AuthActor } from "@twiniti/auth";
 import type { AppEnv } from "@twiniti/config";
 import {
   contactSearchSchema,
   createCampaignSchema,
   createContactSchema,
+  logOutboundEmailSchema,
   segmentIdSchema,
   segmentSearchSchema,
   updateContactSchema,
@@ -30,6 +31,7 @@ import {
   getSegmentById,
   listCampaigns,
   listSegments,
+  logOutboundEmail,
   parseFilterAst,
   searchContacts,
   type Db,
@@ -51,7 +53,26 @@ export const toolDefs = [
   { name: "update_contact", description: "Update a contact", scope: "contacts:update", inputSchema: { type: "object" } },
   { name: "get_contact_timeline", description: "Get contact timeline events", scope: "contacts:read", inputSchema: { type: "object", required: ["id"], properties: { id: { type: "string", format: "uuid" } } } },
   { name: "create_campaign_draft", description: "Create a campaign draft", scope: "campaigns:create", inputSchema: { type: "object" } },
-  { name: "get_campaign_status", description: "List campaigns / status", scope: "campaigns:preview", inputSchema: { type: "object" } }
+  { name: "get_campaign_status", description: "List campaigns / status", scope: "campaigns:preview", inputSchema: { type: "object" } },
+  {
+    name: "log_outbound_email",
+    description: "Log a Microsoft Graph outbound email on a contact timeline (idempotent via internetMessageId)",
+    scope: "email_events:write",
+    inputSchema: {
+      type: "object",
+      required: ["email"],
+      properties: {
+        email: { type: "string", format: "email" },
+        subject: { type: "string" },
+        mailbox: { type: "string" },
+        occurredAt: { type: "string", format: "date-time" },
+        internetMessageId: { type: "string" },
+        pack: { type: "string" },
+        batch: { type: "string" },
+        metadata: { type: "object" }
+      }
+    }
+  }
 ] as const;
 
 const MCP_RESOURCES = [
@@ -112,7 +133,10 @@ export function createMcpServer(db: Db, actor: AuthActor) {
     const args = (request.params.arguments ?? {}) as ToolArguments;
     const tool = toolDefs.find((item) => item.name === name);
     if (!tool) throw new Error(`Unknown tool: ${name}`);
-    if (actor.type === "agent") assertScope(actor, tool.scope);
+    if (actor.type === "agent") {
+      if (tool.name === "log_outbound_email") assertLogOutboundEmailScopes(actor);
+      else assertScope(actor, tool.scope);
+    }
 
     let result: unknown;
     switch (tool.name) {
@@ -205,6 +229,15 @@ export function createMcpServer(db: Db, actor: AuthActor) {
       }
       case "get_campaign_status": {
         result = await listCampaigns(db, assertOrganization(actor));
+        break;
+      }
+      case "log_outbound_email": {
+        const input = logOutboundEmailSchema.parse(args);
+        result = await logOutboundEmail(db, assertOrganization(actor), input, {
+          actorType: actor.type,
+          actorId: actor.id,
+          source: "mcp.log_outbound_email"
+        });
         break;
       }
     }
