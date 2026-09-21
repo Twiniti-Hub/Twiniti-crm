@@ -3,7 +3,11 @@ import test from "node:test";
 import { createModelGateway, ModelGatewayError } from "../ai/modelGateway.js";
 import { buildNoSideEffectReplay, evaluateWorkerOutput } from "../ai/workerEvaluation.js";
 import { assessExternalToolMetadata, hashRunCredential, mintRunCredential, validateRunCredential } from "../ai/runCredentials.js";
-import { getRequestedWorkspaceId, WORKSPACE_CONTEXT_HEADER } from "@twiniti/auth";
+import {
+  getRequestedWorkspaceId,
+  resolveSuperAdminWorkspaceMembership,
+  WORKSPACE_CONTEXT_HEADER
+} from "@twiniti/auth";
 import { assertProductionApiConfiguration, loadEnv } from "@twiniti/config";
 import {
   agentIdentitySchema,
@@ -75,9 +79,65 @@ test("workspace context accepts only UUID headers", () => {
   );
 });
 
+test("Super Admin workspace context prefers CRM membership id over Hexclave subject", () => {
+  const workspaceId = "73b3883b-a3bf-4360-9b8a-dbda3fc3537a";
+  const otherWorkspaceId = "550e8400-e29b-41d4-a716-446655440000";
+  const subjectMembership = {
+    id: "6b0e65c9-4a3c-41ef-a2b1-26212fe7e975",
+    organizationId: workspaceId,
+    email: "george.broadbent@twiniti.ai",
+    displayName: "George",
+    countryCode: "US",
+    role: "admin",
+    active: true
+  };
+
+  assert.equal(
+    resolveSuperAdminWorkspaceMembership({
+      workspaceId,
+      subjectMembership,
+      emailMembership: null
+    })?.id,
+    subjectMembership.id
+  );
+
+  assert.equal(
+    resolveSuperAdminWorkspaceMembership({
+      workspaceId,
+      subjectMembership: {
+        ...subjectMembership,
+        organizationId: otherWorkspaceId
+      },
+      emailMembership: subjectMembership
+    })?.id,
+    subjectMembership.id
+  );
+
+  assert.equal(
+    resolveSuperAdminWorkspaceMembership({
+      workspaceId,
+      subjectMembership: { ...subjectMembership, active: false },
+      emailMembership: null
+    }),
+    null
+  );
+
+  assert.equal(
+    resolveSuperAdminWorkspaceMembership({
+      workspaceId: otherWorkspaceId,
+      subjectMembership,
+      emailMembership: subjectMembership
+    }),
+    null
+  );
+});
+
 test("agent scope updates require at least one supported scope", () => {
   assert.deepEqual(updateAgentIdentitySchema.parse({ scopes: ["contacts:read"] }), {
     scopes: ["contacts:read"]
+  });
+  assert.deepEqual(updateAgentIdentitySchema.parse({ scopes: ["email_events:write"] }), {
+    scopes: ["email_events:write"]
   });
   assert.throws(() => updateAgentIdentitySchema.parse({ scopes: [] }));
   assert.throws(() => updateAgentIdentitySchema.parse({ scopes: ["contacts:delete"] }));
