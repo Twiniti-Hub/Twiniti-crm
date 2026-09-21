@@ -149,6 +149,36 @@ export function getRequestedWorkspaceId(headers: RequestLike["headers"]): string
   return value && UUID_PATTERN.test(value) ? value : undefined;
 }
 
+type WorkspaceCrmMembership = {
+  id: string;
+  organizationId: string;
+  email?: string | null;
+  displayName?: string | null;
+  countryCode?: string | null;
+  role: string;
+  active: boolean;
+};
+
+/**
+ * Prefer an active CRM membership in the selected workspace for Super Admin
+ * workspace-context actors. Tracking addresses and other crm_users FKs key off
+ * membership id, not the Hexclave subject.
+ */
+export function resolveSuperAdminWorkspaceMembership(input: {
+  workspaceId: string;
+  subjectMembership: WorkspaceCrmMembership | null | undefined;
+  emailMembership: WorkspaceCrmMembership | null | undefined;
+}): WorkspaceCrmMembership | null {
+  const { workspaceId, subjectMembership, emailMembership } = input;
+  if (subjectMembership?.active && subjectMembership.organizationId === workspaceId) {
+    return subjectMembership;
+  }
+  if (emailMembership?.active && emailMembership.organizationId === workspaceId) {
+    return emailMembership;
+  }
+  return null;
+}
+
 function toHexclaveTokenStore(requestLike: RequestLike): HexclaveTokenStoreRequest {
   const headers = requestLike.headers;
   if (typeof (headers as { get?: unknown }).get === "function") {
@@ -379,19 +409,27 @@ export async function resolveRequestActor(
       const workspace = await getOrganizationById(db, requestedWorkspaceId);
       if (workspace) {
         const billing = await getOrganizationBilling(db, workspace.id);
+        // Workspace header used to force actor.id = Hexclave subject even when
+        // the Super Admin already has a crm_users row in that org. Settings BCC
+        // and other crm_users FK paths then miss existing rows (TWI-711).
+        const workspaceMember = resolveSuperAdminWorkspaceMembership({
+          workspaceId: workspace.id,
+          subjectMembership: crmUserBySubject,
+          emailMembership: crmUser
+        });
         return {
           type: "user",
-          id: subject,
+          id: workspaceMember?.id ?? subject,
           organizationId: workspace.id,
-          role: "admin",
-          email,
-          displayName,
+          role: workspaceMember ? (normalizeRole(workspaceMember.role) ?? "admin") : "admin",
+          email: workspaceMember?.email ?? email,
+          displayName: workspaceMember?.displayName ?? displayName,
           needsSetup: false,
           isSuperAdmin: true,
           hexclaveSubject: subject,
           organizationName: workspace.name,
           regionCode: workspace.residencyRegion as RegionCode,
-          countryCode: null,
+          countryCode: workspaceMember?.countryCode ?? null,
           billingStatus: billing?.status ?? "pending"
         };
       }
