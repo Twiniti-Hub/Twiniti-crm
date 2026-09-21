@@ -26,7 +26,8 @@ const AGENT_SCOPES: Array<{ value: AgentScope; label: string; description: strin
   { value: "campaigns:send", label: "Send campaigns", description: "Send approved campaigns" },
   { value: "workflows:read", label: "Read workflows", description: "View workflows" },
   { value: "reports:read", label: "Read reports", description: "View reports" },
-  { value: "email_events:read", label: "Read email events", description: "View email activity" }
+  { value: "email_events:read", label: "Read email events", description: "View email activity" },
+  { value: "email_events:write", label: "Write email events", description: "Log outbound emails from Microsoft Graph" }
 ];
 
 function ScopePicker({

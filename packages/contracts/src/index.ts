@@ -343,7 +343,8 @@ export const agentScopeSchema = z.enum([
   "campaigns:send",
   "workflows:read",
   "reports:read",
-  "email_events:read"
+  "email_events:read",
+  "email_events:write"
 ]);
 
 const agentScopesSchema = z.array(agentScopeSchema).min(1).max(30);
@@ -812,6 +813,18 @@ export const ingestEventSchema = z.object({
   privacyClass: z.enum(["standard", "sensitive", "restricted"]).optional()
 });
 
+/** Agent/MCP input for logging a Microsoft Graph outbound email on a contact timeline. */
+export const logOutboundEmailSchema = z.object({
+  email: z.string().email(),
+  subject: z.string().trim().max(500).optional(),
+  mailbox: z.string().trim().max(320).optional(),
+  occurredAt: z.string().datetime().optional(),
+  internetMessageId: z.string().trim().max(255).optional(),
+  pack: z.string().trim().max(120).optional(),
+  batch: z.string().trim().max(120).optional(),
+  metadata: z.record(z.unknown()).optional()
+});
+
 export const createImportJobSchema = z.object({
   provider: z.enum(["hubspot", "csv", "manual"]).default("hubspot"),
   mode: z.enum(["api", "csv", "package"]).default("api"),
@@ -893,7 +906,8 @@ export const agentToolNameSchema = z.enum([
   "request_campaign_approval",
   "send_approved_campaign",
   "get_campaign_status",
-  "get_email_events"
+  "get_email_events",
+  "log_outbound_email"
 ]);
 
 export type PropertyValue = z.infer<typeof propertyValueSchema>;
@@ -948,6 +962,7 @@ export type CreateWorkflow = z.infer<typeof createWorkflowSchema>;
 export type UpdateWorkflow = z.infer<typeof updateWorkflowSchema>;
 export type Workflow = z.infer<typeof workflowSchema>;
 export type IngestEvent = z.infer<typeof ingestEventSchema>;
+export type LogOutboundEmail = z.infer<typeof logOutboundEmailSchema>;
 export type CreateImportJob = z.infer<typeof createImportJobSchema>;
 export type ImportJob = z.infer<typeof importJobSchema>;
 export type HubspotPropertyDefinitionImport = z.infer<typeof hubspotPropertyDefinitionImportSchema>;

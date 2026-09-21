@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
-import { assertScope } from "@twiniti/auth";
+import { assertLogOutboundEmailScopes, assertScope, hasScope } from "@twiniti/auth";
 import type { AppEnv } from "@twiniti/config";
 import {
   agentIdentitySchema,
@@ -16,6 +16,7 @@ import {
   hubspotContactsImportBodySchema,
   hubspotPropertyDefinitionsImportBodySchema,
   ingestEventSchema,
+  logOutboundEmailSchema,
   updateAgentIdentitySchema,
   updatePropertyDefinitionSchema,
   updateSegmentSchema
@@ -36,8 +37,14 @@ import {
   emailTemplates,
   enqueueJob,
   experiments,
+  AGENT_INGESTIBLE_EMAIL_EVENT_TYPES,
+  buildOutboundEmailDedupeKey,
+  extractInternetMessageId,
   findContactByEmail,
+  findCustomerEventByDedupeKey,
   getEmailTrackingAddress,
+  isAgentIngestibleEmailEventType,
+  logOutboundEmail,
   getDefaultOrganizationResendDomain,
   HUBSPOT_CONTACT_FIELD_ALIASES,
   HUBSPOT_CONTACT_COMPANY_FIELD_ALIASES,
@@ -1034,22 +1041,77 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
       { name: "send_approved_campaign", scope: "campaigns:send" },
       { name: "get_campaign_status", scope: "campaigns:preview" },
       { name: "get_email_events", scope: "email_events:read" },
+      { name: "log_outbound_email", scope: "email_events:write" },
       { name: "estimate_segment_size", scope: "segments:read" }
     ]
   }));
 
+  app.post("/api/v1/contacts/log-outbound-email", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      if (actor.type === "agent") assertLogOutboundEmailScopes(actor);
+      else requireUserRole(actor, "member");
+      const input = logOutboundEmailSchema.parse(request.body);
+      const organizationId = requireOrgId(actor);
+      const result = await logOutboundEmail(db, organizationId, input, {
+        actorType: actor.type,
+        actorId: actor.id,
+        source: actor.type === "agent" ? "mcp.log_outbound_email" : "api.log_outbound_email"
+      });
+      reply.code(result.status === "duplicate" ? 200 : 201);
+      return { data: result };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
   app.post("/api/v1/events", async (request, reply) => {
     try {
       const actor = requireActor(request);
-      requireUserRole(actor, "member");
       const input = ingestEventSchema.parse(request.body);
+      if (actor.type === "agent") {
+        assertScope(actor, "email_events:write");
+        if (!isAgentIngestibleEmailEventType(input.eventType)) {
+          const error = new Error(
+            `Agents may only ingest outbound email events (${[...AGENT_INGESTIBLE_EMAIL_EVENT_TYPES].join(", ")})`
+          ) as Error & { statusCode: number };
+          error.statusCode = 403;
+          throw error;
+        }
+      } else {
+        requireUserRole(actor, "member");
+      }
       const organizationId = requireOrgId(actor);
+      let contactId = input.contactId ?? null;
       if (input.contactId) {
         const [contact] = await db.select({ id: contacts.id }).from(contacts).where(and(
           eq(contacts.id, input.contactId),
           eq(contacts.organizationId, organizationId)
         )).limit(1);
         if (!contact) return reply.code(404).send({ error: { code: "not_found", message: "Contact not found" } });
+      }
+      if (input.email && !contactId) {
+        const existing = await findContactByEmail(db, organizationId, input.email);
+        if (existing) {
+          contactId = existing.id;
+        } else if (actor.type === "agent") {
+          if (!hasScope(actor, "contacts:create") && !hasScope(actor, "contacts:update")) {
+            assertScope(actor, "contacts:create");
+          }
+          const created = await createContact(db, {
+            organizationId,
+            email: input.email,
+            change: { actorType: actor.type, actorId: actor.id, source: "api.events.ingest" }
+          });
+          contactId = created.id;
+        } else {
+          return reply.code(404).send({ error: { code: "not_found", message: "Contact not found" } });
+        }
+      }
+      if (actor.type === "agent" && !contactId) {
+        return reply.code(400).send({
+          error: { code: "bad_request", message: "contactId or email is required for agent event ingest" }
+        });
       }
       if (input.companyId) {
         const [company] = await db.select({ id: companies.id }).from(companies).where(and(
@@ -1058,6 +1120,41 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
         )).limit(1);
         if (!company) return reply.code(404).send({ error: { code: "not_found", message: "Company not found" } });
       }
+      const payload = input.payload ?? {};
+      const dedupeKey = input.dedupeKey
+        ?? buildOutboundEmailDedupeKey(extractInternetMessageId(payload))
+        ?? null;
+      if (actor.type === "agent" && dedupeKey) {
+        const existing = await findCustomerEventByDedupeKey(db, organizationId, dedupeKey);
+        if (existing) {
+          reply.code(200);
+          return { data: existing, meta: { duplicate: true } };
+        }
+      }
+      if (actor.type === "agent") {
+        const [row] = await db.insert(customerEvents).values({
+          organizationId,
+          contactId,
+          companyId: input.companyId ?? null,
+          eventType: input.eventType,
+          source: input.source,
+          occurredAt: new Date(input.occurredAt ?? Date.now()),
+          payload,
+          dedupeKey,
+          privacyClass: input.privacyClass ?? "standard"
+        }).onConflictDoNothing().returning();
+        if (row) {
+          reply.code(201);
+          return { data: row };
+        }
+        if (dedupeKey) {
+          const existing = await findCustomerEventByDedupeKey(db, organizationId, dedupeKey);
+          reply.code(200);
+          return { data: existing, meta: { duplicate: true } };
+        }
+        reply.code(201);
+        return { data: row };
+      }
       const [row] = await db.insert(customerEvents).values({
         organizationId,
         contactId: input.contactId ?? null,
@@ -1065,7 +1162,7 @@ export async function registerMarketingRoutes(app: FastifyInstance, db: Db, env:
         eventType: input.eventType,
         source: input.source,
         occurredAt: new Date(input.occurredAt ?? Date.now()),
-        payload: input.payload ?? {},
+        payload,
         dedupeKey: input.dedupeKey ?? null,
         privacyClass: input.privacyClass ?? "standard"
       }).returning();

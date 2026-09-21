@@ -47,6 +47,18 @@ Grant only the scopes required by the integration. Examples include:
 - `campaigns:preview` — preview campaigns
 - `campaigns:request_approval` — request campaign approval
 - `reports:read` — read reports
+- `email_events:read` — read email activity
+- `email_events:write` — log outbound email events on contact timelines
+
+Microsoft Graph outbound email logging (via the `log_outbound_email` MCP tool or
+`POST /api/v1/contacts/log-outbound-email`) requires **all three** scopes:
+
+- `contacts:create` — create a contact when the recipient is not yet in Loop
+- `contacts:update` — upsert an existing contact by email
+- `email_events:write` — write the `email.sent` timeline event
+
+Grant these on the Agents page with **Edit access**; scope changes apply on the
+next request with that credential.
 
 Board and saved-view endpoints introduced for Contacts/Companies Kanban are **user-only** in this release. Agent credentials do not receive board-view scopes; continue using contact create/update/read for record changes.
 
