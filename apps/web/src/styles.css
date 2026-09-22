@@ -238,4 +238,17 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .history-diff-list li { display: grid; gap: 4px; padding-top: 10px; }
 .history-diff-field { font-size: 12px; font-weight: 800; color: #2f675d; }
 .history-diff-values { font-size: 13px; line-height: 1.4; color: #243c44; overflow-wrap: anywhere; }
+.activity-list { display: grid; gap: 10px; }
+.activity-card { border: 1px solid #e4ece8; border-radius: 12px; background: #fbfdfc; padding: 12px 14px; display: grid; gap: 8px; }
+.activity-card-email { border-color: #cfe0f5; background: #f7faff; }
+.activity-card-note { border-color: #e4ece8; }
+.activity-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.activity-badge { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 999px; background: #eef3f0; color: #5d746d; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.activity-badge-email { background: #e3eefc; color: #2a5f9e; }
+.activity-badge-note { background: #e7f3ef; color: #2f675d; }
+.activity-email-subject { font-size: 14px; color: #1f343f; overflow-wrap: anywhere; }
+.activity-email-meta { margin: 0; }
+.activity-email-toggle { justify-self: start; padding-left: 0; }
+.activity-email-body { margin: 0; padding: 12px; border-radius: 10px; background: #fff; border: 1px solid #dce8e3; white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; font-size: 13px; line-height: 1.45; color: #243c44; max-height: 320px; overflow: auto; }
+.activity-generic-details { margin: 0; font-size: 13px; line-height: 1.45; color: #243c44; }
 

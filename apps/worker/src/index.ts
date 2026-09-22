@@ -771,7 +771,15 @@ async function processReceivedEmail(
     references
   });
   const messageId = typeof message.message_id === "string" ? message.message_id : getEmailHeader(message.headers, "message-id");
-  const subject = typeof message.subject === "string" ? message.subject : null;
+  const subjectFromField = typeof message.subject === "string" ? message.subject.trim() : "";
+  const subjectFromHeader = getEmailHeader(message.headers, "subject")?.trim() ?? "";
+  const subject = subjectFromField || subjectFromHeader || null;
+  const bodyText = typeof message.text === "string" && message.text.trim()
+    ? message.text
+    : typeof message.html === "string" && message.html.trim()
+      ? message.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
+      : null;
+  const bodyHtml = typeof message.html === "string" ? message.html : null;
   const occurredAt = typeof message.created_at === "string" ? new Date(message.created_at) : new Date(event.createdAt);
   const contactsToRecord = matchedContacts.length > 0 ? matchedContacts : [null];
   for (const contact of contactsToRecord) {
@@ -795,8 +803,8 @@ async function processReceivedEmail(
       messageId,
       inReplyTo,
       threadKey: inReplyTo ?? references[0] ?? messageId ?? subject?.toLowerCase() ?? emailId,
-      bodyText: typeof message.text === "string" ? message.text : null,
-      bodyHtml: typeof message.html === "string" ? message.html : null,
+      bodyText,
+      bodyHtml,
       metadata,
       dedupeKey: `received:${emailId}:${contact?.id ?? "unmatched"}`,
       occurredAt
