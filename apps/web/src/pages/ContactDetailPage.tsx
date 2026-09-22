@@ -179,16 +179,34 @@ function groupHistory(rows: PropertyHistory[]): ChangeSet[] {
 
 function timelineActivityLabel(event: TimelineEvent): string {
   if (event.eventType === "note.created") return "Note";
-  return event.eventType.replace(/^email\./, "");
+  if (event.eventType.startsWith("email.")) {
+    const kind = event.eventType.replace(/^email\./, "");
+    if (kind === "sent") return "Email sent";
+    if (kind === "received") return "Email received";
+    if (kind === "replied") return "Email reply";
+    return `Email · ${kind}`;
+  }
+  return event.eventType;
+}
+
+function isEmailTimelineEvent(event: TimelineEvent): boolean {
+  return event.eventType.startsWith("email.");
+}
+
+function emailBodyPreview(event: TimelineEvent): string | null {
+  const text = typeof event.payload.bodyText === "string" ? event.payload.bodyText.trim() : "";
+  if (text) return text;
+  return null;
 }
 
 function timelineDetails(event: TimelineEvent): string {
   if (event.eventType === "note.created") {
     return typeof event.payload.body === "string" ? event.payload.body : "";
   }
-  const subject = typeof event.payload.subject === "string" ? event.payload.subject : null;
+  const subject = typeof event.payload.subject === "string" ? event.payload.subject.trim() : "";
   const fromEmail = typeof event.payload.fromEmail === "string" ? event.payload.fromEmail : null;
-  return subject ?? fromEmail ?? event.source;
+  if (subject) return subject;
+  return fromEmail ?? event.source;
 }
 
 export function ContactDetailPage() {
@@ -207,6 +225,7 @@ export function ContactDetailPage() {
   const [noteBody, setNoteBody] = useState("");
   const [noteBusy, setNoteBusy] = useState(false);
   const [expandedSets, setExpandedSets] = useState<Set<string>>(new Set());
+  const [expandedEmails, setExpandedEmails] = useState<Set<string>>(new Set());
   const [visibleSetCount, setVisibleSetCount] = useState(HISTORY_PAGE_SIZE);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -331,6 +350,15 @@ export function ContactDetailPage() {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
+      return next;
+    });
+  }
+
+  function toggleEmail(id: string) {
+    setExpandedEmails((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }
@@ -463,27 +491,56 @@ export function ContactDetailPage() {
               </div>
             </form>
             {timeline.length === 0 ? <p className="muted">No activity recorded yet.</p> : (
-              <div className="table-wrap">
-                <table>
-                  <thead><tr><th>When</th><th>Activity</th><th>Details</th></tr></thead>
-                  <tbody>
-                    {timeline.map((event) => {
-                      const details = timelineDetails(event);
-                      const isNote = event.eventType === "note.created";
-                      return (
-                        <tr key={event.id}>
-                          <td>{new Date(event.occurredAt).toLocaleString()}</td>
-                          <td>{timelineActivityLabel(event)}</td>
-                          <td>
-                            {isNote ? (
-                              <span className="timeline-note-body">{details}</span>
-                            ) : details}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div className="activity-list">
+                {timeline.map((event) => {
+                  const details = timelineDetails(event);
+                  const isNote = event.eventType === "note.created";
+                  const isEmail = isEmailTimelineEvent(event);
+                  const fromEmail = typeof event.payload.fromEmail === "string" ? event.payload.fromEmail : null;
+                  const subject = typeof event.payload.subject === "string" ? event.payload.subject.trim() : "";
+                  const body = emailBodyPreview(event);
+                  const expanded = expandedEmails.has(event.id);
+                  return (
+                    <article
+                      key={event.id}
+                      className={`activity-card${isEmail ? " activity-card-email" : ""}${isNote ? " activity-card-note" : ""}`}
+                    >
+                      <div className="activity-card-head">
+                        <span className={`activity-badge${isEmail ? " activity-badge-email" : ""}${isNote ? " activity-badge-note" : ""}`}>
+                          {timelineActivityLabel(event)}
+                        </span>
+                        <time className="muted">{new Date(event.occurredAt).toLocaleString()}</time>
+                      </div>
+                      {isEmail ? (
+                        <>
+                          <strong className="activity-email-subject">
+                            {subject || "(No subject)"}
+                          </strong>
+                          {fromEmail ? <p className="muted activity-email-meta">From {fromEmail}</p> : null}
+                          {body ? (
+                            <>
+                              <button
+                                type="button"
+                                className="quiet activity-email-toggle"
+                                aria-expanded={expanded}
+                                onClick={() => toggleEmail(event.id)}
+                              >
+                                {expanded ? "Hide email" : "View email"}
+                              </button>
+                              {expanded ? <pre className="activity-email-body">{body}</pre> : null}
+                            </>
+                          ) : (
+                            <p className="muted">No message body was captured for this email.</p>
+                          )}
+                        </>
+                      ) : isNote ? (
+                        <span className="timeline-note-body">{details}</span>
+                      ) : (
+                        <p className="activity-generic-details">{details}</p>
+                      )}
+                    </article>
+                  );
+                })}
               </div>
             )}
           </section>

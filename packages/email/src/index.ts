@@ -85,7 +85,36 @@ export type ReceivedEmail = {
   headers?: Record<string, string | string[] | undefined>;
   message_id?: string | null;
   created_at?: string | null;
+  received_for?: string[] | null;
 };
+
+/** Resend may return the email at the top level or wrapped as `{ data: email }`. */
+export function coerceReceivedEmail(body: unknown): ReceivedEmail | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const record = body as Record<string, unknown>;
+  if (record.data && typeof record.data === "object" && !Array.isArray(record.data)) {
+    return coerceReceivedEmail(record.data);
+  }
+  if (typeof record.id === "string") {
+    return {
+      id: record.id,
+      to: Array.isArray(record.to) ? record.to.map(String) : undefined,
+      from: typeof record.from === "string" ? record.from : undefined,
+      cc: Array.isArray(record.cc) ? record.cc.map(String) : record.cc === null ? null : undefined,
+      bcc: Array.isArray(record.bcc) ? record.bcc.map(String) : record.bcc === null ? null : undefined,
+      subject: typeof record.subject === "string" ? record.subject : record.subject === null ? null : undefined,
+      html: typeof record.html === "string" ? record.html : record.html === null ? null : undefined,
+      text: typeof record.text === "string" ? record.text : record.text === null ? null : undefined,
+      headers: record.headers && typeof record.headers === "object" && !Array.isArray(record.headers)
+        ? record.headers as Record<string, string | string[] | undefined>
+        : undefined,
+      message_id: typeof record.message_id === "string" ? record.message_id : record.message_id === null ? null : undefined,
+      created_at: typeof record.created_at === "string" ? record.created_at : record.created_at === null ? null : undefined,
+      received_for: Array.isArray(record.received_for) ? record.received_for.map(String) : record.received_for === null ? null : undefined
+    };
+  }
+  return null;
+}
 
 export async function getReceivedEmail(input: { apiKey: string; emailId: string }): Promise<{
   data: ReceivedEmail | null;
@@ -94,9 +123,14 @@ export async function getReceivedEmail(input: { apiKey: string; emailId: string 
   const response = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(input.emailId)}`, {
     headers: { Authorization: `Bearer ${input.apiKey}` }
   });
-  const body = await response.json() as { data?: ReceivedEmail; error?: unknown };
-  if (!response.ok) return { data: null, error: body.error ?? `Resend receiving request failed (${response.status})` };
-  return { data: body.data ?? null, error: null };
+  const body = await response.json() as unknown;
+  if (!response.ok) {
+    const error = body && typeof body === "object" && "error" in body
+      ? (body as { error?: unknown }).error
+      : `Resend receiving request failed (${response.status})`;
+    return { data: null, error };
+  }
+  return { data: coerceReceivedEmail(body), error: null };
 }
 
 const SVIX_TOLERANCE_SECONDS = 300;

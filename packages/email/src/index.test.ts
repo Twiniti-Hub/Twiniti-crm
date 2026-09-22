@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { extractResendWebhookDomains, personalizeForContact, verifyResendWebhookSignature } from "../src/index.js";
+import {
+  coerceReceivedEmail,
+  extractResendWebhookDomains,
+  personalizeForContact,
+  verifyResendWebhookSignature
+} from "../src/index.js";
 import { createHmac } from "node:crypto";
 
 describe("personalizeForContact", () => {
@@ -15,6 +20,39 @@ describe("personalizeForContact", () => {
       }
     );
     assert.equal(html, "Hi Ada (Analyst) opt=false");
+  });
+});
+
+describe("coerceReceivedEmail", () => {
+  it("accepts a top-level Resend receiving payload", () => {
+    const email = coerceReceivedEmail({
+      object: "email",
+      id: "4ef9a417-02e9-4d39-ad75-9611e0fcc33c",
+      subject: "Hello World",
+      from: "onboarding@resend.dev",
+      to: ["delivered@resend.dev"],
+      text: "Congrats",
+      html: "<p>Congrats</p>"
+    });
+    assert.equal(email?.id, "4ef9a417-02e9-4d39-ad75-9611e0fcc33c");
+    assert.equal(email?.subject, "Hello World");
+    assert.equal(email?.text, "Congrats");
+  });
+
+  it("accepts a wrapped { data } receiving payload", () => {
+    const email = coerceReceivedEmail({
+      data: {
+        id: "abc",
+        subject: "Wrapped",
+        from: "ada@example.com"
+      }
+    });
+    assert.equal(email?.subject, "Wrapped");
+    assert.equal(email?.from, "ada@example.com");
+  });
+
+  it("returns null for unrelated JSON", () => {
+    assert.equal(coerceReceivedEmail({ ok: true }), null);
   });
 });
 

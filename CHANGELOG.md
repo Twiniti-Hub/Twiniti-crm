@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fix Resend inbound email parsing so contact timeline activities keep the
+  subject and body, and show emails as expandable cards with a clear Email badge.
 - Add free-form contact notes on the contact detail page (no email required) and
   group the field-change audit trail into expandable change sets with Show more
   instead of an endless raw JSON table.
