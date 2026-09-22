@@ -241,10 +241,12 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .activity-list { display: grid; gap: 10px; }
 .activity-card { border: 1px solid #e4ece8; border-radius: 12px; background: #fbfdfc; padding: 12px 14px; display: grid; gap: 8px; }
 .activity-card-email { border-color: #cfe0f5; background: #f7faff; }
+.activity-card-imported { border-color: #e4ece8; background: #fbfdfc; }
 .activity-card-note { border-color: #e4ece8; }
 .activity-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .activity-badge { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 999px; background: #eef3f0; color: #5d746d; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .activity-badge-email { background: #e3eefc; color: #2a5f9e; }
+.activity-badge-imported { background: #eef3f0; color: #5a6b73; }
 .activity-badge-note { background: #e7f3ef; color: #2f675d; }
 .activity-email-subject { font-size: 14px; color: #1f343f; overflow-wrap: anywhere; }
 .activity-email-meta { margin: 0; }

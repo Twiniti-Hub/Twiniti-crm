@@ -322,7 +322,9 @@ export function SettingsPage() {
           <p className="muted">
             Connect verified Resend domains for this organization. Each domain uses its own API key.
             BCC tracking and campaign sending use the <strong>default</strong> domain.
-            Paste the full webhook URL into Resend (not the Loop homepage). Save the matching signing secret here.
+            Paste the <strong>exact</strong> webhook URL from the table into Resend (including <code>?domain=…</code>),
+            subscribe to <code>email.received</code>, then save that webhook’s signing secret (<code>whsec_…</code>) here.
+            Do not point Resend at the Loop homepage — a wrong URL or secret returns 401 and BCC emails never log.
           </p>
           {resendDomains.length > 0 ? (
             <div className="table-wrap" style={{ marginBottom: 16 }}>

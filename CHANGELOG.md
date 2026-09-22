@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Distinguish HubSpot imported marketing summaries from real BCC emails on the
+  contact timeline, and clarify Resend webhook URL/secret setup when signatures
+  fail (401) so BCC activity can land.
 - Let users open full BCC-tracked email contents on the contact timeline (HTML
   or text), and keep one activity card per received message by deduping on
   Message-ID instead of collapsing distinct emails.
