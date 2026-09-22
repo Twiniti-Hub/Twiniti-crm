@@ -98,7 +98,7 @@ These documents describe planned work rather than currently available product fe
 
 ## User help
 
-The end-user guide is in [docs/help/README.md](docs/help/README.md). It covers onboarding, contacts, companies, imports, audiences, campaigns, forms, workflows, agents, deliverability, settings, billing, and Super Admin workspace selection.
+The end-user guide is in [docs/help/README.md](docs/help/README.md). It covers onboarding, contacts, companies, imports, audiences, campaigns, forms, workflows, agents, deliverability, settings, billing, and Super Admin workspace selection. Resend domain, receiving, and BCC webhook setup: [docs/operations/RESEND_EMAIL_SETUP.md](docs/operations/RESEND_EMAIL_SETUP.md).
 
 ## Render
 
@@ -165,6 +165,8 @@ The companies list now matches the contacts list with `25`, `50`, or `100` row p
 ## Email activity tracking
 
 Each signed-in user can copy a personal BCC address from Settings once the organization has connected a verified Resend domain. The address uses that organization's default Resend domain (`log_{token}@{your-domain}`). BCCing that address records the email against matching contacts, including replies, and shows it in the contact timeline. The Resend domain must have receiving enabled (MX records) and an `email.received` webhook pointed at `https://{regional-loop-host}/api/v1/webhooks/resend?domain={your-domain}`. Do not use the Loop homepage URL. Save the Resend signing secret on that domain in Settings. The worker uses Resend's receiving API to retrieve message content after the webhook arrives.
+
+Full setup and troubleshooting: [docs/operations/RESEND_EMAIL_SETUP.md](docs/operations/RESEND_EMAIL_SETUP.md). End-user help: [docs/help/deliverability.md](docs/help/deliverability.md).
 
 ## Security principles
 
