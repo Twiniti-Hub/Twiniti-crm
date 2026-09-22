@@ -250,5 +250,28 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .activity-email-meta { margin: 0; }
 .activity-email-toggle { justify-self: start; padding-left: 0; }
 .activity-email-body { margin: 0; padding: 12px; border-radius: 10px; background: #fff; border: 1px solid #dce8e3; white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; font-size: 13px; line-height: 1.45; color: #243c44; max-height: 320px; overflow: auto; }
+.email-viewer-dialog { max-width: min(880px, 96vw); width: 100%; padding: 0; }
+.email-viewer { display: grid; gap: 0; }
+.email-viewer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #e4ece8;
+}
+.email-viewer-header h2 { margin: 4px 0 8px; font-size: 1.15rem; overflow-wrap: anywhere; }
+.email-viewer-header p { margin: 0 0 4px; }
+.email-viewer-body { padding: 16px 20px 20px; }
+.email-viewer-frame {
+  display: block;
+  width: 100%;
+  min-height: 360px;
+  height: min(60vh, 560px);
+  border: 1px solid #dce8e3;
+  border-radius: 10px;
+  background: #fff;
+}
+.email-viewer-text { max-height: min(60vh, 560px); }
 .activity-generic-details { margin: 0; font-size: 13px; line-height: 1.45; color: #243c44; }
 

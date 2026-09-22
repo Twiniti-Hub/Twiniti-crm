@@ -1712,6 +1712,7 @@ export async function getContactTimeline(db: Db, organizationId: string, contact
       inReplyTo: activity.inReplyTo,
       threadKey: activity.threadKey,
       bodyText: activity.bodyText,
+      bodyHtml: activity.bodyHtml,
       metadata: activity.metadata
     },
     dedupeKey: activity.dedupeKey,

@@ -83,3 +83,42 @@ export function classifyEmailActivity(input: {
   }
   return { direction: "outbound", activityType: "sent" };
 }
+
+/** Normalize RFC Message-ID for stable dedupe keys. */
+export function normalizeMessageId(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return null;
+  return trimmed.replace(/^<|>$/g, "");
+}
+
+/**
+ * One activity row per distinct received message per contact.
+ * Prefer Message-ID (RFC unique) so two Resend emails never collapse.
+ * Fall back to Resend email id so webhook retries stay idempotent.
+ */
+export function buildReceivedEmailDedupeKey(input: {
+  providerEmailId: string;
+  messageId?: string | null;
+  contactId?: string | null;
+}): string {
+  const contactPart = input.contactId?.trim() || "unmatched";
+  const messageId = normalizeMessageId(input.messageId);
+  if (messageId) {
+    return `received:msgid:${messageId}:${contactPart}`.slice(0, 500);
+  }
+  return `received:resid:${input.providerEmailId}:${contactPart}`.slice(0, 500);
+}
+
+/** Prefer plain text; otherwise strip tags from HTML. Empty strip → null. */
+export function extractEmailBodyText(input: {
+  text?: string | null;
+  html?: string | null;
+}): string | null {
+  if (typeof input.text === "string" && input.text.trim()) return input.text;
+  if (typeof input.html === "string" && input.html.trim()) {
+    const stripped = input.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    return stripped || null;
+  }
+  return null;
+}
