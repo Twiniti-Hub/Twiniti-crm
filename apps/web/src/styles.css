@@ -213,3 +213,29 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
   .kanban-lane.is-over, .kanban-card.is-dragging { background: #1a4349; }
   .kanban-card-body small, .kanban-hint, .kanban-empty { color: #8ba9a5; }
 }
+
+.note-composer { display: grid; gap: 10px; margin-bottom: 16px; }
+.note-composer-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.timeline-note-body { display: block; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; color: #243c44; }
+.history-list { display: grid; gap: 10px; }
+.history-card { border: 1px solid #e4ece8; border-radius: 12px; background: #fbfdfc; overflow: hidden; }
+.history-card-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+}
+.history-card-summary { display: grid; gap: 4px; min-width: 0; }
+.history-card-summary strong { font-size: 13px; color: #1f343f; }
+.history-card-chevron { color: #6c8781; font-size: 12px; }
+.history-diff-list { list-style: none; margin: 0; padding: 0 14px 12px; display: grid; gap: 8px; border-top: 1px solid #edf3f0; }
+.history-diff-list li { display: grid; gap: 4px; padding-top: 10px; }
+.history-diff-field { font-size: 12px; font-weight: 800; color: #2f675d; }
+.history-diff-values { font-size: 13px; line-height: 1.4; color: #243c44; overflow-wrap: anywhere; }
+

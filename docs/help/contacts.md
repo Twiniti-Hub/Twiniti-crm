@@ -2,11 +2,13 @@
 
 ## Find a contact
 
-Open **Contacts**. Kanban is the default view and groups contacts by lifecycle stage. Use the board search to filter cards. Switch to **List** (`?view=list`) for the tabular browser, or open a card to see the contact detail page with custom fields, email activity, and change history.
+Open **Contacts**. Kanban is the default view and groups contacts by lifecycle stage. Use the board search to filter cards. Switch to **List** (`?view=list`) for the tabular browser, or open a card to see the contact detail page with custom fields, notes and activity, and grouped change history.
 
 ## Add or edit a contact
 
 Choose **New contact**, enter the email and available identity fields, then save. From a contact detail page choose the edit controls to change core fields or grouped custom fields. If another user edits the same record first, reload and resolve the reported version conflict before saving again.
+
+On the contact detail page, use **Add note** to capture call outcomes or context without sending email. Notes appear immediately in the activity timeline. Field changes are grouped by save into a short change history; expand a row to see field-level diffs, and choose **Show more** when you need older changes.
 
 On the Kanban board, drag a card between lanes or use **Move to…** on the card. Moves update the lifecycle stage immediately with optimistic concurrency. The **Other** lane holds unknown imported values and is not a drop target.
 
