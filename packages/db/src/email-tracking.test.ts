@@ -1,10 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildReceivedEmailDedupeKey,
   classifyEmailActivity,
+  extractEmailBodyText,
   getEmailHeader,
   getTrackingToken,
   getTrackingTokenFromValues,
+  normalizeMessageId,
   parseEmailAddresses,
   parseTrackingAddress,
   parseTrackingAddressFromValues
@@ -36,4 +39,41 @@ test("matches reply metadata and classifies inbound email", () => {
     contactEmails: ["contact@example.com"],
     inReplyTo: "<message-1@example.com>"
   }), { direction: "inbound", activityType: "replied" });
+});
+
+test("received email dedupe prefers Message-ID so distinct emails stay separate", () => {
+  assert.equal(normalizeMessageId("<ABC@Example.com>"), "abc@example.com");
+  assert.equal(
+    buildReceivedEmailDedupeKey({
+      providerEmailId: "resend-1",
+      messageId: "<one@mail.example>",
+      contactId: "contact-a"
+    }),
+    "received:msgid:one@mail.example:contact-a"
+  );
+  assert.notEqual(
+    buildReceivedEmailDedupeKey({
+      providerEmailId: "resend-1",
+      messageId: "<one@mail.example>",
+      contactId: "contact-a"
+    }),
+    buildReceivedEmailDedupeKey({
+      providerEmailId: "resend-1",
+      messageId: "<two@mail.example>",
+      contactId: "contact-a"
+    })
+  );
+  assert.equal(
+    buildReceivedEmailDedupeKey({
+      providerEmailId: "resend-1",
+      contactId: "contact-a"
+    }),
+    "received:resid:resend-1:contact-a"
+  );
+});
+
+test("extractEmailBodyText keeps plain text and strips HTML without inventing empty bodies", () => {
+  assert.equal(extractEmailBodyText({ text: " Hello ", html: "<p>ignored</p>" }), " Hello ");
+  assert.equal(extractEmailBodyText({ text: null, html: "<p>Hi <b>there</b></p>" }), "Hi there");
+  assert.equal(extractEmailBodyText({ text: "  ", html: "<div></div>" }), null);
 });

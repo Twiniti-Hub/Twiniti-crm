@@ -8,7 +8,7 @@ Open **Contacts**. Kanban is the default view and groups contacts by lifecycle s
 
 Choose **New contact**, enter the email and available identity fields, then save. From a contact detail page choose the edit controls to change core fields or grouped custom fields. If another user edits the same record first, reload and resolve the reported version conflict before saving again.
 
-On the contact detail page, use **Add note** to capture call outcomes or context without sending email. Notes appear immediately in the activity timeline. BCC-tracked emails appear as **Email** activity cards with subject and an expandable message body. Field changes are grouped by save into a short change history; expand a row to see field-level diffs, and choose **Show more** when you need older changes.
+On the contact detail page, use **Add note** to capture call outcomes or context without sending email. Notes appear immediately in the activity timeline. BCC-tracked emails appear as separate **Email** activity cards (one per message) with subject and an **Open email** viewer for the message body. Field changes are grouped by save into a short change history; expand a row to see field-level diffs, and choose **Show more** when you need older changes.
 
 On the Kanban board, drag a card between lanes or use **Move to…** on the card. Moves update the lifecycle stage immediately with optimistic concurrency. The **Other** lane holds unknown imported values and is not a drop target.
 

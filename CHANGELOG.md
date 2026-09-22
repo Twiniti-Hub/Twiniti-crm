@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Let users open full BCC-tracked email contents on the contact timeline (HTML
+  or text), and keep one activity card per received message by deduping on
+  Message-ID instead of collapsing distinct emails.
 - Fix Resend inbound email parsing so contact timeline activities keep the
   subject and body, and show emails as expandable cards with a clear Email badge.
 - Add free-form contact notes on the contact detail page (no email required) and

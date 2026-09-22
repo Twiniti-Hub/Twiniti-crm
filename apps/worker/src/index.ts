@@ -40,7 +40,9 @@ import {
   parseEmailAddresses,
   getEmailHeader,
   parseMessageReferences,
+  buildReceivedEmailDedupeKey,
   classifyEmailActivity,
+  extractEmailBodyText,
   listPropertyDefinitions,
   mapHubspotContactRow,
   organizations,
@@ -725,7 +727,9 @@ async function processReceivedEmail(
   if (!resendConfig) throw new Error("Organization Resend domain is not configured for received email processing");
   const receivedResult = await getReceivedEmail({ apiKey: decryptResendSecret(resendConfig.apiKeyCiphertext, env.RESEND_CREDENTIAL_ENCRYPTION_KEY), emailId });
   if (receivedResult.error) throw new Error(`Unable to retrieve received email ${emailId}`);
-  const message = { ...data, ...(receivedResult.data ?? {}) } as Record<string, unknown>;
+  // Retry the job if Resend returned an unparseable body — do not permanently store empty shells.
+  if (!receivedResult.data) throw new Error(`Unable to parse received email ${emailId}`);
+  const message = { ...data, ...receivedResult.data } as Record<string, unknown>;
   const addressValues = [
     message.to,
     message.bcc,
@@ -774,12 +778,11 @@ async function processReceivedEmail(
   const subjectFromField = typeof message.subject === "string" ? message.subject.trim() : "";
   const subjectFromHeader = getEmailHeader(message.headers, "subject")?.trim() ?? "";
   const subject = subjectFromField || subjectFromHeader || null;
-  const bodyText = typeof message.text === "string" && message.text.trim()
-    ? message.text
-    : typeof message.html === "string" && message.html.trim()
-      ? message.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()
-      : null;
-  const bodyHtml = typeof message.html === "string" ? message.html : null;
+  const bodyHtml = typeof message.html === "string" && message.html.trim() ? message.html : null;
+  const bodyText = extractEmailBodyText({
+    text: typeof message.text === "string" ? message.text : null,
+    html: bodyHtml
+  });
   const occurredAt = typeof message.created_at === "string" ? new Date(message.created_at) : new Date(event.createdAt);
   const contactsToRecord = matchedContacts.length > 0 ? matchedContacts : [null];
   for (const contact of contactsToRecord) {
@@ -788,7 +791,12 @@ async function processReceivedEmail(
       matchedContact: Boolean(contact),
       candidateEmails: contacts.map((candidate) => candidate.emailNormalized)
     };
-    await db.insert(emailActivities).values({
+    const dedupeKey = buildReceivedEmailDedupeKey({
+      providerEmailId: emailId,
+      messageId,
+      contactId: contact?.id ?? null
+    });
+    const [inserted] = await db.insert(emailActivities).values({
       organizationId: trackingAddress.organizationId,
       contactId: contact?.id ?? null,
       trackingAddressId: trackingAddress.id,
@@ -802,13 +810,30 @@ async function processReceivedEmail(
       subject,
       messageId,
       inReplyTo,
-      threadKey: inReplyTo ?? references[0] ?? messageId ?? subject?.toLowerCase() ?? emailId,
+      threadKey: inReplyTo ?? references[0] ?? messageId ?? emailId,
       bodyText,
       bodyHtml,
       metadata,
-      dedupeKey: `received:${emailId}:${contact?.id ?? "unmatched"}`,
+      dedupeKey,
       occurredAt
-    }).onConflictDoNothing();
+    }).onConflictDoNothing().returning();
+
+    // Same message retried after an empty-body write: backfill content, never replace a different email.
+    if (!inserted && (bodyText || bodyHtml)) {
+      const [existing] = await db.select().from(emailActivities).where(and(
+        eq(emailActivities.organizationId, trackingAddress.organizationId),
+        eq(emailActivities.dedupeKey, dedupeKey)
+      )).limit(1);
+      if (existing && !existing.bodyText && !existing.bodyHtml) {
+        await db.update(emailActivities).set({
+          bodyText,
+          bodyHtml,
+          subject: subject ?? existing.subject,
+          messageId: messageId ?? existing.messageId,
+          metadata
+        }).where(eq(emailActivities.id, existing.id));
+      }
+    }
   }
 
   await db.insert(emailEvents).values({
@@ -817,7 +842,7 @@ async function processReceivedEmail(
     eventType: "email.received",
     email: fromEmail,
     payload: body,
-    dedupeKey: String(body.id ?? emailId)
+    dedupeKey: String(body.id ?? `${emailId}:${event.id}`)
   }).onConflictDoNothing();
   await db.update(webhookEvents).set({
     organizationId: trackingAddress.organizationId,

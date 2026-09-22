@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import { api } from "../lib/api";
 
@@ -193,10 +193,13 @@ function isEmailTimelineEvent(event: TimelineEvent): boolean {
   return event.eventType.startsWith("email.");
 }
 
-function emailBodyPreview(event: TimelineEvent): string | null {
-  const text = typeof event.payload.bodyText === "string" ? event.payload.bodyText.trim() : "";
-  if (text) return text;
-  return null;
+function emailBodies(event: TimelineEvent): { text: string | null; html: string | null } {
+  const textRaw = typeof event.payload.bodyText === "string" ? event.payload.bodyText.trim() : "";
+  const htmlRaw = typeof event.payload.bodyHtml === "string" ? event.payload.bodyHtml.trim() : "";
+  return {
+    text: textRaw || null,
+    html: htmlRaw || null
+  };
 }
 
 function timelineDetails(event: TimelineEvent): string {
@@ -225,7 +228,8 @@ export function ContactDetailPage() {
   const [noteBody, setNoteBody] = useState("");
   const [noteBusy, setNoteBusy] = useState(false);
   const [expandedSets, setExpandedSets] = useState<Set<string>>(new Set());
-  const [expandedEmails, setExpandedEmails] = useState<Set<string>>(new Set());
+  const [openEmailId, setOpenEmailId] = useState<string | null>(null);
+  const emailDialogRef = useRef<HTMLDialogElement>(null);
   const [visibleSetCount, setVisibleSetCount] = useState(HISTORY_PAGE_SIZE);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -354,14 +358,30 @@ export function ContactDetailPage() {
     });
   }
 
-  function toggleEmail(id: string) {
-    setExpandedEmails((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
+  const openEmailEvent = useMemo(
+    () => (openEmailId ? timeline.find((event) => event.id === openEmailId) ?? null : null),
+    [openEmailId, timeline]
+  );
+  const openEmailBodies = openEmailEvent ? emailBodies(openEmailEvent) : null;
+  const openEmailSubject = openEmailEvent && typeof openEmailEvent.payload.subject === "string"
+    ? openEmailEvent.payload.subject.trim()
+    : "";
+  const openEmailFrom = openEmailEvent && typeof openEmailEvent.payload.fromEmail === "string"
+    ? openEmailEvent.payload.fromEmail
+    : null;
+  const openEmailTo = openEmailEvent && Array.isArray(openEmailEvent.payload.toEmails)
+    ? openEmailEvent.payload.toEmails.filter((value): value is string => typeof value === "string")
+    : [];
+
+  useEffect(() => {
+    const dialog = emailDialogRef.current;
+    if (!dialog) return;
+    if (openEmailEvent) {
+      if (!dialog.open) dialog.showModal();
+      return;
+    }
+    if (dialog.open) dialog.close();
+  }, [openEmailEvent]);
 
   if (!contact && !error) {
     return <div className="banner info">Loading contact…</div>;
@@ -497,9 +517,12 @@ export function ContactDetailPage() {
                   const isNote = event.eventType === "note.created";
                   const isEmail = isEmailTimelineEvent(event);
                   const fromEmail = typeof event.payload.fromEmail === "string" ? event.payload.fromEmail : null;
+                  const toEmails = Array.isArray(event.payload.toEmails)
+                    ? event.payload.toEmails.filter((value): value is string => typeof value === "string")
+                    : [];
                   const subject = typeof event.payload.subject === "string" ? event.payload.subject.trim() : "";
-                  const body = emailBodyPreview(event);
-                  const expanded = expandedEmails.has(event.id);
+                  const bodies = emailBodies(event);
+                  const canOpen = Boolean(bodies.text || bodies.html);
                   return (
                     <article
                       key={event.id}
@@ -517,18 +540,17 @@ export function ContactDetailPage() {
                             {subject || "(No subject)"}
                           </strong>
                           {fromEmail ? <p className="muted activity-email-meta">From {fromEmail}</p> : null}
-                          {body ? (
-                            <>
-                              <button
-                                type="button"
-                                className="quiet activity-email-toggle"
-                                aria-expanded={expanded}
-                                onClick={() => toggleEmail(event.id)}
-                              >
-                                {expanded ? "Hide email" : "View email"}
-                              </button>
-                              {expanded ? <pre className="activity-email-body">{body}</pre> : null}
-                            </>
+                          {toEmails.length > 0 ? (
+                            <p className="muted activity-email-meta">To {toEmails.join(", ")}</p>
+                          ) : null}
+                          {canOpen ? (
+                            <button
+                              type="button"
+                              className="quiet activity-email-toggle"
+                              onClick={() => setOpenEmailId(event.id)}
+                            >
+                              Open email
+                            </button>
                           ) : (
                             <p className="muted">No message body was captured for this email.</p>
                           )}
@@ -613,6 +635,43 @@ export function ContactDetailPage() {
           </section>
         </>
       ) : null}
+
+      <dialog
+        ref={emailDialogRef}
+        className="app-dialog email-viewer-dialog"
+        onClose={() => setOpenEmailId(null)}
+      >
+        {openEmailEvent && openEmailBodies ? (
+          <div className="email-viewer">
+            <div className="email-viewer-header">
+              <div>
+                <p className="eyebrow">Email</p>
+                <h2>{openEmailSubject || "(No subject)"}</h2>
+                {openEmailFrom ? <p className="muted">From {openEmailFrom}</p> : null}
+                {openEmailTo.length > 0 ? <p className="muted">To {openEmailTo.join(", ")}</p> : null}
+                <p className="muted">{new Date(openEmailEvent.occurredAt).toLocaleString()}</p>
+              </div>
+              <button type="button" className="quiet" onClick={() => setOpenEmailId(null)}>
+                Close
+              </button>
+            </div>
+            <div className="email-viewer-body">
+              {openEmailBodies.html ? (
+                <iframe
+                  className="email-viewer-frame"
+                  title={openEmailSubject || "Email contents"}
+                  sandbox=""
+                  srcDoc={openEmailBodies.html}
+                />
+              ) : openEmailBodies.text ? (
+                <pre className="activity-email-body email-viewer-text">{openEmailBodies.text}</pre>
+              ) : (
+                <p className="muted">No message body was captured for this email.</p>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </dialog>
     </>
   );
 }
