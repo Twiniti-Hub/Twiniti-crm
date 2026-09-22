@@ -36,6 +36,7 @@ import {
   importJobs,
   importRows,
   isEmailSuppressed,
+  crmUsers,
   parseTrackingAddressFromValues,
   parseEmailAddresses,
   getEmailHeader,
@@ -993,14 +994,40 @@ async function assertWorkerLicense(organizationId: string) {
     throw new Error("Organization billing is not active");
   }
   if (!licenseApi.configured) return;
+
+  const [principal] = await db.select({
+    id: crmUsers.id,
+    email: crmUsers.email,
+    hexclaveSubject: crmUsers.hexclaveSubject,
+    role: crmUsers.role
+  }).from(crmUsers).where(and(
+    eq(crmUsers.organizationId, organizationId),
+    eq(crmUsers.active, true)
+  )).orderBy(sql`case when ${crmUsers.role} = 'admin' then 0 else 1 end`, crmUsers.createdAt).limit(1);
+
   const check = await licenseApi.checkUserLicense({
     externalOrganizationId: organizationId,
+    externalUserId: principal?.id ?? null,
+    userSubject: principal?.hexclaveSubject ?? null,
+    email: principal?.email ?? null,
     productCode: env.LICENSE_API_PRODUCT_CODE,
     source: "twiniti-crm"
   });
-  if (check.decision !== "allow") {
-    throw new Error(`License_API denied worker action: ${check.reasonCode}`);
+  if (check.decision === "allow") return;
+
+  // Passive ingest (webhooks) has no logged-in user. If License_API cannot resolve a
+  // principal but the org is already provisioned and previously allowed, do not
+  // drop inbound email permanently.
+  const provisioned = billing.licenseProvisioningStatus === "provisioned" && Boolean(billing.licenseId);
+  const locallyAllowed = billing.licenseDecision === "allow" || billing.licenseStatus === "active";
+  if (
+    provisioned
+    && locallyAllowed
+    && (check.reasonCode === "LICENSE_OR_USER_NOT_FOUND" || check.decision === "retry")
+  ) {
+    return;
   }
+  throw new Error(`License_API denied worker action: ${check.reasonCode}`);
 }
 
 async function handleJob(kind: string, payload: Record<string, unknown>, organizationId: string | null) {

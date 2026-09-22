@@ -179,6 +179,7 @@ function groupHistory(rows: PropertyHistory[]): ChangeSet[] {
 
 function timelineActivityLabel(event: TimelineEvent): string {
   if (event.eventType === "note.created") return "Note";
+  if (isImportedMarketingEvent(event)) return "Imported marketing";
   if (event.eventType.startsWith("email.")) {
     const kind = event.eventType.replace(/^email\./, "");
     if (kind === "sent") return "Email sent";
@@ -189,8 +190,17 @@ function timelineActivityLabel(event: TimelineEvent): string {
   return event.eventType;
 }
 
+function isImportedMarketingEvent(event: TimelineEvent): boolean {
+  if (event.source === "hubspot.import") return true;
+  const metadata = event.payload.metadata;
+  if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+    return (metadata as { imported?: unknown }).imported === true;
+  }
+  return false;
+}
+
 function isEmailTimelineEvent(event: TimelineEvent): boolean {
-  return event.eventType.startsWith("email.");
+  return event.eventType.startsWith("email.") && !isImportedMarketingEvent(event);
 }
 
 function emailBodies(event: TimelineEvent): { text: string | null; html: string | null } {
@@ -515,6 +525,7 @@ export function ContactDetailPage() {
                 {timeline.map((event) => {
                   const details = timelineDetails(event);
                   const isNote = event.eventType === "note.created";
+                  const isImported = isImportedMarketingEvent(event);
                   const isEmail = isEmailTimelineEvent(event);
                   const fromEmail = typeof event.payload.fromEmail === "string" ? event.payload.fromEmail : null;
                   const toEmails = Array.isArray(event.payload.toEmails)
@@ -523,18 +534,35 @@ export function ContactDetailPage() {
                   const subject = typeof event.payload.subject === "string" ? event.payload.subject.trim() : "";
                   const bodies = emailBodies(event);
                   const canOpen = Boolean(bodies.text || bodies.html);
+                  const deliveredCount = (() => {
+                    const metadata = event.payload.metadata;
+                    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+                    const value = (metadata as { marketingEmailsDelivered?: unknown }).marketingEmailsDelivered;
+                    return typeof value === "number" && Number.isFinite(value) ? value : null;
+                  })();
                   return (
                     <article
                       key={event.id}
-                      className={`activity-card${isEmail ? " activity-card-email" : ""}${isNote ? " activity-card-note" : ""}`}
+                      className={`activity-card${isEmail ? " activity-card-email" : ""}${isNote ? " activity-card-note" : ""}${isImported ? " activity-card-imported" : ""}`}
                     >
                       <div className="activity-card-head">
-                        <span className={`activity-badge${isEmail ? " activity-badge-email" : ""}${isNote ? " activity-badge-note" : ""}`}>
+                        <span className={`activity-badge${isEmail ? " activity-badge-email" : ""}${isNote ? " activity-badge-note" : ""}${isImported ? " activity-badge-imported" : ""}`}>
                           {timelineActivityLabel(event)}
                         </span>
                         <time className="muted">{new Date(event.occurredAt).toLocaleString()}</time>
                       </div>
-                      {isEmail ? (
+                      {isImported ? (
+                        <>
+                          <strong className="activity-email-subject">
+                            {subject || "Marketing email"}
+                          </strong>
+                          <p className="muted activity-email-meta">
+                            HubSpot import summary
+                            {deliveredCount !== null ? ` · ${deliveredCount} delivered` : ""}
+                            . Individual message bodies are not stored for imports.
+                          </p>
+                        </>
+                      ) : isEmail ? (
                         <>
                           <strong className="activity-email-subject">
                             {subject || "(No subject)"}
