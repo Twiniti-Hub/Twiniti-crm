@@ -122,7 +122,10 @@ export function registerResendWebhookRoutes(app: FastifyInstance, db: Db, env: A
           });
         }
         return reply.code(401).send({
-          error: { code: "unauthorized", message: "Invalid Resend webhook signature" }
+          error: {
+            code: "unauthorized",
+            message: "Invalid Resend webhook signature — re-copy the whsec_ signing secret from the Resend webhook that uses this URL into Settings → Email delivery"
+          }
         });
       }
       const event = await storeWebhookEvent(db, {
