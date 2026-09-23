@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import { Link } from "react-router";
 import { api } from "../lib/api";
 import type { Me } from "../lib/me";
 import { authConfigured } from "../hexclave/client";
@@ -322,9 +323,11 @@ export function SettingsPage() {
           <p className="muted">
             Connect verified Resend domains for this organization. Each domain uses its own API key.
             BCC tracking and campaign sending use the <strong>default</strong> domain.
-            Paste the <strong>exact</strong> webhook URL from the table into Resend (including <code>?domain=…</code>),
+            In Resend: verify the domain, enable <strong>Receiving</strong> (MX), paste the{" "}
+            <strong>exact</strong> webhook URL from this table (including <code>?domain=…</code>),
             subscribe to <code>email.received</code>, then save that webhook’s signing secret (<code>whsec_…</code>) here.
             Do not point Resend at the Loop homepage — a wrong URL or secret returns 401 and BCC emails never log.
+            Full checklist: <Link to="/help">Help → Email with Resend</Link>.
           </p>
           {resendDomains.length > 0 ? (
             <div className="table-wrap" style={{ marginBottom: 16 }}>
