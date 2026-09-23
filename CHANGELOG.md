@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Codify Linear hygiene in AGENTS.md so agents keep CRM issues, PR links, and Production receipts current.
 - Document Resend email setup end-to-end (domains, MX receiving, webhook URL and
   signing secret, BCC smoke-test, troubleshooting) and refresh Help / Settings /
   Deliverability copy so workspace admins can complete BCC tracking without
