@@ -29,7 +29,7 @@ services:
       - key: RESEND_CREDENTIAL_ENCRYPTION_KEY
         sync: false
       - key: PLATFORM_EMAIL_FROM
-        value: "Twiniti Loop <noreply@twiniti.ai>"
+        value: "Twiniti Loop <noreply@crm.twiniti.ai>"
       - key: SUPPORT_EMAIL
         value: support@twiniti.ai
       - key: STRIPE_SECRET_KEY
@@ -95,7 +95,7 @@ services:
       - key: RESEND_CREDENTIAL_ENCRYPTION_KEY
         sync: false
       - key: PLATFORM_EMAIL_FROM
-        value: "Twiniti Loop <noreply@twiniti.ai>"
+        value: "Twiniti Loop <noreply@crm.twiniti.ai>"
       - key: SUPPORT_EMAIL
         value: support@twiniti.ai
       - key: STRIPE_SECRET_KEY
@@ -161,7 +161,7 @@ services:
       - key: RESEND_CREDENTIAL_ENCRYPTION_KEY
         sync: false
       - key: PLATFORM_EMAIL_FROM
-        value: "Twiniti Loop <noreply@twiniti.ai>"
+        value: "Twiniti Loop <noreply@crm.twiniti.ai>"
       - key: SUPPORT_EMAIL
         value: support@twiniti.ai
       - key: STRIPE_SECRET_KEY

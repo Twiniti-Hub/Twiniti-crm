@@ -1,12 +1,89 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  ResendSendError,
   coerceReceivedEmail,
+  ensureResendSendSucceeded,
   extractResendWebhookDomains,
   personalizeForContact,
+  sendEmail,
   verifyResendWebhookSignature
 } from "../src/index.js";
 import { createHmac } from "node:crypto";
+
+describe("ensureResendSendSucceeded", () => {
+  it("returns the message id when Resend reports success", () => {
+    assert.deepEqual(ensureResendSendSucceeded({ data: { id: "msg_abc123" } }), { id: "msg_abc123" });
+  });
+
+  it("throws ResendSendError when the SDK returns an error object", () => {
+    assert.throws(
+      () => ensureResendSendSucceeded({ error: { message: "Invalid `from` address" }, data: null }),
+      (error: unknown) => error instanceof ResendSendError && error.message === "Invalid `from` address"
+    );
+  });
+
+  it("throws when success payload is missing a message id", () => {
+    assert.throws(
+      () => ensureResendSendSucceeded({ data: {} }),
+      (error: unknown) => error instanceof ResendSendError && error.message === "Resend did not return a message id"
+    );
+  });
+});
+
+describe("sendEmail", () => {
+  it("rejects when the injected Resend client returns an error", async () => {
+    await assert.rejects(
+      () => sendEmail(
+        {
+          apiKey: "re_test_key",
+          from: "no-reply@example.com",
+          to: "ops@example.com",
+          subject: "Test",
+          html: "<p>Hi</p>"
+        },
+        {
+          send: async () => ({ error: { message: "Domain not verified" }, data: null })
+        }
+      ),
+      (error: unknown) => error instanceof ResendSendError && error.message === "Domain not verified"
+    );
+  });
+
+  it("rejects when the injected Resend client omits a message id", async () => {
+    await assert.rejects(
+      () => sendEmail(
+        {
+          apiKey: "re_test_key",
+          from: "no-reply@example.com",
+          to: "ops@example.com",
+          subject: "Test",
+          html: "<p>Hi</p>"
+        },
+        {
+          send: async () => ({ data: {} })
+        }
+      ),
+      (error: unknown) => error instanceof ResendSendError && error.message === "Resend did not return a message id"
+    );
+  });
+
+  it("returns the message id when the injected client succeeds", async () => {
+    const result = await sendEmail(
+      {
+        apiKey: "re_test_key",
+        from: "no-reply@example.com",
+        to: "ops@example.com",
+        subject: "Test",
+        html: "<p>Hi</p>"
+      },
+      {
+        send: async () => ({ data: { id: "msg_ok" } })
+      }
+    );
+    assert.deepEqual(result, { data: { id: "msg_ok" } });
+  });
+});
 
 describe("personalizeForContact", () => {
   it("replaces core and properties.* tokens", () => {

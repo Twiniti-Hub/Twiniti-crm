@@ -29,7 +29,7 @@ export const envSchema = z.object({
   RESEND_CREDENTIAL_ENCRYPTION_KEY: z.string().optional().default(""),
   // Shared platform Resend API key (Render common env group) for operational alerts.
   RESEND_API_KEY: z.string().optional().default(""),
-  PLATFORM_EMAIL_FROM: z.string().optional().default("Twiniti Loop <noreply@twiniti.ai>"),
+  PLATFORM_EMAIL_FROM: z.string().optional().default("Twiniti Loop <noreply@crm.twiniti.ai>"),
   SUPPORT_EMAIL: z.string().email().optional().default("support@twiniti.ai"),
   STRIPE_SECRET_KEY: z.string().optional().default(""),
   STRIPE_WEBHOOK_SECRET: z.string().optional().default(""),
