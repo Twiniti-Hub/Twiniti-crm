@@ -102,3 +102,14 @@ test("landing HTML advertises the sitemap and canonical production URL", () => {
   assert.match(html, /rel="canonical"\s+href="https:\/\/loop\.twiniti\.ai\/"/);
   assert.match(html, /rel="sitemap"[^>]*href="\/sitemap\.xml"/);
 });
+
+test("landing bundle source embeds the Loop intro YouTube video for SEO", () => {
+  const introVideoSource = fs.readFileSync(path.join(landingRoot, "src/intro-video.ts"), "utf8");
+  const mainSource = fs.readFileSync(path.join(landingRoot, "src/main.ts"), "utf8");
+
+  assert.match(introVideoSource, /0jkmQhBqdpg/);
+  assert.match(introVideoSource, /youtube\.com\/watch\?v=\$\{LOOP_INTRO_VIDEO_ID\}/);
+  assert.match(introVideoSource, /VideoObject/);
+  assert.match(mainSource, /renderLoopIntroVideoMarkup/);
+  assert.match(mainSource, /injectLoopIntroVideoJsonLd/);
+});
