@@ -18,6 +18,7 @@ import { registerRelationshipStewardRoutes } from "./routes/relationship-steward
 import { registerRunCredentialRoutes } from "./routes/run-credentials.js";
 import { registerMarketingRoutes } from "./routes/marketing.js";
 import { registerOrganizationRoutes } from "./routes/organizations.js";
+import { registerWebsiteContactRoutes } from "./routes/website-contact.js";
 import { registerResendWebhookRoutes } from "./routes/resend-webhook.js";
 import { resolvePublicFormCorsOptions } from "./public-form-cors.js";
 
@@ -85,6 +86,7 @@ await registerDigitalWorkerRoutes(app, db);
 await registerRelationshipStewardRoutes(app, db);
 await registerRunCredentialRoutes(app, db);
 await registerMarketingRoutes(app, db, env);
+registerWebsiteContactRoutes(app, env);
 registerResendWebhookRoutes(app, db, env);
 await registerMcpRoutes(app, db, env, pool);
 

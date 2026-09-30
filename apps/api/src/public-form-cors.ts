@@ -19,6 +19,9 @@ function normalizedWebOrigins(env: AppEnv): string[] {
 }
 
 export function isPublicFormCorsRoute(pathname: string): boolean {
+  if (pathname === "/api/v1/public/website-contact") {
+    return true;
+  }
   return /^\/api\/v1\/public\/forms\/[^/]+(?:\/submit)?$/.test(pathname);
 }
 
