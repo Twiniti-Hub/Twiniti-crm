@@ -1,6 +1,12 @@
 import "./styles.css";
+import "./intro-video.css";
 import "./logo-overrides.css";
 import "./analytics-consent.css";
+import {
+  injectLoopIntroVideoJsonLd,
+  mountLoopIntroVideoPlayers,
+  renderLoopIntroVideoMarkup,
+} from "./intro-video";
 import {
   getAnalyticsConsent,
   initializeGoogleAnalytics,
@@ -47,6 +53,8 @@ document.querySelector<HTMLDivElement>("#root")!.innerHTML = `
           </div>
           <p class="hero-note"><span aria-hidden="true">✦</span> Choose your country at signup. Your workspace is placed in the right data region and stays there.</p>
         </div>
+        <div class="hero-media">
+        ${renderLoopIntroVideoMarkup()}
         <div class="hero-art" aria-label="A visual preview of the Twiniti Loop workspace">
           <div class="orb orb-one"></div>
           <div class="orb orb-two"></div>
@@ -58,6 +66,7 @@ document.querySelector<HTMLDivElement>("#root")!.innerHTML = `
             <div class="activity-row"><span class="avatar avatar-coral">MC</span><span><strong>Campaign approved</strong><small>Product launch · just now</small></span><span class="activity-check">✓</span></div>
             <div class="activity-row"><span class="avatar avatar-blue">JP</span><span><strong>New company added</strong><small>Northstar Studio · 12 min ago</small></span><span class="activity-check">✓</span></div>
           </div>
+        </div>
         </div>
       </section>
 
@@ -80,6 +89,9 @@ document.querySelector<HTMLDivElement>("#root")!.innerHTML = `
     <footer class="footer container"><a class="brand" href="#top" aria-label="Twiniti Loop home"><img class="brand-logo" src="${darkLogoPath}" alt="" aria-hidden="true" /></a><div class="footer-meta">${appLink("Sign in", "/sign-in", "footer-link")} ${appLink("Sign up", "/sign-up", "footer-link")}<span>© 2026 Twiniti Loop</span><a class="maker-map-badge" href="https://www.makermap.lol/broadbent_mg"><img src="https://www.makermap.lol/badge/broadbent_mg.svg" alt="Connect with me on Maker Map" width="262" height="54" /></a></div></footer>
   </div>
 `;
+
+injectLoopIntroVideoJsonLd();
+mountLoopIntroVideoPlayers();
 
 function trackCurrentPage(): void {
   trackPageView(`${window.location.pathname}${window.location.search}${window.location.hash}`);
