@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { loadEnv, regionalDatabaseUrls } from "@twiniti/config";
 import type { RegionCode } from "@twiniti/contracts";
 import {
@@ -27,8 +27,9 @@ import {
   getOrganizationBilling,
   getDefaultOrganizationResendDomain,
   getOrganizationResendDomainByName,
-  findContactsByEmails,
+  adoptUnmatchedReceivedEmailActivity,
   findContactByExternalRecordId,
+  resolveContactsForReceivedEmail,
   getDb,
   withServiceRls,
   scopedDb,
@@ -42,7 +43,6 @@ import {
   getEmailHeader,
   parseMessageReferences,
   buildReceivedEmailDedupeKey,
-  classifyEmailActivity,
   extractEmailBodyText,
   listPropertyDefinitions,
   mapHubspotContactRow,
@@ -688,14 +688,25 @@ async function processResendWebhook(payload: { webhookEventId: string; organizat
       // duplicate webhook events are ignored
     }
 
-    if (relatedSend && emailId) {
+    const activityContactId = relatedSend?.contactId ?? null;
+    let linkedContactId = activityContactId;
+    if (!linkedContactId && emailId) {
+      const [relatedActivity] = await db.select({ contactId: emailActivities.contactId }).from(emailActivities).where(and(
+        eq(emailActivities.organizationId, organizationId),
+        eq(emailActivities.providerEmailId, emailId),
+        isNotNull(emailActivities.contactId)
+      )).limit(1);
+      linkedContactId = relatedActivity?.contactId ?? null;
+    }
+
+    if (linkedContactId && emailId) {
       await db.insert(emailActivities).values({
         organizationId,
-        contactId: relatedSend.contactId,
+        contactId: linkedContactId,
         direction: "outbound",
         activityType: eventType.replace(/^email\./, ""),
         providerEmailId: emailId,
-        toEmails: [relatedSend.toEmail],
+        toEmails: relatedSend ? [relatedSend.toEmail] : parseEmailAddresses(data.to),
         dedupeKey: `provider:${emailId}:${eventType}`,
         occurredAt: typeof data.created_at === "string" ? new Date(data.created_at) : new Date(),
         metadata: { webhookEventId: event.id }
@@ -763,18 +774,22 @@ async function processReceivedEmail(
     ...ccEmails,
     ...parseEmailAddresses(getEmailHeader(message.headers, "to", "cc"))
   ])];
-  const contacts = await findContactsByEmails(db, trackingAddress.organizationId, [...participantEmails, ...(fromEmail ? [fromEmail] : [])]);
-  const matchedContacts = contacts.filter((candidate) =>
-    candidate.emailNormalized === fromEmail || participantEmails.includes(candidate.emailNormalized)
-  );
   const inReplyTo = getEmailHeader(message.headers, "in-reply-to") ?? (typeof message.in_reply_to === "string" ? message.in_reply_to : null);
   const references = parseMessageReferences(getEmailHeader(message.headers, "references") ?? message.references);
-  const classification = classifyEmailActivity({
-    fromEmail,
-    contactEmails: contacts.map((candidate) => candidate.emailNormalized),
-    inReplyTo,
-    references
-  });
+  const { classification, contactsByEmail, contactsToRecord } = await resolveContactsForReceivedEmail(
+    db,
+    trackingAddress.organizationId,
+    {
+      participantEmails,
+      fromEmail,
+      trackingEmail,
+      inReplyTo,
+      references,
+      rawTo: message.to,
+      rawCc: message.cc,
+      change: { actorType: "system", actorId: "worker", source: "bcc.received" }
+    }
+  );
   const messageId = typeof message.message_id === "string" ? message.message_id : getEmailHeader(message.headers, "message-id");
   const subjectFromField = typeof message.subject === "string" ? message.subject.trim() : "";
   const subjectFromHeader = getEmailHeader(message.headers, "subject")?.trim() ?? "";
@@ -785,18 +800,25 @@ async function processReceivedEmail(
     html: bodyHtml
   });
   const occurredAt = typeof message.created_at === "string" ? new Date(message.created_at) : new Date(event.createdAt);
-  const contactsToRecord = matchedContacts.length > 0 ? matchedContacts : [null];
   for (const contact of contactsToRecord) {
     const metadata = {
       webhookEventId: event.id,
       matchedContact: Boolean(contact),
-      candidateEmails: contacts.map((candidate) => candidate.emailNormalized)
+      candidateEmails: [...contactsByEmail.keys()]
     };
     const dedupeKey = buildReceivedEmailDedupeKey({
       providerEmailId: emailId,
       messageId,
       contactId: contact?.id ?? null
     });
+    if (contact?.id) {
+      const adopted = await adoptUnmatchedReceivedEmailActivity(db, trackingAddress.organizationId, {
+        providerEmailId: emailId,
+        messageId,
+        contactId: contact.id
+      });
+      if (adopted) continue;
+    }
     const [inserted] = await db.insert(emailActivities).values({
       organizationId: trackingAddress.organizationId,
       contactId: contact?.id ?? null,
