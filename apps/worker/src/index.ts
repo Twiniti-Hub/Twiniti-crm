@@ -227,20 +227,28 @@ async function processCampaignSend(payload: { campaignId: string; organizationId
       properties: (contact?.properties ?? {}) as Record<string, unknown>
     });
 
-    const result = await sendEmail({
-      apiKey: resendApiKey,
-      from: resendFrom,
-      to: recipient.emailNormalized,
-      subject: campaign.subject ?? campaign.name,
-      html,
-      idempotencyKey: recipient.idempotencyKey
-    });
+    let resendId: string | null = null;
+    let recipientFailed = false;
+    let recipientError: string | null = null;
+    try {
+      const result = await sendEmail({
+        apiKey: resendApiKey,
+        from: resendFrom,
+        to: recipient.emailNormalized,
+        subject: campaign.subject ?? campaign.name,
+        html,
+        idempotencyKey: recipient.idempotencyKey
+      });
+      resendId = result.data.id;
+    } catch (error) {
+      recipientFailed = true;
+      recipientError = error instanceof Error ? error.message : "Resend send failed";
+    }
 
-    const resendId = (result.data as { id?: string } | null | undefined)?.id ?? null;
     await db.update(campaignRecipients).set({
-      status: result.error ? "failed" : "sent",
+      status: recipientFailed ? "failed" : "sent",
       resendId,
-      error: result.error ? JSON.stringify(result.error) : null
+      error: recipientError
     }).where(and(
       eq(campaignRecipients.id, recipient.id),
       eq(campaignRecipients.organizationId, campaign.organizationId)
@@ -251,16 +259,16 @@ async function processCampaignSend(payload: { campaignId: string; organizationId
       campaignId: campaign.id,
       contactId: recipient.contactId,
       toEmail: recipient.emailNormalized,
-      status: result.error ? "failed" : "sent",
+      status: recipientFailed ? "failed" : "sent",
       resendId,
       idempotencyKey: recipient.idempotencyKey
     });
-    if (result.error) failedCount += 1;
+    if (recipientFailed) failedCount += 1;
     await db.insert(emailActivities).values({
       organizationId: campaign.organizationId,
       contactId: recipient.contactId,
       direction: "outbound",
-      activityType: result.error ? "failed" : "sent",
+      activityType: recipientFailed ? "failed" : "sent",
       providerEmailId: resendId,
       fromEmail: resendFrom,
       toEmails: [recipient.emailNormalized],

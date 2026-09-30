@@ -94,7 +94,7 @@ export function registerWebsiteContactRoutes(app: FastifyInstance, env: AppEnv) 
       });
 
       try {
-        await sendEmail({
+        const sendResult = await sendEmail({
           apiKey: env.RESEND_API_KEY,
           from: env.PLATFORM_EMAIL_FROM,
           to: WEBSITE_CONTACT_NOTIFY_TO,
@@ -103,6 +103,10 @@ export function registerWebsiteContactRoutes(app: FastifyInstance, env: AppEnv) 
           html: content.html,
           text: content.text
         });
+        request.log.info(
+          { resendMessageId: sendResult.data.id, source: body.source },
+          "Website contact notification sent"
+        );
       } catch {
         return reply.code(503).send({
           error: {

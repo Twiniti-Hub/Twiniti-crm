@@ -53,24 +53,73 @@ export async function validateResendApiKey(apiKey: string, domain: string): Prom
   return { valid: true, domainId: match?.id, verified: match?.status === "verified" };
 }
 
-export async function sendEmail(input: SendEmailInput) {
+export type ResendSendResult = {
+  data?: { id?: string } | null;
+  error?: unknown;
+};
+
+export class ResendSendError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ResendSendError";
+  }
+}
+
+function redactSecretsInMessage(message: string): string {
+  return message.replace(/\bre_[A-Za-z0-9_-]+\b/g, "[redacted]");
+}
+
+function formatResendSendError(error: unknown): string {
+  if (typeof error === "string" && error.trim()) {
+    return redactSecretsInMessage(error.trim());
+  }
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    if (typeof record.message === "string" && record.message.trim()) {
+      return redactSecretsInMessage(record.message.trim());
+    }
+    if (typeof record.name === "string" && record.name.trim()) {
+      return redactSecretsInMessage(record.name.trim());
+    }
+  }
+  return "Resend rejected the send request";
+}
+
+/** Ensures the Resend SDK response represents a successful send (throws otherwise). */
+export function ensureResendSendSucceeded(result: ResendSendResult): { id: string } {
+  if (result.error) {
+    throw new ResendSendError(formatResendSendError(result.error));
+  }
+  const id = result.data?.id?.trim();
+  if (!id) {
+    throw new ResendSendError("Resend did not return a message id");
+  }
+  return { id };
+}
+
+export type SendEmailDeps = {
+  send?: (payload: Parameters<Resend["emails"]["send"]>[0], options?: Parameters<Resend["emails"]["send"]>[1]) => Promise<ResendSendResult>;
+};
+
+export async function sendEmail(input: SendEmailInput, deps?: SendEmailDeps) {
   const parsed = sendEmailInputSchema.parse(input);
-  const client = createResendClient(parsed.apiKey);
-  const result = await client.emails.send(
-    {
-      from: parsed.from,
-      to: parsed.to,
-      subject: parsed.subject,
-      html: parsed.html,
-      text: parsed.text,
-      bcc: parsed.bcc,
-      cc: parsed.cc,
-      replyTo: parsed.replyTo,
-      headers: parsed.headers
-    },
-    parsed.idempotencyKey ? { idempotencyKey: parsed.idempotencyKey } : undefined
-  );
-  return result;
+  const payload = {
+    from: parsed.from,
+    to: parsed.to,
+    subject: parsed.subject,
+    html: parsed.html,
+    text: parsed.text,
+    bcc: parsed.bcc,
+    cc: parsed.cc,
+    replyTo: parsed.replyTo,
+    headers: parsed.headers
+  };
+  const options = parsed.idempotencyKey ? { idempotencyKey: parsed.idempotencyKey } : undefined;
+  const result = deps?.send
+    ? await deps.send(payload, options)
+    : await createResendClient(parsed.apiKey).emails.send(payload, options);
+  const { id } = ensureResendSendSucceeded(result);
+  return { data: { id } };
 }
 
 export type ReceivedEmail = {
