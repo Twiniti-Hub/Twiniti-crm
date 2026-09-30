@@ -3,6 +3,34 @@ import type { LogOutboundEmail } from "@twiniti/contracts";
 import type { Db } from "./client.js";
 import { customerEvents } from "./schema.js";
 import { createContact, findContactByEmail, type ContactChangeContext } from "./repositories.js";
+import type { contacts } from "./schema.js";
+
+export type ContactRow = typeof contacts.$inferSelect;
+
+/** Find an org contact by email or create one (shared by MCP outbound log and BCC ingest). */
+export async function ensureContactByEmail(
+  db: Db,
+  organizationId: string,
+  email: string,
+  input?: {
+    firstName?: string | null;
+    lastName?: string | null;
+    change?: ContactChangeContext;
+  }
+): Promise<ContactRow> {
+  const trimmed = email.trim();
+  let contact = await findContactByEmail(db, organizationId, trimmed);
+  if (!contact) {
+    contact = await createContact(db, {
+      organizationId,
+      email: trimmed,
+      firstName: input?.firstName ?? null,
+      lastName: input?.lastName ?? null,
+      change: input?.change ?? { actorType: "agent", actorId: "system", source: "outbound-email.log" }
+    });
+  }
+  return contact;
+}
 
 /** Outbound email event types agents may ingest via POST /api/v1/events. */
 export const AGENT_INGESTIBLE_EMAIL_EVENT_TYPES = new Set([
@@ -55,14 +83,9 @@ export async function logOutboundEmail(
   change?: ContactChangeContext
 ): Promise<LogOutboundEmailResult> {
   const email = input.email.trim();
-  let contact = await findContactByEmail(db, organizationId, email);
-  if (!contact) {
-    contact = await createContact(db, {
-      organizationId,
-      email,
-      change: change ?? { actorType: "agent", actorId: "system", source: "outbound-email.log" }
-    });
-  }
+  const contact = await ensureContactByEmail(db, organizationId, email, {
+    change: change ?? { actorType: "agent", actorId: "system", source: "outbound-email.log" }
+  });
 
   const payload: Record<string, unknown> = {
     subject: input.subject ?? null,

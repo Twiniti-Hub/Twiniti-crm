@@ -106,9 +106,22 @@ A secret from a different Resend endpoint, or a rotated secret that was never re
 | --- | --- | --- |
 | No BCC address in Settings | No verified **default** Resend domain | Admin connects domain, verifies, sets default |
 | Resend dashboard shows 401 on webhook | Wrong URL or wrong/mismatched `whsec_…` | Copy URL from Settings; save the secret for **that** endpoint |
-| Webhook 200 but no timeline card | Worker job failed or contact not matched | Check worker jobs / `webhook_events`; confirm contact email matches To/From/Cc |
+| Webhook 200 but no timeline card | Worker job failed, or (before auto-create) contact not matched | Check worker jobs / `webhook_events`; net-new To/Cc recipients auto-create after fix; see replay below |
 | Timeline shows HubSpot import, not new mail | Looking at imported marketing summary | Send a new BCC; look for **Email** card with Open email |
 | Subject/body empty on old rows | Stored before parse/dedupe fixes | New receives after current Production tip carry content |
+
+## Replay a stored `email.received` webhook (operators)
+
+Use only when `webhook_events` still holds the Svix payload and Resend’s receiving API can still return the message for `data.email_id`. Do **not** run against Production without an explicit change ticket.
+
+1. Find the row (US example): filter `webhook_events` where `provider = 'resend'`, `event_type = 'email.received'`, and `created_at` near the send time; note `id` and `payload->'data'->>'email_id'`.
+2. Confirm whether an `email_activities` row exists with that `provider_email_id` and `contact_id IS NULL` (legacy unmatched ingest).
+3. Re-run ingest idempotently:
+   - `UPDATE webhook_events SET processed_at = NULL WHERE id = '<webhook_event_id>';`
+   - Enqueue `webhook.resend.process` with `{ "webhookEventId": "<webhook_event_id>", "organizationId": "<org_id>", "receivingDomain": "<crm.twiniti.ai or org domain>" }` via the same path as the API (internal `enqueueJob` helper or an ops script in the deployment environment).
+4. The worker re-fetches content from Resend, **adopts** an existing unmatched activity to the new contact when possible, or inserts once per contact using dedupe keys. Duplicate timeline rows are not expected.
+
+For the 2026-09-29 “Introductions” message to `vtzvetkov@panynj.gov`, replay is viable if step 1 still returns the event and Resend still serves that `email_id`; no manual MCP upsert is required when replay succeeds.
 
 ## Related docs
 
