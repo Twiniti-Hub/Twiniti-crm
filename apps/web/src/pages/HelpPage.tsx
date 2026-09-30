@@ -51,13 +51,13 @@ const topics = [
   },
   {
     title: "Deliverability and tracking",
-    description: "Review email health and use your personal BCC address to record email activity.",
+    description: "Review email health and set up Resend so personal BCC addresses log on contact timelines.",
     to: "/deliverability",
     action: "Open Deliverability"
   },
   {
     title: "Settings and team access",
-    description: "Invite members, manage roles, and find your personal email tracking address.",
+    description: "Invite members, manage Resend domains and webhooks, and copy your personal BCC address.",
     to: "/settings",
     action: "Open Settings"
   },
@@ -88,6 +88,46 @@ export function HelpPage() {
         </p>
       </section>
 
+      <section className="help-note panel" aria-labelledby="help-email-heading">
+        <p className="eyebrow">Email with Resend</p>
+        <h2 id="help-email-heading">BCC tracking and campaign delivery</h2>
+        <p className="muted">
+          Loop sends campaigns and logs personal BCC email through your organization&apos;s
+          Resend domain. Company admins complete setup once; every member then copies their
+          own BCC address from Settings.
+        </p>
+        <ol className="help-steps">
+          <li>
+            <strong>Verify a domain in Resend</strong> and enable <strong>Receiving</strong>{" "}
+            (publish the MX records Resend shows).
+          </li>
+          <li>
+            In <Link to="/settings">Settings → Email delivery</Link>, add the domain, API key,
+            and From address, then set it as the <strong>default</strong>.
+          </li>
+          <li>
+            Copy the <strong>exact</strong> webhook URL from the domain table into Resend
+            (include <code>?domain=…</code>). Subscribe to <code>email.received</code>.
+            Do not use the Loop homepage URL.
+          </li>
+          <li>
+            Paste that webhook&apos;s signing secret (<code>whsec_…</code>) back into
+            Settings for the same domain. A wrong secret returns HTTP 401 and BCC mail
+            never logs.
+          </li>
+          <li>
+            Copy your personal BCC address under Settings → Email tracking. BCC it on a
+            real customer email, then open the contact — look for an <strong>Email</strong>{" "}
+            card with <strong>Open email</strong>, not an Imported marketing summary.
+          </li>
+        </ol>
+        <p className="muted">
+          Review health under <Link to="/deliverability">Deliverability</Link>. Imported
+          HubSpot marketing cards are historical stats only; they are not openable BCC
+          messages.
+        </p>
+      </section>
+
       <section className="help-grid" aria-label="Help topics">
         {topics.map((topic) => (
           <article className="help-card" key={topic.title}>
@@ -113,4 +153,3 @@ export function HelpPage() {
     </>
   );
 }
-

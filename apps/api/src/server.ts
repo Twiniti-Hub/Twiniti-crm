@@ -19,6 +19,7 @@ import { registerRunCredentialRoutes } from "./routes/run-credentials.js";
 import { registerMarketingRoutes } from "./routes/marketing.js";
 import { registerOrganizationRoutes } from "./routes/organizations.js";
 import { registerResendWebhookRoutes } from "./routes/resend-webhook.js";
+import { resolvePublicFormCorsOptions } from "./public-form-cors.js";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 loadDotenv({ path: path.join(rootDir, ".env") });
@@ -36,9 +37,9 @@ const db = scopedDb(getDb(databaseUrl));
 const pool = getPool(databaseUrl);
 
 await app.register(cors, {
-  origin: env.WEB_ORIGIN,
-  credentials: true,
-  allowedHeaders: ["Content-Type", "Authorization", "X-Twiniti-Workspace-Id"]
+  delegator: (request, callback) => {
+    callback(null, resolvePublicFormCorsOptions(request, env));
+  }
 });
 
 await app.register(swagger, {

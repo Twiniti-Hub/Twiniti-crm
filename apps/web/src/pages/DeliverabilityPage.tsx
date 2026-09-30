@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { formatCount } from "@twiniti/ui";
 import { api } from "../lib/api";
 
@@ -51,6 +52,21 @@ export function DeliverabilityPage() {
         </article>
       </section>
       {data?.fromEmail ? <p className="muted">From: {data.fromEmail}</p> : null}
+      <section className="panel" style={{ marginTop: 15 }}>
+        <p className="eyebrow">Setup</p>
+        <h3>Resend and BCC tracking</h3>
+        <p className="muted">
+          Campaign sending and personal BCC timeline logging use your organization&apos;s
+          default Resend domain. Company admins connect the domain, paste the webhook URL
+          from Settings into Resend (<code>email.received</code>), and save the matching{" "}
+          <code>whsec_…</code> signing secret. Then each member copies their BCC address
+          from Settings and BCCs it on customer email.
+        </p>
+        <p className="muted">
+          Step-by-step: <Link to="/help">Help → Email with Resend</Link> ·{" "}
+          <Link to="/settings">Settings → Email delivery</Link>.
+        </p>
+      </section>
     </>
   );
 }

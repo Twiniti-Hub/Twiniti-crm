@@ -40,11 +40,16 @@ landing hostname is a marketing origin only; do not use
 - [Billing](billing.md)
 - [Super Admin](super-admin.md)
 
+Operator guide for connecting Resend (domains, MX receiving, webhooks, BCC):
+[Resend email setup](../operations/RESEND_EMAIL_SETUP.md).
+
 ## Product notes
 
 - Data belongs to the currently selected company workspace.
 - Contact imports run in the background; large files may remain in progress after you leave the page.
 - Campaign sending is approval-gated. Preview and request approval before sending.
+- BCC email tracking needs a verified default Resend domain with receiving (MX)
+  and an `email.received` webhook; see Deliverability help and Settings.
 - A company admin can invite members and change their roles.
 - The sidebar groups work into Workspace, Growth, Agent workforce, and Workspace
   administration. Super Admins can select the workspace context from the
