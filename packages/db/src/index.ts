@@ -9,3 +9,4 @@ export * from "./jobs.js";
 export * from "./hubspot.js";
 export * from "./email-tracking.js";
 export * from "./outbound-email.js";
+export * from "./received-email.js";
