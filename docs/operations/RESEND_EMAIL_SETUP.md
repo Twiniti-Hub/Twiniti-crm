@@ -10,7 +10,9 @@ Operator companion to [organization Resend domains](../architecture/organization
 | --- | --- | --- |
 | Campaign / transactional send | Org Resend API key + verified **default** domain | Domain verified in Resend; credential saved in Settings |
 | Personal BCC timeline logging | Resend **Receiving** (MX) + `email.received` webhook → regional API → worker | Same default domain; webhook URL + signing secret; MX for receiving |
-| Platform ops mail (signup alerts, etc.) | Shared `RESEND_API_KEY` / `PLATFORM_EMAIL_FROM` | Render common env — **not** org Settings |
+| Platform ops mail (signup alerts, website contact, etc.) | Shared `RESEND_API_KEY` / `PLATFORM_EMAIL_FROM` | Render common env — **not** org Settings |
+
+**Platform From lock:** `PLATFORM_EMAIL_FROM` must use a **verified** Resend sending address on **`crm.twiniti.ai`** (for example `Twiniti Loop <noreply@crm.twiniti.ai>`). Do not use `@twiniti.ai` apex From addresses until that domain is verified in Resend. Recipients such as `SUPPORT_EMAIL` / `contactus@twiniti.ai` may remain on `@twiniti.ai`.
 
 There is no global Resend fallback for tenant mail. Each organization stores its own encrypted API key and webhook secret per domain.
 
