@@ -9,6 +9,14 @@
 1. Personal workspace data must **not** be visible to the company organization.
 2. Belonging to a company organization must **not** grant access to that person’s personal workspace.
 3. This is **personal CRM**, not a second company tenant that shares the org’s records.
+4. **Cross-workspace data movement (asymmetric):**
+   - **Personal cannot import from organizations** (no pull/copy from any company workspace into personal).
+   - **Organizations may import from personal** only with **explicit permission from the personal workspace owner** (the human who owns that personal org).
+5. **Existing users:** remain on their **company organization only**; **do not** auto-provision a personal workspace at rollout.
+6. **Billing:** personal workspace is a **separate Stripe charge** from company organization subscription.
+7. **Licensing:** keep the **current organization license product** for company workspaces; add a **distinct license product/check for personal** workspaces (two products, not one shared entitlement).
+8. **Organization export:** only **organization admins** may export data **from** a company workspace.
+9. **RLS:** PostgreSQL organization RLS must **always** apply on tenant data paths; cross-workspace flows must not bypass RLS with broad service context or cross-org queries.
 
 ---
 
@@ -82,7 +90,7 @@ There is **no first-class `tasks` table** in Loop CRM schema yet. “Tasks” ap
 
 **Root cause:** The product conflates “workspace” with “company organization,” and **`crm_users.hexclave_subject` uniqueness** enforces one workspace per human identity.
 
-**Non-goals for the smallest viable design:** Cross-workspace search, merged contact graphs, copying org contacts into personal, or org admins “managing” personal workspaces.
+**Non-goals for the smallest viable design:** Cross-workspace search, merged contact graphs, personal→org import without owner consent, or org admins “managing” personal workspaces without membership.
 
 ---
 
@@ -140,17 +148,17 @@ Company org admins who are **not** members of the personal org never pass `twini
 - Do **not** expose personal org in company Settings → Members.
 - Personal org member list API should only list the owner (**guess:** cap at one active human member unless product later allows sharing personal workspace).
 
-### 5. Billing and licensing (decisions required)
+### 5. Billing and licensing (locked)
 
-Current code ties Stripe + License API to **organization** billing (`organization_billing`, `checkOrganizationLicense` on every request for non–Super Admin).
+Current code ties Stripe + License API to **organization** billing (`organization_billing`, `checkOrganizationLicense` on every request for non–Super Admin). Personal workspaces use the same **per-organization** billing row shape but **different commercial products**.
 
-| Area | Company workspace | Personal workspace (proposal) |
+| Area | Company workspace | Personal workspace |
 | --- | --- | --- |
-| Stripe | Org checkout required | **Guess:** separate product decision—free tier, individual Stripe price, or bundled with Twiniti account |
-| License API | Required when configured | **Guess:** follow SignalDesk precedent (TWI-635): skip or lightweight check for personal kind only |
-| Feature gating | Billing status blocks CRM routes | Personal may need `billingStatus: active` bypass or dedicated status |
+| Stripe | Existing org subscription / checkout (`organization_billing`) | **Separate Stripe price/subscription** for the personal org (second charge; not bundled into company subscription) |
+| License API | Current org product code / check (unchanged contract) | **Separate personal product code** and `checkUserLicense` (or equivalent) keyed to the personal `organization_id` |
+| Feature gating | Billing + license gate CRM routes today | Same gating pattern: personal CRM routes require **personal** Stripe + **personal** license allow |
 
-Document the chosen policy in implementation; the plan only flags this as a **blocking product decision**, not solved here.
+Implementation detail (TBD in build): map `workspace_kind` to Stripe price id and `LICENSE_API_PRODUCT_CODE` (or a second env var for personal). Both kinds still use `organization_billing.organization_id` as the billing anchor.
 
 ### 6. Product surface area by workspace kind
 
@@ -158,7 +166,7 @@ Document the chosen policy in implementation; the plan only flags this as a **bl
 
 | Include (org-scoped, private) | Exclude or hide initially |
 | --- | --- |
-| Contacts, companies, import | Campaigns, segments (audience blast) |
+| Contacts, companies, import (local CSV / manual only; **no import from company org**) | Campaigns, segments (audience blast) |
 | Email activities / BCC tracking (personal addresses) | Org-wide deliverability admin |
 | Priority queue / overview | Multi-user invites (unless explicitly designed) |
 | Help | Company billing admin for org they don’t own |
@@ -168,9 +176,9 @@ Document the chosen policy in implementation; the plan only flags this as a **bl
 
 UI: workspace switcher in sidebar (`Shell.tsx`) showing **kind** + name; reload `/api/v1/me` and regional routing after switch (regional API already follows org region—user may need regional redirect when switching between US/EU/UK workspaces; **guess:** same as Super Admin cross-region behavior today).
 
-### 7. What must never be shared
+### 7. What must never be shared (default) vs controlled cross-workspace flows
 
-These must remain strictly partitioned by `organization_id` (no cross-org joins, exports, or “copy from work” without explicit user action in a later feature):
+**Default:** All CRM data stays partitioned by `organization_id`. Routine API, MCP, and UI paths must not join or leak across orgs. RLS remains **on and forced** for every table with `organization_id`; reads/writes use `withOrganizationRls` / tenant transactions as today (`auth-hook.ts`).
 
 | Domain | Tables / surfaces |
 | --- | --- |
@@ -181,11 +189,32 @@ These must remain strictly partitioned by `organization_id` (no cross-org joins,
 | **Marketing** | Campaigns, lists, segments, workflows, forms |
 | **Audit** | `audit_events` |
 
+**Only allowed cross-workspace movement (MVP personal workspace service):**
+
+| Direction | Allowed? | Rule |
+| --- | --- | --- |
+| Organization → personal (import) | **No** | Block at API and UI; no “copy from company” in personal import flows. |
+| Personal → organization (import) | **Yes, conditional** | Company workspace may import selected records **from the owner’s personal org** only after the **personal owner** grants permission (scoped, revocable consent; audit every use). Import runs as **copy into target org** (new rows, new `organization_id`), not shared pointers. |
+| Organization export | **Admin only** | Export endpoints and bulk download (CSV, etc.) from a **company** workspace require **admin** role (`requireUserRole(actor, "admin")`). Members cannot export org data. |
+| Personal export | TBD in UX | **Guess:** personal owner may export their personal data; does not grant org admins access to personal. |
+
+**Implementation sketch for personal → org import (RLS-safe):**
+
+1. Actor is in **company** workspace context (validated membership + RLS for company org).
+2. Server verifies the linked personal org belongs to the same Hexclave subject and `workspace_kind = personal`.
+3. Server requires a stored **consent grant** (token or record) created by the personal owner while in **personal** context (TTL and scope: e.g. contacts/companies only).
+4. Copy job reads from personal org inside a transaction with personal RLS context, writes to company org inside company RLS context—**two transactions**, no single query spanning orgs without service bypass.
+5. Audit: `personal_import.consent_granted`, `personal_import.executed` with source/target org ids.
+
 **Explicit anti-patterns:**
 
 - Reusing company `organization_id` with a “visibility flag” on records (org members could still access via admin tools/API).
 - Putting personal records in the **same** org as the company with role-based hiding only (RLS does not hide rows from co-members today).
 - Letting company admins query “all orgs where user X is a member” from the **company** session (membership enumeration API must be scoped to **current org only**; personal org ids never appear in company member UI).
+- Using `withServiceRls` or `service_context` to bulk-read personal data for org users without owner consent.
+- Personal workspace CSV/import UI that accepts a “source organization id” or reuses org import pipelines against company data.
+
+These cross-workspace rules apply to the **MVP personal workspace service** (first shippable personal CRM slice: provisioning, switcher, personal billing/license, core contacts/companies/import/export boundaries)—not a later optional add-on.
 
 ---
 
@@ -195,7 +224,7 @@ These must remain strictly partitioned by `organization_id` (no cross-org joins,
 
 | Cohort | Proposed handling |
 | --- | --- |
-| Active `crm_users` in company org | No automatic personal org. Offer **Create personal workspace** in switcher (opt-in). |
+| Active `crm_users` in company org | **No personal org created at migration or launch.** Users stay assigned to their existing company organization only. Personal workspace is **opt-in** via explicit “Create personal workspace” (with separate Stripe + personal license). |
 | `needsSetup` users | Onboarding choice: personal vs company (replace single company funnel). |
 | Super Admins | Keep existing global directory; personal orgs appear in Super Admin lists (**guess:** filter badge `personal` for support clarity). |
 
@@ -226,6 +255,11 @@ These must remain strictly partitioned by `organization_id` (no cross-org joins,
    - Attempt to set `X-Twiniti-Workspace-Id` to an org id **without** membership → 403 / empty RLS.
 2. **Membership tests:** accept company invite after personal workspace exists (and vice versa) succeeds; two rows share same `hexclave_subject`, different `organization_id`.
 3. **Regression:** existing single-org users behave as today when no second membership exists.
+4. **Cross-workspace import/export:**
+   - Personal session: request to import from a company `organization_id` → **403**.
+   - Company session (non-admin): org export → **403**.
+   - Company session (admin): org export → **200**; data limited to company org via RLS.
+   - Company session: personal→org import without owner consent → **403**; with valid consent → copy succeeds; personal rows unchanged; RLS never disabled globally.
 
 ### Manual / E2E (post-implementation)
 
@@ -234,6 +268,8 @@ These must remain strictly partitioned by `organization_id` (no cross-org joins,
 3. Switcher: personal shows Cp only; company shows Cc only.
 4. User B (company admin for User A’s company): member list **does not** show personal workspace; API cannot fetch Cp.
 5. Optional: MCP/agent credentials scoped to company org cannot read personal org.
+6. Personal owner grants consent; company admin runs import from personal → records appear in company only; revoking consent blocks further imports.
+7. Personal user cannot import from company via UI or API.
 
 ### Operational
 
@@ -247,9 +283,10 @@ These must remain strictly partitioned by `organization_id` (no cross-org joins,
 1. **Schema + auth:** `workspace_kind`, multi-membership, validated workspace context for all users, `/api/v1/me` returns membership list + active workspace.
 2. **Provisioning UX:** onboarding fork + “Create personal workspace.”
 3. **Switcher UI + regional navigation.**
-4. **Billing/license policy** for personal kind.
-5. **Feature gating** (hide Growth section in personal kind).
-6. **Docs/help** update (`docs/help/getting-started.md`, in-app Help).
+4. **Billing/license:** separate Stripe product + personal License API product on personal org.
+5. **Cross-workspace:** consent model + org-admin-only export + block personal←org import (MVP scope).
+6. **Feature gating** (hide Growth section in personal kind).
+7. **Docs/help** update (`docs/help/getting-started.md`, in-app Help).
 
 Each phase should ship behind explicit George approval per `docs/RELEASE_POLICY.md`.
 
@@ -257,11 +294,12 @@ Each phase should ship behind explicit George approval per `docs/RELEASE_POLICY.
 
 ## Open questions (need George / product)
 
-1. Personal workspace **pricing** and License API behavior.
-2. Maximum members on a personal workspace (1 vs family/small team).
-3. Whether personal workspace can exist **without** any company workspace (personal-only users).
-4. Cross-region switcher UX when personal (EU) and company (US) differ—redirect rules.
-5. Marketing features in personal v1: fully hidden vs read-only templates.
+1. Maximum members on a personal workspace (1 vs family/small team).
+2. Whether personal workspace can exist **without** any company workspace (personal-only users).
+3. Cross-region switcher UX when personal (EU) and company (US) differ—redirect rules.
+4. Marketing features in personal v1: fully hidden vs read-only templates.
+5. Personal→org consent UX (one-time vs standing grant; which object types; expiry).
+6. Stripe price ids and License API **personal product code** values (commercial naming only—no dates).
 
 ---
 
@@ -281,9 +319,9 @@ Each phase should ship behind explicit George approval per `docs/RELEASE_POLICY.
 ## Explicit guesses in this plan
 
 - Default workspace preference storage mechanism (`user_workspace_preferences` vs column).
-- Personal workspace Stripe/License treatment (SignalDesk-like skip for personal).
 - Single-human-member cap on personal orgs.
 - Initial feature surface (Growth section hidden in personal).
 - Super Admin listing/filtering of personal orgs.
+- Personal workspace export permissions for the owner (beyond org-admin-only company export).
 
 These guesses do not commit the implementation; they narrow the design space for the first engineering pass.
