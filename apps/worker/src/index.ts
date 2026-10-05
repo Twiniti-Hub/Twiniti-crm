@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { loadEnv, regionalDatabaseUrls } from "@twiniti/config";
+import { resolveWorkerPollingConfig } from "./pollingConfig.js";
 import type { RegionCode } from "@twiniti/contracts";
 import {
   createLicenseApiClient,
@@ -75,10 +76,29 @@ const env = loadEnv({
 });
 
 const regionalDatabaseEntries = Object.entries(regionalDatabaseUrls(env)) as Array<[RegionCode, string]>;
-const regionalDatabases = regionalDatabaseEntries.map(([region, url]) => ({ region, db: scopedDb(getDb(url)) }));
-let activeRegion: RegionCode = regionalDatabases[0]?.region ?? "us";
-let db = regionalDatabases[0]?.db ?? getDb();
+type RegionalDatabase = { region: RegionCode; db: ReturnType<typeof scopedDb> };
+let regionalDatabases: RegionalDatabase[] | null = null;
+let activeRegion: RegionCode = regionalDatabaseEntries[0]?.[0] ?? "us";
+let db!: ReturnType<typeof scopedDb>;
+
+function getRegionalDatabases(): RegionalDatabase[] {
+  if (!regionalDatabases) {
+    regionalDatabases = regionalDatabaseEntries.map(([region, url]) => ({
+      region,
+      db: scopedDb(getDb(url))
+    }));
+    activeRegion = regionalDatabases[0]?.region ?? "us";
+    db = regionalDatabases[0]?.db ?? scopedDb(getDb());
+  }
+  return regionalDatabases;
+}
+
 const licenseApi = createLicenseApiClient(env);
+const workerPolling = resolveWorkerPollingConfig({
+  deploymentEnv: env.DEPLOYMENT_ENV,
+  workerPollingEnabled: process.env.WORKER_POLLING_ENABLED,
+  workerPollIntervalMs: process.env.WORKER_POLL_INTERVAL_MS
+});
 const CHECKPOINT_EVERY = 25;
 
 type ContactImportStats = {
@@ -1144,7 +1164,7 @@ async function tick() {
   if (ticking) return;
   ticking = true;
   try {
-    for (const target of regionalDatabases) {
+    for (const target of getRegionalDatabases()) {
       activeRegion = target.region;
       db = target.db;
       const claimed = await withServiceRls(db, null, (serviceDb) => claimJobs(serviceDb, 5));
@@ -1168,8 +1188,15 @@ async function tick() {
 }
 
 let ticking = false;
-console.log(`[worker] started for regions: ${regionalDatabases.map(({ region }) => region).join(", ")}`);
-setInterval(() => {
+const configuredRegions = regionalDatabaseEntries.map(([region]) => region).join(", ");
+console.log(
+  `[worker] DEPLOYMENT_ENV=${env.DEPLOYMENT_ENV} regions=${configuredRegions} polling=${workerPolling.enabled ? `every ${workerPolling.intervalMs}ms` : "disabled"}`
+);
+if (workerPolling.enabled) {
+  setInterval(() => {
+    void tick();
+  }, workerPolling.intervalMs);
   void tick();
-}, 2000);
-void tick();
+} else {
+  console.log("[worker] WORKER_POLLING_ENABLED=false; no database polling until re-enabled and redeployed");
+}
