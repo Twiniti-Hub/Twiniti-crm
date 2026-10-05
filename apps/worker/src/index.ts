@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { loadEnv, regionalDatabaseUrls } from "@twiniti/config";
-import { resolveWorkerPollingConfig } from "./pollingConfig.js";
+import { resolveWorkerPollingConfig, resolveWorkerRuntimeEnvironment } from "./pollingConfig.js";
 import type { RegionCode } from "@twiniti/contracts";
 import {
   createLicenseApiClient,
@@ -94,8 +94,12 @@ function getRegionalDatabases(): RegionalDatabase[] {
 }
 
 const licenseApi = createLicenseApiClient(env);
+const workerRuntimeEnv = resolveWorkerRuntimeEnvironment({
+  appEnv: process.env.APP_ENV,
+  deploymentEnv: process.env.DEPLOYMENT_ENV ?? env.DEPLOYMENT_ENV
+});
 const workerPolling = resolveWorkerPollingConfig({
-  deploymentEnv: env.DEPLOYMENT_ENV,
+  deploymentEnv: workerRuntimeEnv,
   workerPollingEnabled: process.env.WORKER_POLLING_ENABLED,
   workerPollIntervalMs: process.env.WORKER_POLL_INTERVAL_MS
 });
@@ -1190,7 +1194,7 @@ async function tick() {
 let ticking = false;
 const configuredRegions = regionalDatabaseEntries.map(([region]) => region).join(", ");
 console.log(
-  `[worker] DEPLOYMENT_ENV=${env.DEPLOYMENT_ENV} regions=${configuredRegions} polling=${workerPolling.enabled ? `every ${workerPolling.intervalMs}ms` : "disabled"}`
+  `[worker] APP_ENV=${process.env.APP_ENV ?? "(unset)"} runtime=${workerRuntimeEnv} regions=${configuredRegions} polling=${workerPolling.enabled ? `every ${workerPolling.intervalMs}ms` : "disabled"}`
 );
 if (workerPolling.enabled) {
   setInterval(() => {

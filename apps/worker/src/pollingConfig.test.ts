@@ -3,8 +3,26 @@ import { describe, it } from "node:test";
 import {
   DEVELOPMENT_WORKER_POLL_INTERVAL_MS,
   PRODUCTION_WORKER_POLL_INTERVAL_MS,
-  resolveWorkerPollingConfig
+  resolveWorkerPollingConfig,
+  resolveWorkerRuntimeEnvironment
 } from "./pollingConfig.js";
+
+describe("resolveWorkerRuntimeEnvironment", () => {
+  it("prefers APP_ENV over DEPLOYMENT_ENV", () => {
+    assert.equal(
+      resolveWorkerRuntimeEnvironment({ appEnv: "production", deploymentEnv: "development" }),
+      "production"
+    );
+  });
+
+  it("falls back to DEPLOYMENT_ENV when APP_ENV is unset", () => {
+    assert.equal(resolveWorkerRuntimeEnvironment({ deploymentEnv: "development" }), "development");
+  });
+
+  it("defaults to production when both are unset", () => {
+    assert.equal(resolveWorkerRuntimeEnvironment({}), "production");
+  });
+});
 
 describe("resolveWorkerPollingConfig", () => {
   it("keeps production polling enabled at 2s", () => {

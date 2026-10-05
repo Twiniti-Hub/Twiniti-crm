@@ -11,6 +11,26 @@ export type WorkerPollingConfig = {
   intervalMs: number;
 };
 
+function parseRuntimeEnvironment(value: string | undefined): DeploymentEnvironment | undefined {
+  if (value === undefined || value.trim() === "") return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "development") return "development";
+  if (normalized === "production") return "production";
+  return undefined;
+}
+
+/** Worker polling uses APP_ENV; falls back to DEPLOYMENT_ENV. Unset → production. */
+export function resolveWorkerRuntimeEnvironment(input: {
+  appEnv?: string;
+  deploymentEnv?: string;
+}): DeploymentEnvironment {
+  return (
+    parseRuntimeEnvironment(input.appEnv)
+    ?? parseRuntimeEnvironment(input.deploymentEnv)
+    ?? "production"
+  );
+}
+
 function parseBooleanFlag(value: string | undefined): boolean | undefined {
   if (value === undefined || value.trim() === "") return undefined;
   const normalized = value.trim().toLowerCase();
