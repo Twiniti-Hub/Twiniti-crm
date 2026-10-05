@@ -265,6 +265,8 @@ services:
         value: production
       - key: DEPLOYMENT_ENV
         value: development
+      - key: APP_ENV
+        value: development
       - key: DATABASE_URL_Dev_US
         sync: false
       - key: DATABASE_URL_Dev_EU
