@@ -4,9 +4,11 @@ import { Link, useNavigate } from "react-router";
 import { api } from "../lib/api";
 import { Brand } from "../components/Brand";
 import { CountrySelect } from "../components/CountrySelect";
+import { PAGE_META, usePageMeta } from "../lib/pageMeta";
 
 export function SignUpPage() {
   const app = useHexclaveApp();
+  usePageMeta(PAGE_META.signUp.title, PAGE_META.signUp.description);
   const navigate = useNavigate();
   const [companyName, setCompanyName] = useState("");
   const [countryCode, setCountryCode] = useState("");
