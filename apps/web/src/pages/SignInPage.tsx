@@ -3,9 +3,11 @@ import { FormEvent, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { Brand } from "../components/Brand";
 import { navigateAfterCredentialSignIn, safeAfterSignInPath } from "../lib/postAuthNavigation";
+import { PAGE_META, usePageMeta } from "../lib/pageMeta";
 
 export function SignInPage() {
   const app = useHexclaveApp();
+  usePageMeta(PAGE_META.signIn.title, PAGE_META.signIn.description);
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
