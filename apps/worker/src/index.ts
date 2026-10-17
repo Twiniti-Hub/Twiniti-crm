@@ -3,7 +3,11 @@ import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { loadEnv, regionalDatabaseUrls } from "@twiniti/config";
-import { resolveWorkerPollingConfig, resolveWorkerRuntimeEnvironment } from "./pollingConfig.js";
+import {
+  resolvePollDelayMs,
+  resolveWorkerPollingConfig,
+  resolveWorkerRuntimeEnvironment
+} from "./pollingConfig.js";
 import type { RegionCode } from "@twiniti/contracts";
 import {
   createLicenseApiClient,
@@ -32,6 +36,7 @@ import {
   findContactByExternalRecordId,
   resolveContactsForReceivedEmail,
   getDb,
+  getPool,
   withServiceRls,
   scopedDb,
   HUBSPOT_CORE_CONTACT_FIELDS,
@@ -83,10 +88,16 @@ let db!: ReturnType<typeof scopedDb>;
 
 function getRegionalDatabases(): RegionalDatabase[] {
   if (!regionalDatabases) {
-    regionalDatabases = regionalDatabaseEntries.map(([region, url]) => ({
-      region,
-      db: scopedDb(getDb(url))
-    }));
+    regionalDatabases = regionalDatabaseEntries.map(([region, url]) => {
+      const pool = getPool(url);
+      pool.on("error", (error: Error) => {
+        console.error(`[worker] database pool error (${region}):`, error);
+      });
+      return {
+        region,
+        db: scopedDb(getDb(url))
+      };
+    });
     activeRegion = regionalDatabases[0]?.region ?? "us";
     db = regionalDatabases[0]?.db ?? scopedDb(getDb());
   }
@@ -100,6 +111,7 @@ const workerRuntimeEnv = resolveWorkerRuntimeEnvironment({
 });
 const workerPolling = resolveWorkerPollingConfig({
   deploymentEnv: workerRuntimeEnv,
+  jobsPollEnabled: process.env.JOBS_POLL_ENABLED,
   workerPollingEnabled: process.env.WORKER_POLLING_ENABLED,
   workerPollIntervalMs: process.env.WORKER_POLL_INTERVAL_MS
 });
@@ -1164,14 +1176,16 @@ async function handleJob(kind: string, payload: Record<string, unknown>, organiz
   }
 }
 
-async function tick() {
-  if (ticking) return;
+async function tick(): Promise<boolean> {
+  if (ticking) return false;
   ticking = true;
+  let hadWork = false;
   try {
     for (const target of getRegionalDatabases()) {
       activeRegion = target.region;
       db = target.db;
       const claimed = await withServiceRls(db, null, (serviceDb) => claimJobs(serviceDb, 5));
+      if (claimed.length > 0) hadWork = true;
       for (const job of claimed) {
         try {
           await withServiceRls(db, job.organizationId, async (tenantDb) => {
@@ -1186,21 +1200,32 @@ async function tick() {
         }
       }
     }
+    return hadWork;
   } finally {
     ticking = false;
   }
 }
 
 let ticking = false;
+async function runPollCycle() {
+  let hadWork = false;
+  try {
+    hadWork = await tick();
+  } catch (error) {
+    console.error("[worker] poll cycle failed:", error);
+  }
+  const delayMs = resolvePollDelayMs({ hadWork, intervalMs: workerPolling.intervalMs });
+  setTimeout(() => {
+    void runPollCycle();
+  }, delayMs);
+}
+
 const configuredRegions = regionalDatabaseEntries.map(([region]) => region).join(", ");
 console.log(
-  `[worker] APP_ENV=${process.env.APP_ENV ?? "(unset)"} runtime=${workerRuntimeEnv} regions=${configuredRegions} polling=${workerPolling.enabled ? `every ${workerPolling.intervalMs}ms` : "disabled"}`
+  `[worker] APP_ENV=${process.env.APP_ENV ?? "(unset)"} runtime=${workerRuntimeEnv} regions=${configuredRegions} polling=${workerPolling.enabled ? `busy ${workerPolling.intervalMs}ms, idle >= 60s` : "disabled"}`
 );
 if (workerPolling.enabled) {
-  setInterval(() => {
-    void tick();
-  }, workerPolling.intervalMs);
-  void tick();
+  void runPollCycle();
 } else {
-  console.log("[worker] WORKER_POLLING_ENABLED=false; no database polling until re-enabled and redeployed");
+  console.log("[worker] JOBS_POLL_ENABLED/WORKER_POLLING_ENABLED=false; no database polling until re-enabled and redeployed");
 }
