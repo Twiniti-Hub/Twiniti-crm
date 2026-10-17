@@ -1,10 +1,13 @@
 import type { DeploymentEnvironment } from "@twiniti/config";
 
-/** Production job-claim loop interval (unchanged). */
+/** Production job-claim loop interval when the queue had work last cycle. */
 export const PRODUCTION_WORKER_POLL_INTERVAL_MS = 2_000;
 
-/** Default Development interval: at most once every two hours. */
+/** Default Development busy interval when polling is explicitly enabled. */
 export const DEVELOPMENT_WORKER_POLL_INTERVAL_MS = 7_200_000;
+
+/** Minimum delay between claim attempts when every region returned an empty queue. */
+export const EMPTY_QUEUE_POLL_BACKOFF_MS = 60_000;
 
 export type WorkerPollingConfig = {
   enabled: boolean;
@@ -48,9 +51,13 @@ function parsePositiveInt(value: string | undefined): number | undefined {
 
 export function resolveWorkerPollingConfig(input: {
   deploymentEnv: DeploymentEnvironment;
+  jobsPollEnabled?: string;
   workerPollingEnabled?: string;
   workerPollIntervalMs?: string;
 }): WorkerPollingConfig {
+  const pollingEnabled =
+    parseBooleanFlag(input.jobsPollEnabled) ?? parseBooleanFlag(input.workerPollingEnabled);
+
   if (input.deploymentEnv === "production") {
     return {
       enabled: true,
@@ -58,11 +65,15 @@ export function resolveWorkerPollingConfig(input: {
     };
   }
 
-  const enabled = parseBooleanFlag(input.workerPollingEnabled) ?? true;
   const overrideInterval = parsePositiveInt(input.workerPollIntervalMs);
 
   return {
-    enabled,
+    enabled: pollingEnabled ?? false,
     intervalMs: overrideInterval ?? DEVELOPMENT_WORKER_POLL_INTERVAL_MS
   };
+}
+
+export function resolvePollDelayMs(input: { hadWork: boolean; intervalMs: number }): number {
+  if (input.hadWork) return input.intervalMs;
+  return Math.max(EMPTY_QUEUE_POLL_BACKOFF_MS, input.intervalMs);
 }
