@@ -40,3 +40,10 @@ test("public form routes add marketing origins without dropping CRM origin", () 
   }
   assert.equal(allowed.length, 1 + PUBLIC_FORM_MARKETING_ORIGINS.length);
 });
+
+test("CTO Advisory marketing origins are allowed on website-contact; unknown origins are not listed", () => {
+  const allowed = allowedCorsOriginsForPath("/api/v1/public/website-contact", env);
+  assert.ok(allowed.includes("https://cto.twiniti.ai"));
+  assert.ok(allowed.includes("https://twiniti-cto-advisory-dev.onrender.com"));
+  assert.equal(allowed.includes("https://not-a-marketing-site.example"), false);
+});
