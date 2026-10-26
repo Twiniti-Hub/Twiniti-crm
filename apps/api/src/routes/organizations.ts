@@ -51,6 +51,7 @@ import { createOrganizationCheckoutSession } from "./billing.js";
 import { enqueueLicenseProvisioning } from "../license-jobs.js";
 import { createLicenseApiClient } from "@twiniti/license-api";
 import { assertVerifiedPrimaryEmail } from "@twiniti/auth";
+import { createAndSendOrganizationAdminInvite } from "../organization-admin-invite.js";
 
 async function refreshSuperAdminLicenseStatuses(
   db: Db,
@@ -90,6 +91,27 @@ async function refreshSuperAdminLicenseStatuses(
       log.warn({ error, organizationId: row.id }, "SuperAdmin license status refresh failed");
     }
   }));
+}
+
+function stripSubjectUnsafeChars(value: string) {
+  return value.replace(/[<>&"]/g, "");
+}
+
+export function buildInviteEmailContent(input: {
+  organizationName: string;
+  role: string;
+  inviteUrl: string;
+}) {
+  const organizationNameHtml = escapeHtml(input.organizationName);
+  const roleHtml = escapeHtml(input.role);
+  const organizationNameSubject = stripSubjectUnsafeChars(input.organizationName);
+  return {
+    subject: `You're invited to ${organizationNameSubject} on Twiniti Loop`,
+    html: `<p>You've been invited to join <strong>${organizationNameHtml}</strong> as a <strong>${roleHtml}</strong>.</p>
+<p><a href="${input.inviteUrl}">Accept invitation</a></p>
+<p>Or open this link: ${input.inviteUrl}</p>`,
+    text: `You've been invited to join ${input.organizationName} as a ${input.role}.\n\nAccept: ${input.inviteUrl}`
+  };
 }
 
 type InviteEmailOrganizationResendDomain = {
@@ -138,15 +160,18 @@ export async function sendInviteEmail(
     );
   }
 
+  const content = buildInviteEmailContent({
+    organizationName: input.organizationName,
+    role: input.role,
+    inviteUrl
+  });
   await sendEmail({
     apiKey,
     from,
     to: input.to,
-    subject: `You're invited to ${input.organizationName} on Twiniti Loop`,
-    html: `<p>You've been invited to join <strong>${input.organizationName}</strong> as a <strong>${input.role}</strong>.</p>
-<p><a href="${inviteUrl}">Accept invitation</a></p>
-<p>Or open this link: ${inviteUrl}</p>`,
-    text: `You've been invited to join ${input.organizationName} as a ${input.role}.\n\nAccept: ${inviteUrl}`
+    subject: content.subject,
+    html: content.html,
+    text: content.text
   }, deps?.sendEmailDeps);
   return { inviteUrl, sent: true as const };
 }
@@ -480,6 +505,24 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       }
       const billing = await ensureOrganizationBilling(db, created.organization.id);
 
+      let invitation = null;
+      if (input.inviteAdminEmail) {
+        const delivered = await createAndSendOrganizationAdminInvite(
+          db,
+          env,
+          {
+            organizationId: created.organization.id,
+            organizationName: created.organization.name,
+            email: input.inviteAdminEmail,
+            invitedByUserId: joinAsAdmin ? created.admin?.id ?? null : actor.organizationId ? actor.id : null,
+            rollbackOnSendFailure: created.created
+          },
+          sendInviteEmail,
+          request.log
+        );
+        invitation = { ...mapInvitation(delivered.invite), ...delivered.emailResult };
+      }
+
       if (actor.organizationId === created.organization.id || joinAsAdmin) {
         await enqueueLicenseProvisioning(db, env, {
           externalOrganizationId: created.organization.id,
@@ -504,29 +547,6 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         });
         checkoutUrl = checkout?.url ?? null;
         checkoutSessionId = checkout?.id ?? null;
-      }
-
-      let invitation = null;
-      if (input.inviteAdminEmail) {
-        const invite = await createInvitation(db, {
-          organizationId: created.organization.id,
-          email: input.inviteAdminEmail,
-          role: "admin",
-          invitedByUserId: joinAsAdmin ? created.admin?.id ?? null : actor.organizationId ? actor.id : null
-        });
-        const emailResult = await sendInviteEmail(
-          env,
-          db,
-          {
-            to: input.inviteAdminEmail,
-            organizationId: created.organization.id,
-            organizationName: created.organization.name,
-            role: "admin",
-            token: invite.token
-          },
-          request.log
-        );
-        invitation = { ...mapInvitation(invite), ...emailResult };
       }
 
       await writeAudit(db, {

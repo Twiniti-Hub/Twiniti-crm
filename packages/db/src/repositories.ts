@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 // neon-http workers use optimistic claim rather than SKIP LOCKED transactions
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Db } from "./client.js";
@@ -467,6 +467,17 @@ export async function createOrganization(
   return { organization: org, admin, created: true };
 }
 
+/** Removes org signup rows when admin invite delivery fails during create (new org only). */
+export async function deleteOrganizationSignupRollback(db: Db, organizationId: string) {
+  await db.transaction(async (tx) => {
+    await tx.delete(organizationInvitations).where(eq(organizationInvitations.organizationId, organizationId));
+    await tx.delete(crmUsers).where(eq(crmUsers.organizationId, organizationId));
+    await tx.delete(organizationBilling).where(eq(organizationBilling.organizationId, organizationId));
+    await tx.delete(propertyDefinitions).where(eq(propertyDefinitions.organizationId, organizationId));
+    await tx.delete(organizations).where(eq(organizations.id, organizationId));
+  });
+}
+
 export async function getOrganizationBilling(db: Db, organizationId: string) {
   const rows = await db.select().from(organizationBilling)
     .where(eq(organizationBilling.organizationId, organizationId))
@@ -835,20 +846,43 @@ export async function acceptInvitation(
     throw error;
   }
 
-  const [user] = await db.insert(crmUsers).values({
-    organizationId: invitation.organizationId,
-    hexclaveSubject: input.subject,
-    email: input.email ?? invitation.email,
-    displayName: input.displayName ?? null,
-    role: invitation.role
-  }).returning();
+  return db.transaction(async (tx) => {
+    const now = new Date();
+    const [claimed] = await tx
+      .update(organizationInvitations)
+      .set({ acceptedAt: now })
+      .where(and(
+        eq(organizationInvitations.id, invitation.id),
+        isNull(organizationInvitations.acceptedAt),
+        gt(organizationInvitations.expiresAt, now)
+      ))
+      .returning();
 
-  await db
-    .update(organizationInvitations)
-    .set({ acceptedAt: new Date() })
-    .where(eq(organizationInvitations.id, invitation.id));
+    if (!claimed) {
+      if (invitation.expiresAt.getTime() < now.getTime()) {
+        const error = new Error("Invitation expired") as Error & { statusCode: number };
+        error.statusCode = 410;
+        throw error;
+      }
+      const error = new Error("Invitation already accepted") as Error & { statusCode: number };
+      error.statusCode = 409;
+      throw error;
+    }
 
-  return { user, organizationId: invitation.organizationId, organizationName: found.organizationName };
+    const [user] = await tx.insert(crmUsers).values({
+      organizationId: invitation.organizationId,
+      hexclaveSubject: input.subject,
+      email: input.email ?? invitation.email,
+      displayName: input.displayName ?? null,
+      role: invitation.role
+    }).returning();
+
+    if (!user) {
+      throw new Error("Unable to create user from invitation");
+    }
+
+    return { user, organizationId: invitation.organizationId, organizationName: found.organizationName };
+  });
 }
 
 export async function searchContacts(
