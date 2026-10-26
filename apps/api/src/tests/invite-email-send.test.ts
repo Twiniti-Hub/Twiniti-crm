@@ -1,15 +1,14 @@
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
+import { test } from "node:test";
 import type { AppEnv } from "@twiniti/config";
 import type { Db } from "@twiniti/db";
-import { getDefaultOrganizationResendDomain } from "@twiniti/db";
-import type { SendEmailInput } from "@twiniti/email";
+import { encryptResendSecret } from "@twiniti/email";
 import { buildInviteEmailContent, sendInviteEmail } from "../routes/organizations.js";
 
 const resendEncryptionKey = Buffer.alloc(32, 7).toString("base64");
 
 test("sendInviteEmail sends escaped HTML from buildInviteEmailContent", async () => {
-  const sendEmailMock = mock.fn(async (_input: SendEmailInput) => ({ data: { id: "email-sent" } }));
+  const captured: { html?: string; subject?: string; text?: string } = {};
   const organizationName = `<script>alert(1)</script> & "Corp"`;
   const role = `member"><img onerror=alert(1)>`;
   const token = "invite-token-abc";
@@ -28,32 +27,36 @@ test("sendInviteEmail sends escaped HTML from buildInviteEmailContent", async ()
       role,
       token
     },
+    undefined,
     {
-      sendEmail: sendEmailMock,
-      getDefaultOrganizationResendDomain: (async () => ({
-        apiKeyCiphertext: "test-ciphertext",
+      getDefaultOrganizationResendDomain: async () => ({
+        apiKeyCiphertext: encryptResendSecret("test-resend-api-key", resendEncryptionKey),
         fromEmail: "invites@example.com",
         fromName: "Twiniti Loop"
-      })) as unknown as typeof getDefaultOrganizationResendDomain,
-      decryptResendSecret: () => "test-resend-api-key"
+      }),
+      sendEmailDeps: {
+        send: async (payload) => {
+          captured.html = typeof payload.html === "string" ? payload.html : undefined;
+          captured.subject = payload.subject;
+          captured.text = typeof payload.text === "string" ? payload.text : undefined;
+          return { data: { id: "email-sent" } };
+        }
+      }
     }
   );
 
   assert.equal(result.sent, true);
-  assert.equal(sendEmailMock.mock.calls.length, 1);
-  const payload = sendEmailMock.mock.calls[0]?.arguments[0];
-  assert.ok(payload);
-  assert.equal(typeof payload.html, "string");
-  assert.equal(typeof payload.subject, "string");
-  assert.equal(typeof payload.text, "string");
+  assert.ok(captured.html);
+  assert.ok(captured.subject);
+  assert.ok(captured.text);
 
   const expected = buildInviteEmailContent({
     organizationName,
     role,
     inviteUrl: result.inviteUrl
   });
-  assert.equal(payload.html, expected.html);
-  assert.equal(payload.subject, expected.subject);
-  assert.equal(payload.text, expected.text);
-  assert.doesNotMatch(payload.html, /<script>/);
+  assert.equal(captured.html, expected.html);
+  assert.equal(captured.subject, expected.subject);
+  assert.equal(captured.text, expected.text);
+  assert.doesNotMatch(captured.html, /<script>/);
 });
