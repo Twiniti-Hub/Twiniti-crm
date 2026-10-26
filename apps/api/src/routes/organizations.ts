@@ -32,7 +32,13 @@ import {
 } from "@twiniti/db";
 import { getDb } from "@twiniti/db";
 import { regionForCountry, type RegionCode } from "@twiniti/contracts";
-import { decryptResendSecret, encryptResendSecret, sendEmail, validateResendApiKey } from "@twiniti/email";
+import {
+  decryptResendSecret,
+  encryptResendSecret,
+  sendEmail,
+  validateResendApiKey,
+  type SendEmailDeps
+} from "@twiniti/email";
 import {
   audit,
   requireActor,
@@ -85,25 +91,62 @@ async function refreshSuperAdminLicenseStatuses(
   }));
 }
 
-async function sendInviteEmail(
+type InviteEmailOrganizationResendDomain = {
+  apiKeyCiphertext: string;
+  fromEmail: string;
+  fromName: string | null;
+};
+
+export type SendInviteEmailDeps = {
+  getDefaultOrganizationResendDomain?: (
+    db: Db,
+    organizationId: string
+  ) => Promise<InviteEmailOrganizationResendDomain | null>;
+  sendEmailDeps?: SendEmailDeps;
+};
+
+export async function sendInviteEmail(
   env: AppEnv,
   db: Db,
-  input: { to: string; organizationId: string; organizationName: string; role: string; token: string }
+  input: { to: string; organizationId: string; organizationName: string; role: string; token: string },
+  log?: { warn: (obj: unknown, msg?: string) => void },
+  deps?: SendInviteEmailDeps
 ) {
   const inviteUrl = `${env.WEB_ORIGIN.replace(/\/$/, "")}/accept-invite?token=${encodeURIComponent(input.token)}`;
-  if (!env.RESEND_CREDENTIAL_ENCRYPTION_KEY) throw new Error("Resend credential encryption is not configured");
-  const config = await getDefaultOrganizationResendDomain(db, input.organizationId);
-  if (!config) throw new Error("Organization Resend configuration is required before sending invitations");
+  const resolveDefaultDomain = deps?.getDefaultOrganizationResendDomain ?? getDefaultOrganizationResendDomain;
+  const config = await resolveDefaultDomain(db, input.organizationId);
+
+  let apiKey: string;
+  let from: string;
+  if (config) {
+    if (!env.RESEND_CREDENTIAL_ENCRYPTION_KEY) {
+      throw new Error("Resend credential encryption is not configured");
+    }
+    apiKey = decryptResendSecret(config.apiKeyCiphertext, env.RESEND_CREDENTIAL_ENCRYPTION_KEY);
+    from = config.fromName ? `${config.fromName} <${config.fromEmail}>` : config.fromEmail;
+  } else if (env.RESEND_API_KEY?.trim() && env.PLATFORM_EMAIL_FROM?.trim()) {
+    apiKey = env.RESEND_API_KEY;
+    from = env.PLATFORM_EMAIL_FROM;
+  } else {
+    log?.warn(
+      { organizationId: input.organizationId, to: input.to },
+      "Cannot send invitation email; no verified organization Resend domain and platform email sender is not configured"
+    );
+    throw new Error(
+      "Invitation email cannot be sent: no verified organization Resend domain and platform email sender is not configured"
+    );
+  }
+
   await sendEmail({
-    apiKey: decryptResendSecret(config.apiKeyCiphertext, env.RESEND_CREDENTIAL_ENCRYPTION_KEY),
-    from: config.fromName ? `${config.fromName} <${config.fromEmail}>` : config.fromEmail,
+    apiKey,
+    from,
     to: input.to,
     subject: `You're invited to ${input.organizationName} on Twiniti Loop`,
     html: `<p>You've been invited to join <strong>${input.organizationName}</strong> as a <strong>${input.role}</strong>.</p>
 <p><a href="${inviteUrl}">Accept invitation</a></p>
 <p>Or open this link: ${inviteUrl}</p>`,
     text: `You've been invited to join ${input.organizationName} as a ${input.role}.\n\nAccept: ${inviteUrl}`
-  });
+  }, deps?.sendEmailDeps);
   return { inviteUrl, sent: true as const };
 }
 
@@ -465,13 +508,18 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
           role: "admin",
           invitedByUserId: joinAsAdmin ? created.admin?.id ?? null : actor.organizationId ? actor.id : null
         });
-        const emailResult = await sendInviteEmail(env, db, {
-          to: input.inviteAdminEmail,
-          organizationId: created.organization.id,
-          organizationName: created.organization.name,
-          role: "admin",
-          token: invite.token
-        });
+        const emailResult = await sendInviteEmail(
+          env,
+          db,
+          {
+            to: input.inviteAdminEmail,
+            organizationId: created.organization.id,
+            organizationName: created.organization.name,
+            role: "admin",
+            token: invite.token
+          },
+          request.log
+        );
         invitation = { ...mapInvitation(invite), ...emailResult };
       }
 
@@ -637,13 +685,18 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         role: input.role,
         invitedByUserId: actor.organizationId ? actor.id : null
       });
-      const emailResult = await sendInviteEmail(env, db, {
-        to: input.email,
-        organizationId: id,
-        organizationName: org.name,
-        role: input.role,
-        token: invite.token
-      });
+      const emailResult = await sendInviteEmail(
+        env,
+        db,
+        {
+          to: input.email,
+          organizationId: id,
+          organizationName: org.name,
+          role: input.role,
+          token: invite.token
+        },
+        request.log
+      );
       await writeAudit(db, {
         organizationId: id,
         actorType: actor.type,
@@ -717,13 +770,18 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         role: input.role,
         invitedByUserId: actor.id
       });
-      const emailResult = await sendInviteEmail(env, db, {
-        to: input.email,
-        organizationId,
-        organizationName: org.name,
-        role: input.role,
-        token: invite.token
-      });
+      const emailResult = await sendInviteEmail(
+        env,
+        db,
+        {
+          to: input.email,
+          organizationId,
+          organizationName: org.name,
+          role: input.role,
+          token: invite.token
+        },
+        request.log
+      );
       await audit(db, actor, "organization.invite", "organization_invitation", invite.id, {
         email: input.email,
         role: input.role
