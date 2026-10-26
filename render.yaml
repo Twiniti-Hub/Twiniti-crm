@@ -58,6 +58,8 @@ services:
         value: "15000"
       - key: LICENSE_API_REQUIRED
         value: "true"
+      - key: LICENSE_DEV_AUTO_TRIAL
+        value: "true"
       - key: AUTH_DISABLED
         value: "false"
       - key: BOOTSTRAP_ORG_NAME
@@ -124,6 +126,8 @@ services:
         value: "15000"
       - key: LICENSE_API_REQUIRED
         value: "true"
+      - key: LICENSE_DEV_AUTO_TRIAL
+        value: "true"
       - key: AUTH_DISABLED
         value: "false"
       - key: BOOTSTRAP_ORG_NAME
@@ -189,6 +193,8 @@ services:
       - key: LICENSE_API_CACHE_TTL_MS
         value: "15000"
       - key: LICENSE_API_REQUIRED
+        value: "true"
+      - key: LICENSE_DEV_AUTO_TRIAL
         value: "true"
       - key: AUTH_DISABLED
         value: "false"

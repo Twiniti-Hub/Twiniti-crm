@@ -1,5 +1,10 @@
 import { HexclaveServerApp } from "@hexclave/js";
-import { hasHexclaveServerConfiguration, isSuperAdminEmail, type AppEnv } from "@twiniti/config";
+import {
+  hasHexclaveServerConfiguration,
+  isLicenseDevAutoTrialEnabled,
+  isSuperAdminEmail,
+  type AppEnv
+} from "@twiniti/config";
 import type { RegionCode } from "@twiniti/contracts";
 import { createLicenseApiClient, type LicenseCheck } from "@twiniti/license-api";
 import {
@@ -251,8 +256,15 @@ async function checkOrganizationLicense(
   input: { organizationId: string; userId?: string | null; subject?: string | null; email?: string | null },
   localStatus: string
 ) {
-  const client = createLicenseApiClient(env);
   const billingActive = localStatus === "active" || localStatus === "trialing";
+  if (isLicenseDevAutoTrialEnabled(env)) {
+    return {
+      billingStatus: billingActive ? localStatus : "trialing",
+      check: null as LicenseCheck | null
+    };
+  }
+
+  const client = createLicenseApiClient(env);
   const billing = await getOrganizationBilling(db, input.organizationId);
   const provisioned =
     Boolean(billing?.licenseId)
