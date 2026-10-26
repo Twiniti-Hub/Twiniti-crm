@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { after, describe, it } from "node:test";
 import { count, eq } from "drizzle-orm";
-import { closeDbPools, createDb } from "./client.js";
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
+import type { Db } from "./client.js";
+import * as schema from "./schema.js";
 import { crmUsers, organizations } from "./schema.js";
 import {
   acceptInvitation,
@@ -10,16 +13,21 @@ import {
 } from "./repositories.js";
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
+const localPools: pg.Pool[] = [];
+
+function createLocalDb(connectionString: string): Db {
+  const pool = new pg.Pool({ connectionString, max: 10 });
+  localPools.push(pool);
+  return drizzle(pool, { schema }) as unknown as Db;
+}
 
 describe("acceptInvitation", () => {
   after(async () => {
-    if (databaseUrl) {
-      await closeDbPools();
-    }
+    await Promise.all(localPools.splice(0).map((pool) => pool.end()));
   });
 
   it("returns 409 on a second accept and creates only one CRM user", { skip: !databaseUrl }, async () => {
-    const db = createDb(databaseUrl!);
+    const db = createLocalDb(databaseUrl!);
     const orgName = `TWI-937 accept ${createInviteToken().slice(0, 8)}`;
     const [org] = await db.insert(organizations).values({ name: orgName }).returning();
     const inviteEmail = `twi937-${createInviteToken().slice(0, 8)}@example.com`;
@@ -52,7 +60,7 @@ describe("acceptInvitation", () => {
   });
 
   it("allows only one concurrent accept for the same invitation token", { skip: !databaseUrl }, async () => {
-    const db = createDb(databaseUrl!);
+    const db = createLocalDb(databaseUrl!);
     const orgName = `TWI-937 race ${createInviteToken().slice(0, 8)}`;
     const [org] = await db.insert(organizations).values({ name: orgName }).returning();
     const inviteEmail = `twi937-race-${createInviteToken().slice(0, 8)}@example.com`;

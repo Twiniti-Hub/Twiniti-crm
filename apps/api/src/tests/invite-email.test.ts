@@ -11,7 +11,8 @@ test("buildInviteEmailContent escapes organization name and role in HTML", () =>
     inviteUrl: "https://app.example.com/accept-invite?token=abc"
   });
 
-  assert.match(content.subject, /<script>/);
+  assert.equal(content.subject, "You're invited to scriptalert(1)/script  Corp on Twiniti Loop");
+  assert.doesNotMatch(content.subject, /[<>&"]/);
   assert.match(content.html, /&lt;script&gt;alert\(1\)&lt;\/script&gt; &amp; &quot;Corp&quot;/);
   assert.match(content.html, /member&quot;&gt;&lt;img onerror=alert\(1\)&gt;/);
   assert.doesNotMatch(content.html, /<script>/);

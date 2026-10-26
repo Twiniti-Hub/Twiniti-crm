@@ -85,6 +85,10 @@ async function refreshSuperAdminLicenseStatuses(
   }));
 }
 
+function stripSubjectUnsafeChars(value: string) {
+  return value.replace(/[<>&"]/g, "");
+}
+
 export function buildInviteEmailContent(input: {
   organizationName: string;
   role: string;
@@ -92,8 +96,9 @@ export function buildInviteEmailContent(input: {
 }) {
   const organizationNameHtml = escapeHtml(input.organizationName);
   const roleHtml = escapeHtml(input.role);
+  const organizationNameSubject = stripSubjectUnsafeChars(input.organizationName);
   return {
-    subject: `You're invited to ${input.organizationName} on Twiniti Loop`,
+    subject: `You're invited to ${organizationNameSubject} on Twiniti Loop`,
     html: `<p>You've been invited to join <strong>${organizationNameHtml}</strong> as a <strong>${roleHtml}</strong>.</p>
 <p><a href="${input.inviteUrl}">Accept invitation</a></p>
 <p>Or open this link: ${input.inviteUrl}</p>`,
@@ -101,22 +106,33 @@ export function buildInviteEmailContent(input: {
   };
 }
 
-async function sendInviteEmail(
+type SendInviteEmailDeps = {
+  sendEmail: typeof sendEmail;
+  getDefaultOrganizationResendDomain: typeof getDefaultOrganizationResendDomain;
+  decryptResendSecret: typeof decryptResendSecret;
+};
+
+export async function sendInviteEmail(
   env: AppEnv,
   db: Db,
-  input: { to: string; organizationId: string; organizationName: string; role: string; token: string }
+  input: { to: string; organizationId: string; organizationName: string; role: string; token: string },
+  deps: SendInviteEmailDeps = {
+    sendEmail,
+    getDefaultOrganizationResendDomain,
+    decryptResendSecret
+  }
 ) {
   const inviteUrl = `${env.WEB_ORIGIN.replace(/\/$/, "")}/accept-invite?token=${encodeURIComponent(input.token)}`;
   if (!env.RESEND_CREDENTIAL_ENCRYPTION_KEY) throw new Error("Resend credential encryption is not configured");
-  const config = await getDefaultOrganizationResendDomain(db, input.organizationId);
+  const config = await deps.getDefaultOrganizationResendDomain(db, input.organizationId);
   if (!config) throw new Error("Organization Resend configuration is required before sending invitations");
   const content = buildInviteEmailContent({
     organizationName: input.organizationName,
     role: input.role,
     inviteUrl
   });
-  await sendEmail({
-    apiKey: decryptResendSecret(config.apiKeyCiphertext, env.RESEND_CREDENTIAL_ENCRYPTION_KEY),
+  await deps.sendEmail({
+    apiKey: deps.decryptResendSecret(config.apiKeyCiphertext, env.RESEND_CREDENTIAL_ENCRYPTION_KEY),
     from: config.fromName ? `${config.fromName} <${config.fromEmail}>` : config.fromEmail,
     to: input.to,
     subject: content.subject,

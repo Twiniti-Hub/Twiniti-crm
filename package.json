@@ -27,7 +27,8 @@
   "pnpm": {
     "overrides": {
       "@esbuild-kit/core-utils>esbuild": "0.25.12",
-      "proxy-addr": "2.0.8"
+      "proxy-addr": "2.0.8",
+      "drizzle-orm": "0.45.2"
     }
   },
   "devDependencies": {
