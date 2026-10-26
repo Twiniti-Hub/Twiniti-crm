@@ -32,6 +32,7 @@ export type AuthActor = {
   needsSetup?: boolean;
   isSuperAdmin?: boolean;
   hexclaveSubject?: string;
+  primaryEmailVerified?: boolean;
   organizationName?: string | null;
   regionCode?: RegionCode | null;
   countryCode?: string | null;
@@ -133,6 +134,22 @@ export function assertOrganization(actor: AuthActor): string {
     throw error;
   }
   return actor.organizationId;
+}
+
+export function assertVerifiedPrimaryEmail(actor: AuthActor): void {
+  if (actor.type !== "user") {
+    return;
+  }
+  if (actor.primaryEmailVerified === true) {
+    return;
+  }
+  const error = new Error("Verify your email address before continuing") as Error & {
+    statusCode: number;
+    errorCode: string;
+  };
+  error.statusCode = 403;
+  error.errorCode = "email_not_verified";
+  throw error;
 }
 
 function getHeader(headers: RequestLike["headers"], name: string): string | undefined {
@@ -237,6 +254,7 @@ async function resolveBootstrapActor(db: Db, env: AppEnv): Promise<AuthActor> {
     needsSetup: false,
     isSuperAdmin: true,
     hexclaveSubject: user.hexclaveSubject,
+    primaryEmailVerified: true,
     organizationName: org.name,
     regionCode: org.residencyRegion as RegionCode,
     countryCode: user.countryCode ?? null,
@@ -404,6 +422,9 @@ export async function resolveRequestActor(
     ?? (user as { email?: string | null }).email
     ?? null;
   const displayName = (user as { displayName?: string | null }).displayName ?? null;
+  const primaryEmailVerified = Boolean(
+    (user as { primaryEmailVerified?: boolean }).primaryEmailVerified
+  );
   const superAdmin = isSuperAdminEmail(email, env);
   const crmUserBySubject = await findCrmUserBySubject(db, subject);
   // Super Admins may predate subject-bound CRM provisioning. If their verified
@@ -439,6 +460,7 @@ export async function resolveRequestActor(
           needsSetup: false,
           isSuperAdmin: true,
           hexclaveSubject: subject,
+          primaryEmailVerified,
           organizationName: workspace.name,
           regionCode: workspace.residencyRegion as RegionCode,
           countryCode: workspaceMember?.countryCode ?? null,
@@ -459,6 +481,7 @@ export async function resolveRequestActor(
         needsSetup: false,
         isSuperAdmin: true,
         hexclaveSubject: subject,
+        primaryEmailVerified,
         organizationName: organization?.name ?? null,
         regionCode: (organization?.residencyRegion as RegionCode | undefined) ?? null,
         countryCode: crmUser.countryCode ?? null,
@@ -475,6 +498,7 @@ export async function resolveRequestActor(
       needsSetup: true,
       isSuperAdmin: true,
       hexclaveSubject: subject,
+      primaryEmailVerified,
       organizationName: null
     };
   }
@@ -490,6 +514,7 @@ export async function resolveRequestActor(
       needsSetup: true,
       isSuperAdmin: superAdmin,
       hexclaveSubject: subject,
+      primaryEmailVerified,
       organizationName: null
     };
   }
@@ -515,6 +540,7 @@ export async function resolveRequestActor(
     needsSetup: false,
     isSuperAdmin: superAdmin,
     hexclaveSubject: subject,
+    primaryEmailVerified,
     organizationName: organization?.name ?? null,
     regionCode: (organization?.residencyRegion as RegionCode | undefined) ?? null,
     countryCode: crmUser.countryCode ?? null,
