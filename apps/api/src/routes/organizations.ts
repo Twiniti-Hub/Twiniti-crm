@@ -91,6 +91,27 @@ async function refreshSuperAdminLicenseStatuses(
   }));
 }
 
+function stripSubjectUnsafeChars(value: string) {
+  return value.replace(/[<>&"]/g, "");
+}
+
+export function buildInviteEmailContent(input: {
+  organizationName: string;
+  role: string;
+  inviteUrl: string;
+}) {
+  const organizationNameHtml = escapeHtml(input.organizationName);
+  const roleHtml = escapeHtml(input.role);
+  const organizationNameSubject = stripSubjectUnsafeChars(input.organizationName);
+  return {
+    subject: `You're invited to ${organizationNameSubject} on Twiniti Loop`,
+    html: `<p>You've been invited to join <strong>${organizationNameHtml}</strong> as a <strong>${roleHtml}</strong>.</p>
+<p><a href="${input.inviteUrl}">Accept invitation</a></p>
+<p>Or open this link: ${input.inviteUrl}</p>`,
+    text: `You've been invited to join ${input.organizationName} as a ${input.role}.\n\nAccept: ${input.inviteUrl}`
+  };
+}
+
 type InviteEmailOrganizationResendDomain = {
   apiKeyCiphertext: string;
   fromEmail: string;
@@ -137,15 +158,18 @@ export async function sendInviteEmail(
     );
   }
 
+  const content = buildInviteEmailContent({
+    organizationName: input.organizationName,
+    role: input.role,
+    inviteUrl
+  });
   await sendEmail({
     apiKey,
     from,
     to: input.to,
-    subject: `You're invited to ${input.organizationName} on Twiniti Loop`,
-    html: `<p>You've been invited to join <strong>${input.organizationName}</strong> as a <strong>${input.role}</strong>.</p>
-<p><a href="${inviteUrl}">Accept invitation</a></p>
-<p>Or open this link: ${inviteUrl}</p>`,
-    text: `You've been invited to join ${input.organizationName} as a ${input.role}.\n\nAccept: ${inviteUrl}`
+    subject: content.subject,
+    html: content.html,
+    text: content.text
   }, deps?.sendEmailDeps);
   return { inviteUrl, sent: true as const };
 }
