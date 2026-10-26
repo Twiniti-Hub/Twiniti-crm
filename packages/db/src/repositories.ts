@@ -467,6 +467,17 @@ export async function createOrganization(
   return { organization: org, admin, created: true };
 }
 
+/** Removes org signup rows when admin invite delivery fails during create (new org only). */
+export async function deleteOrganizationSignupRollback(db: Db, organizationId: string) {
+  await db.transaction(async (tx) => {
+    await tx.delete(organizationInvitations).where(eq(organizationInvitations.organizationId, organizationId));
+    await tx.delete(crmUsers).where(eq(crmUsers.organizationId, organizationId));
+    await tx.delete(organizationBilling).where(eq(organizationBilling.organizationId, organizationId));
+    await tx.delete(propertyDefinitions).where(eq(propertyDefinitions.organizationId, organizationId));
+    await tx.delete(organizations).where(eq(organizations.id, organizationId));
+  });
+}
+
 export async function getOrganizationBilling(db: Db, organizationId: string) {
   const rows = await db.select().from(organizationBilling)
     .where(eq(organizationBilling.organizationId, organizationId))
