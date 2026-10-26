@@ -44,6 +44,7 @@ import {
 import { createOrganizationCheckoutSession } from "./billing.js";
 import { enqueueLicenseProvisioning } from "../license-jobs.js";
 import { createLicenseApiClient } from "@twiniti/license-api";
+import { assertVerifiedPrimaryEmail } from "@twiniti/auth";
 
 async function refreshSuperAdminLicenseStatuses(
   db: Db,
@@ -247,6 +248,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         email: actor.email ?? null,
         displayName: actor.displayName ?? null,
         needsSetup: Boolean(actor.needsSetup),
+        primaryEmailVerified: actor.primaryEmailVerified ?? null,
         isSuperAdmin: Boolean(actor.isSuperAdmin),
         billingStatus: actor.billingStatus ?? "pending",
         licenseDecision: actor.licenseDecision ?? null,
@@ -407,6 +409,10 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
 
       if (!joinAsAdmin && !actor.isSuperAdmin) {
         return reply.code(403).send({ error: { code: "forbidden", message: "Super admin required" } });
+      }
+
+      if (joinAsAdmin) {
+        assertVerifiedPrimaryEmail(actor);
       }
 
       const subject = actor.hexclaveSubject ?? actor.id;
@@ -745,6 +751,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
           error: { code: "conflict", message: "You already belong to a company" }
         });
       }
+      assertVerifiedPrimaryEmail(actor);
       const input = acceptInvitationSchema.parse(request.body);
       const subject = actor.hexclaveSubject ?? actor.id;
       const result = await acceptInvitation(db, {
