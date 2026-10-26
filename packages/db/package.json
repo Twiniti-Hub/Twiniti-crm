@@ -7,7 +7,7 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/hubspot.test.ts src/email-tracking.test.ts src/contact-identities.test.ts src/regional-policy.test.ts src/board.test.ts src/contact-timeline.test.ts src/outbound-email.test.ts src/received-email.test.ts",
+    "test": "tsx --test src/hubspot.test.ts src/email-tracking.test.ts src/contact-identities.test.ts src/regional-policy.test.ts src/board.test.ts src/contact-timeline.test.ts src/outbound-email.test.ts src/received-email.test.ts src/accept-invitation.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:verify:regional": "tsx scripts/verify-regional-schemas.ts"
@@ -25,6 +25,8 @@
   "devDependencies": {
     "drizzle-kit": "^0.31.4",
     "tsx": "^4.23.1",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "pg": "^8.23.1",
+    "@types/pg": "^8.23.1"
   }
 }
