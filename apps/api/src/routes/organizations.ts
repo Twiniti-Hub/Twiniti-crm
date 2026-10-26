@@ -48,6 +48,7 @@ import {
   sendError
 } from "../auth-hook.js";
 import { createOrganizationCheckoutSession } from "./billing.js";
+import { createAndSendOrganizationAdminInvite } from "../organization-admin-invite.js";
 import { enqueueLicenseProvisioning } from "../license-jobs.js";
 import { createLicenseApiClient } from "@twiniti/license-api";
 
@@ -474,6 +475,24 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       }
       const billing = await ensureOrganizationBilling(db, created.organization.id);
 
+      let invitation = null;
+      if (input.inviteAdminEmail) {
+        const delivered = await createAndSendOrganizationAdminInvite(
+          db,
+          env,
+          {
+            organizationId: created.organization.id,
+            organizationName: created.organization.name,
+            email: input.inviteAdminEmail,
+            invitedByUserId: joinAsAdmin ? created.admin?.id ?? null : actor.organizationId ? actor.id : null,
+            rollbackOnSendFailure: created.created
+          },
+          sendInviteEmail,
+          request.log
+        );
+        invitation = { ...mapInvitation(delivered.invite), ...delivered.emailResult };
+      }
+
       if (actor.organizationId === created.organization.id || joinAsAdmin) {
         await enqueueLicenseProvisioning(db, env, {
           externalOrganizationId: created.organization.id,
@@ -498,29 +517,6 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         });
         checkoutUrl = checkout?.url ?? null;
         checkoutSessionId = checkout?.id ?? null;
-      }
-
-      let invitation = null;
-      if (input.inviteAdminEmail) {
-        const invite = await createInvitation(db, {
-          organizationId: created.organization.id,
-          email: input.inviteAdminEmail,
-          role: "admin",
-          invitedByUserId: joinAsAdmin ? created.admin?.id ?? null : actor.organizationId ? actor.id : null
-        });
-        const emailResult = await sendInviteEmail(
-          env,
-          db,
-          {
-            to: input.inviteAdminEmail,
-            organizationId: created.organization.id,
-            organizationName: created.organization.name,
-            role: "admin",
-            token: invite.token
-          },
-          request.log
-        );
-        invitation = { ...mapInvitation(invite), ...emailResult };
       }
 
       await writeAudit(db, {
