@@ -143,7 +143,12 @@ export function sendError(reply: FastifyReply, error: unknown) {
     ? Number((error as { statusCode: number }).statusCode)
     : 400;
   const message = error instanceof Error ? error.message : "Request failed";
+  const explicitCode = typeof error === "object" && error && "errorCode" in error
+    ? String((error as { errorCode: string }).errorCode)
+    : undefined;
+  const code = explicitCode
+    ?? (statusCode === 403 ? "forbidden" : statusCode === 401 ? "unauthorized" : "bad_request");
   return reply.code(statusCode >= 400 ? statusCode : 400).send({
-    error: { code: statusCode === 403 ? "forbidden" : statusCode === 401 ? "unauthorized" : "bad_request", message }
+    error: { code, message }
   });
 }
