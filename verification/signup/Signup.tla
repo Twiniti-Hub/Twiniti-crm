@@ -110,11 +110,17 @@ CreatorIsAdmin ==
 RejectedPasswordStoresNothing ==
   phase = "auth_failed" => account = FALSE /\ storedRegion = "" /\ admin = FALSE
 
-\* A later country that maps to another region is refused and the stored region stays.
+\* A later country that maps to another region is the refused phase, and only that phase.
+\* The second conjunct is the converse: a cross-region submission that
+\* incorrectly lands on "workspace" or "checkout" fails here even though
+\* the saved region was left unchanged.
 CountryChangeIsRefused ==
-  phase = "region_locked" =>
-    /\ storedRegion # ""
-    /\ RegionOf(country) # storedRegion
-    /\ storedRegion = RegionOf(firstCountry)
+  /\ (phase = "region_locked" =>
+       /\ storedRegion # ""
+       /\ country \in Countries
+       /\ RegionOf(country) # storedRegion
+       /\ storedRegion = RegionOf(firstCountry))
+  /\ (storedRegion # "" /\ country \in Countries /\ RegionOf(country) # storedRegion =>
+       phase = "region_locked")
 
 ====

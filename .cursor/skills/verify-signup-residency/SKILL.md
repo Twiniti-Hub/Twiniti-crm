@@ -43,7 +43,7 @@ Then read the result with `/statechart` on `verification/signup/Signup.tla`, usi
 - **WorkspaceMatchesCountry.** The saved region is the region of the country on the first save.
 - **CreatorIsAdmin.** That person is the company admin exactly when a workspace is saved.
 - **RejectedPasswordStoresNothing.** A rejected password stores no account and no workspace.
-- **CountryChangeIsRefused.** A later country in another region ends on "Country change refused" and the saved region is unchanged.
+- **CountryChangeIsRefused.** A saved workspace whose submitted country maps to another region is in the refused phase, and that phase only happens for a cross-region country. The saved region is still the first country's region. Sending that submission to the workspace phase fails this rule even when the saved region is left unchanged.
 
 The spec's `Next` is the disjunction of the sign-up actions. `NothingFurtherHappens` only stutters on checkout and on a rejected password so TLC's deadlock check stays quiet. The view hides that stutter. It also does not draw a step that stays on the same chart label (trying yet another country while the change is already refused, or submitting the saved country again while already on that workspace).
 
