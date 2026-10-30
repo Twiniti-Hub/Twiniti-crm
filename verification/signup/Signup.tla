@@ -1,10 +1,14 @@
 ---- MODULE Signup ----
-\* New-user signup for one person, one company workspace.
+\* New-user signup for one person, one company workspace, then Stripe and the license server.
 \* Code: apps/web/src/pages/SignUpPage.tsx (credential, then POST /api/v1/organizations)
-\*       apps/api/src/routes/organizations.ts (region lock on an existing workspace)
-\*       packages/db/src/repositories.ts createOrganization (region written only on insert)
+\*       apps/api/src/routes/organizations.ts (region lock, then license enqueue, then checkout)
+\*       apps/api/src/routes/billing.ts (checkout session, Stripe webhook, subscription sync enqueue)
+\*       apps/api/src/license-jobs.ts (processLicenseSubscriptionSync marks the license provisioned)
+\*       packages/db/src/repositories.ts createOrganization
 \*       packages/contracts/src/index.ts regionForCountry
 \*
+\* The create request queues license.provision before the customer pays.
+\* This model treats the clean license as the subscription sync after a successful payment.
 \* Countries stand for the three residency cells: GB -> uk, DE -> eu, US -> us.
 
 EXTENDS Naturals
@@ -22,9 +26,11 @@ VARIABLES
   firstCountry,
   storedRegion,
   account,
-  admin
+  admin,
+  payment,
+  licenseIssued
 
-vars == <<phase, country, firstCountry, storedRegion, account, admin>>
+vars == <<phase, country, firstCountry, storedRegion, account, admin, payment, licenseIssued>>
 
 Init ==
   /\ phase = "form"
@@ -33,6 +39,8 @@ Init ==
   /\ storedRegion = ""
   /\ account = FALSE
   /\ admin = FALSE
+  /\ payment = "none"
+  /\ licenseIssued = FALSE
 
 YouSubmit(c) ==
   /\ phase = "form"
@@ -40,7 +48,7 @@ YouSubmit(c) ==
   /\ country' = c
   /\ account' = TRUE
   /\ phase' = "account"
-  /\ UNCHANGED <<firstCountry, storedRegion, admin>>
+  /\ UNCHANGED <<firstCountry, storedRegion, admin, payment, licenseIssued>>
 
 YouSubmitUnitedKingdom == YouSubmit("GB")
 YouSubmitEuropeanUnion == YouSubmit("DE")
@@ -49,7 +57,7 @@ YouSubmitUnitedStates == YouSubmit("US")
 ThePasswordIsRejected ==
   /\ phase = "form"
   /\ phase' = "auth_failed"
-  /\ UNCHANGED <<country, firstCountry, storedRegion, account, admin>>
+  /\ UNCHANGED <<country, firstCountry, storedRegion, account, admin, payment, licenseIssued>>
 
 TheWorkspaceIsSaved ==
   /\ phase = "account"
@@ -58,30 +66,60 @@ TheWorkspaceIsSaved ==
   /\ storedRegion' = RegionOf(country)
   /\ admin' = TRUE
   /\ phase' = "workspace"
-  /\ UNCHANGED <<country, account>>
+  /\ UNCHANGED <<country, account, payment, licenseIssued>>
 
-YouContinueToCheckout ==
+YouStartPayment ==
   /\ phase = "workspace"
-  /\ phase' = "checkout"
-  /\ UNCHANGED <<country, firstCountry, storedRegion, account, admin>>
+  /\ payment' = "open"
+  /\ phase' = "paying"
+  /\ UNCHANGED <<country, firstCountry, storedRegion, account, admin, licenseIssued>>
+
+ThePaymentSucceeds ==
+  /\ phase = "paying"
+  /\ payment' = "paid"
+  /\ phase' = "paid"
+  /\ UNCHANGED <<country, firstCountry, storedRegion, account, admin, licenseIssued>>
+
+ThePaymentIsCanceled ==
+  /\ phase = "paying"
+  /\ payment' = "canceled"
+  /\ phase' = "payment_canceled"
+  /\ UNCHANGED <<country, firstCountry, storedRegion, account, admin, licenseIssued>>
+
+YouTryPaymentAgain ==
+  /\ phase = "payment_canceled"
+  /\ payment' = "open"
+  /\ phase' = "paying"
+  /\ UNCHANGED <<country, firstCountry, storedRegion, account, admin, licenseIssued>>
+
+TheLicenseServerIssuesACleanLicense ==
+  /\ phase = "paid"
+  /\ payment = "paid"
+  /\ licenseIssued' = TRUE
+  /\ phase' = "licensed"
+  /\ UNCHANGED <<country, firstCountry, storedRegion, account, admin, payment>>
 
 YouSubmitAgain(c) ==
-  /\ phase \in {"workspace", "checkout", "region_locked"}
+  /\ phase \in {"workspace", "paying", "paid", "payment_canceled", "licensed", "region_locked"}
   /\ account = TRUE
   /\ storedRegion # ""
   /\ c \in Countries
   /\ country' = c
-  /\ IF RegionOf(c) = storedRegion
-     THEN phase' = "workspace"
-     ELSE phase' = "region_locked"
-  /\ UNCHANGED <<firstCountry, storedRegion, account, admin>>
+  /\ LET resumed ==
+       IF licenseIssued THEN "licensed"
+       ELSE IF payment = "paid" THEN "paid"
+       ELSE IF payment = "open" THEN "paying"
+       ELSE IF payment = "canceled" THEN "payment_canceled"
+       ELSE "workspace"
+     IN phase' = IF RegionOf(c) = storedRegion THEN resumed ELSE "region_locked"
+  /\ UNCHANGED <<firstCountry, storedRegion, account, admin, payment, licenseIssued>>
 
 YouSubmitUnitedKingdomAgain == YouSubmitAgain("GB")
 YouSubmitEuropeanUnionAgain == YouSubmitAgain("DE")
 YouSubmitUnitedStatesAgain == YouSubmitAgain("US")
 
 NothingFurtherHappens ==
-  /\ phase \in {"checkout", "auth_failed"}
+  /\ phase \in {"licensed", "auth_failed"}
   /\ UNCHANGED vars
 
 Next ==
@@ -90,7 +128,11 @@ Next ==
   \/ YouSubmitUnitedStates
   \/ ThePasswordIsRejected
   \/ TheWorkspaceIsSaved
-  \/ YouContinueToCheckout
+  \/ YouStartPayment
+  \/ ThePaymentSucceeds
+  \/ ThePaymentIsCanceled
+  \/ YouTryPaymentAgain
+  \/ TheLicenseServerIssuesACleanLicense
   \/ YouSubmitUnitedKingdomAgain
   \/ YouSubmitEuropeanUnionAgain
   \/ YouSubmitUnitedStatesAgain
@@ -98,22 +140,16 @@ Next ==
 
 Spec == Init /\ [][Next]_vars
 
-\* A saved workspace stays in the region of the country chosen on the first save.
 WorkspaceMatchesCountry ==
   storedRegion = "" \/ storedRegion = RegionOf(firstCountry)
 
-\* The person who created the workspace is its company admin, and only then.
 CreatorIsAdmin ==
   admin = (storedRegion # "")
 
-\* A rejected password never creates an account or a workspace.
 RejectedPasswordStoresNothing ==
-  phase = "auth_failed" => account = FALSE /\ storedRegion = "" /\ admin = FALSE
+  phase = "auth_failed" =>
+    account = FALSE /\ storedRegion = "" /\ admin = FALSE /\ payment = "none" /\ licenseIssued = FALSE
 
-\* A later country that maps to another region is the refused phase, and only that phase.
-\* The second conjunct is the converse: a cross-region submission that
-\* incorrectly lands on "workspace" or "checkout" fails here even though
-\* the saved region was left unchanged.
 CountryChangeIsRefused ==
   /\ (phase = "region_locked" =>
        /\ storedRegion # ""
@@ -122,5 +158,15 @@ CountryChangeIsRefused ==
        /\ storedRegion = RegionOf(firstCountry))
   /\ (storedRegion # "" /\ country \in Countries /\ RegionOf(country) # storedRegion =>
        phase = "region_locked")
+
+\* A clean license is issued only after Stripe has recorded a successful payment,
+\* and payment never moves the saved region.
+CleanLicenseFollowsPayment ==
+  /\ (licenseIssued => payment = "paid" /\ storedRegion # "" /\ admin)
+  /\ (phase = "licensed" => licenseIssued)
+  /\ (phase = "paid" => payment = "paid" /\ ~licenseIssued)
+  /\ (phase = "paying" => payment = "open" /\ ~licenseIssued)
+  /\ (phase = "payment_canceled" => payment = "canceled" /\ ~licenseIssued)
+  /\ (payment = "none" => ~licenseIssued)
 
 ====

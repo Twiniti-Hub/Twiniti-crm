@@ -49,4 +49,18 @@ assert.match(
   /!created\.created && joinAsAdmin && created\.organization\.residencyRegion !== regionForCountry\(input\.countryCode\)/
 );
 
+const licenseEnqueue = post.indexOf("enqueueLicenseProvisioning");
+assert.ok(licenseEnqueue > lock && checkout > licenseEnqueue, "license provisioning is queued after the region lock and before checkout");
+
+const billing = readFileSync(join(root, "apps/api/src/routes/billing.ts"), "utf8");
+const webhook = billing.slice(billing.indexOf('app.post("/api/v1/webhooks/stripe"'));
+const completed = webhook.indexOf('case "checkout.session.completed"');
+const sync = webhook.indexOf("enqueueLicenseSubscriptionSync");
+assert.ok(completed > 0 && sync > completed, "a completed checkout enqueues a license subscription sync");
+
+const jobs = readFileSync(join(root, "apps/api/src/license-jobs.ts"), "utf8");
+const syncFn = jobs.slice(jobs.indexOf("export async function processLicenseSubscriptionSync"));
+assert.match(syncFn, /licenseProvisioningStatus: "provisioned"/, "subscription sync marks the license provisioned");
+assert.match(syncFn, /synchronizeSubscriptionState/, "subscription sync updates the license server");
+
 console.log("signup residency check passed");
