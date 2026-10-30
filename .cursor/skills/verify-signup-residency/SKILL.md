@@ -64,7 +64,7 @@ If `/statechart` fails while `check.mjs` passes, replay the numbered path on the
 
 Update the spec, the view, and `check.mjs` so they still describe the code. Run `check.mjs` and `/statechart` again. Move the sync commit below forward only after that run matches the tree.
 
-- Sync commit: `0f39a8e98ab1ce6655013fcd086fcae50e7aabaf`
+- Sync commit: `eca33a039a851211872bdfb1cb327d0b53aa5865`
 - Covered functions: `SignUpPage` `onSubmit`, `registerOrganizationRoutes` `POST /api/v1/organizations`, `createOrganization`, `regionForCountry`.
 
 ## Left out
