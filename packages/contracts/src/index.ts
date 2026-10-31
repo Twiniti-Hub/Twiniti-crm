@@ -46,11 +46,15 @@ export const propertyValueSchema = z.union([
 
 export const roleSchema = z.enum(["admin", "member"]);
 
+export const workspaceKindSchema = z.enum(["company", "personal"]);
+export type WorkspaceKind = z.infer<typeof workspaceKindSchema>;
+
 export const createOrganizationSchema = z.object({
   name: z.string().trim().min(1).max(200),
   countryCode: countryCodeSchema,
   inviteAdminEmail: z.string().trim().email().optional(),
-  joinAsAdmin: z.boolean().optional()
+  joinAsAdmin: z.boolean().optional(),
+  workspaceKind: workspaceKindSchema.optional().default("company")
 });
 
 export const inviteMemberSchema = z.object({
@@ -73,6 +77,7 @@ export const organizationSummarySchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
   regionCode: regionCodeSchema.optional(),
+  workspaceKind: workspaceKindSchema.optional(),
   createdAt: z.string().optional(),
   memberCount: z.number().int().nonnegative().optional()
 });

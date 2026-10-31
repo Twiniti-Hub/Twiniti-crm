@@ -6,7 +6,7 @@ Super Admin is a restricted console for operators who manage multiple workspaces
 
 The Super Admin console includes a global platform-health dashboard covering the configured US, UK, and EU data stores. It shows:
 
-- total organizations, active users, registered agents, companies, and contacts;
+- total organizations, total personal workspaces, active users, registered agents, companies, and contacts;
 - organizations currently in a seven-day or three-month trial;
 - paid organizations and trial-to-paid conversion dates;
 - billing, subscription, License_API status, and license decision;
@@ -15,9 +15,9 @@ The Super Admin console includes a global platform-health dashboard covering the
 
 Use the billing filter to review all organizations, trial organizations, paid organizations, or organizations needing attention. The dashboard is calculated server-side and can be refreshed when investigating a webhook or license synchronization delay.
 
-Use the workspace selector to choose a company and region, then select **Open workspace**. Confirm the selected organization before viewing or changing CRM data. Return to the console when finished.
+Use the workspace selector to choose a company or personal workspace and region, then select **Open workspace**. Confirm the selected organization before viewing or changing CRM data. Return to the console when finished.
 
-Super Admins can create workspaces and manage workspace membership. Treat these actions as administrative changes: verify the organization and invitee email carefully, and grant the smallest appropriate role.
+Super Admins can create company workspaces and personal workspaces, and manage workspace membership. Personal workspaces are separate organizations (`workspace_kind = personal`) and are not company tenants. Treat these actions as administrative changes: verify the organization and invitee email carefully, and grant the smallest appropriate role.
 
 If a Super Admin account was provisioned before subject-based membership was enabled, the existing active membership is matched to the verified Super Admin email so the assigned workspace can load normally.
 
