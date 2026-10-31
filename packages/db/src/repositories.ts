@@ -417,6 +417,7 @@ export async function createOrganization(
   input: {
     name: string;
     countryCode: string;
+    workspaceKind?: "company" | "personal";
     adminSubject?: string;
     email?: string | null;
     displayName?: string | null;
@@ -424,6 +425,7 @@ export async function createOrganization(
 ) {
   const countryCode = countryCodeSchema.parse(input.countryCode);
   const residencyRegion: RegionCode = regionForCountry(countryCode);
+  const workspaceKind = input.workspaceKind === "personal" ? "personal" : "company";
   const provisioningKey = input.adminSubject ? `twiniti-crm:user:${input.adminSubject}` : null;
   if (input.adminSubject) {
     const existing = await db.select({ organization: organizations, admin: crmUsers })
@@ -435,6 +437,7 @@ export async function createOrganization(
   }
   const [org] = await db.insert(organizations).values({
     name: input.name.trim(),
+    workspaceKind,
     residencyRegion,
     provisioningKey
   }).onConflictDoNothing({ target: organizations.provisioningKey }).returning();
@@ -612,6 +615,7 @@ export async function listOrganizations(db: Db) {
     .select({
       id: organizations.id,
       name: organizations.name,
+      workspaceKind: organizations.workspaceKind,
       residencyRegion: organizations.residencyRegion,
       createdAt: organizations.createdAt,
       memberCount: count(crmUsers.id)
@@ -628,6 +632,7 @@ export async function getSuperAdminDashboard(db: Db, regionCode: RegionCode) {
     .select({
       id: organizations.id,
       name: organizations.name,
+      workspaceKind: organizations.workspaceKind,
       regionCode: sql<string>`${regionCode}`,
       createdAt: organizations.createdAt,
       billingStatus: organizationBilling.status,

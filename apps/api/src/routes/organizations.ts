@@ -301,6 +301,48 @@ function mapInvitation(row: {
   };
 }
 
+export function summarizeSuperAdminDashboardTotals(
+  rows: Array<{
+    workspaceKind?: string | null;
+    activeUserCount: number;
+    agentCount: number;
+    companyCount: number;
+    contactCount: number;
+    billingStatus: string | null;
+    trialEnd: Date | string | null;
+  }>,
+  nowMs = Date.now()
+) {
+  return rows.reduce(
+    (summary, row) => {
+      summary.organizations += 1;
+      if (row.workspaceKind === "personal") summary.personalWorkspaces += 1;
+      summary.users += row.activeUserCount;
+      summary.agents += row.agentCount;
+      summary.companies += row.companyCount;
+      summary.contacts += row.contactCount;
+      const billing = row.billingStatus ?? "pending";
+      if (billing === "trialing") summary.trialing += 1;
+      else if (billing === "active") summary.paid += 1;
+      else summary.attention += 1;
+      if (row.trialEnd && new Date(row.trialEnd).getTime() > nowMs) summary.trialsEnding += 1;
+      return summary;
+    },
+    {
+      organizations: 0,
+      personalWorkspaces: 0,
+      users: 0,
+      agents: 0,
+      companies: 0,
+      contacts: 0,
+      trialing: 0,
+      paid: 0,
+      attention: 0,
+      trialsEnding: 0
+    }
+  );
+}
+
 export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, env: AppEnv) {
   app.get("/api/v1/me", async (request) => {
     const actor = requireActor(request);
@@ -462,6 +504,13 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         return reply.code(403).send({ error: { code: "forbidden", message: "Users only" } });
       }
       const input = createOrganizationSchema.parse(request.body);
+      const workspaceKind = input.workspaceKind ?? "company";
+
+      if (workspaceKind === "personal" && !actor.isSuperAdmin) {
+        return reply.code(403).send({
+          error: { code: "forbidden", message: "Only Super Admins can create personal workspaces" }
+        });
+      }
 
       if (!actor.needsSetup && !actor.isSuperAdmin) {
         if (!actor.organizationId || actor.role !== "admin") {
@@ -487,6 +536,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       const created = await createOrganization(db, {
         name: input.name,
         countryCode: input.countryCode,
+        workspaceKind,
         ...(joinAsAdmin
           ? {
               adminSubject: subject,
@@ -556,7 +606,11 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         action: "organization.create",
         entityType: "organization",
         entityId: created.organization.id,
-        metadata: { name: created.organization.name, joinedAsAdmin: joinAsAdmin }
+        metadata: {
+          name: created.organization.name,
+          joinedAsAdmin: joinAsAdmin,
+          workspaceKind: created.organization.workspaceKind
+        }
       });
 
       if (created.created && joinAsAdmin && actor.needsSetup) {
@@ -578,6 +632,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         data: {
           id: created.organization.id,
           name: created.organization.name,
+          workspaceKind: created.organization.workspaceKind,
           regionCode: created.organization.residencyRegion,
           countryCode: input.countryCode,
           createdAt: created.organization.createdAt.toISOString(),
@@ -603,6 +658,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         data: rows.map((row) => ({
           id: row.id,
           name: row.name,
+          workspaceKind: row.workspaceKind,
           createdAt: row.createdAt.toISOString(),
           memberCount: Number(row.memberCount ?? 0),
           regionCode: row.residencyRegion
@@ -627,23 +683,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         }))
       );
       const organizations = regionalRows.flat();
-      const now = Date.now();
-      const totals = organizations.reduce(
-        (summary, row) => {
-          summary.organizations += 1;
-          summary.users += row.activeUserCount;
-          summary.agents += row.agentCount;
-          summary.companies += row.companyCount;
-          summary.contacts += row.contactCount;
-          const billing = row.billingStatus ?? "pending";
-          if (billing === "trialing") summary.trialing += 1;
-          else if (billing === "active") summary.paid += 1;
-          else summary.attention += 1;
-          if (row.trialEnd && new Date(row.trialEnd).getTime() > now) summary.trialsEnding += 1;
-          return summary;
-        },
-        { organizations: 0, users: 0, agents: 0, companies: 0, contacts: 0, trialing: 0, paid: 0, attention: 0, trialsEnding: 0 }
-      );
+      const totals = summarizeSuperAdminDashboardTotals(organizations);
       return {
         data: {
           generatedAt: new Date().toISOString(),
