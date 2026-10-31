@@ -16,10 +16,20 @@ import {
   getOrganizationBilling,
   getOrganizationById,
   hashCredential,
+  listMembershipsForSubject,
   touchAgent,
   updateOrganizationLicense,
   type Db
 } from "@twiniti/db";
+
+export type AuthWorkspaceSummary = {
+  id: string;
+  name: string;
+  workspaceKind: "company" | "personal";
+  regionCode: RegionCode;
+  role: string;
+  membershipId: string;
+};
 
 export type AuthActor = {
   type: "user" | "agent" | "system";
@@ -34,12 +44,14 @@ export type AuthActor = {
   hexclaveSubject?: string;
   primaryEmailVerified?: boolean;
   organizationName?: string | null;
+  workspaceKind?: "company" | "personal" | null;
   regionCode?: RegionCode | null;
   countryCode?: string | null;
   billingStatus?: string;
   licenseDecision?: string;
   licenseReasonCode?: string;
   licenseStatus?: string | null;
+  workspaces?: AuthWorkspaceSummary[];
 };
 
 export type CrmRole = "admin" | "member";
@@ -199,6 +211,44 @@ export function resolveSuperAdminWorkspaceMembership(input: {
     return emailMembership;
   }
   return null;
+}
+
+type SubjectMembershipRow = {
+  id: string;
+  organizationId: string;
+  email: string | null;
+  displayName: string | null;
+  countryCode: string | null;
+  role: string;
+  active: boolean;
+  organizationName: string;
+  workspaceKind: string;
+  residencyRegion: string;
+};
+
+function toWorkspaceSummaries(memberships: SubjectMembershipRow[]): AuthWorkspaceSummary[] {
+  return memberships.map((row) => ({
+    id: row.organizationId,
+    name: row.organizationName,
+    workspaceKind: row.workspaceKind === "personal" ? "personal" : "company",
+    regionCode: row.residencyRegion as RegionCode,
+    role: normalizeRole(row.role) ?? "member",
+    membershipId: row.id
+  }));
+}
+
+/** Pick active membership: validated header, else first company, else first membership. */
+export function selectMembershipForRequest(
+  memberships: SubjectMembershipRow[],
+  requestedWorkspaceId: string | undefined
+): SubjectMembershipRow | null {
+  const active = memberships.filter((row) => row.active);
+  if (!active.length) return null;
+  if (requestedWorkspaceId) {
+    const matched = active.find((row) => row.organizationId === requestedWorkspaceId);
+    if (matched) return matched;
+  }
+  return active.find((row) => row.workspaceKind === "company") ?? active[0] ?? null;
 }
 
 function toHexclaveTokenStore(requestLike: RequestLike): HexclaveTokenStoreRequest {
@@ -426,29 +476,33 @@ export async function resolveRequestActor(
     (user as { primaryEmailVerified?: boolean }).primaryEmailVerified
   );
   const superAdmin = isSuperAdminEmail(email, env);
-  const crmUserBySubject = await findCrmUserBySubject(db, subject);
+  const memberships = await listMembershipsForSubject(db, subject);
+  const crmUserBySubject = memberships[0]
+    ?? await findCrmUserBySubject(db, subject);
   // Super Admins may predate subject-bound CRM provisioning. If their verified
   // platform email already belongs to an active CRM membership, use that
   // membership as the default workspace rather than forcing a blank console.
-  const crmUser = crmUserBySubject ?? (superAdmin && email ? await findCrmUserByEmail(db, email) : null);
+  const emailMembership = superAdmin && email ? await findCrmUserByEmail(db, email) : null;
+  const crmUser = crmUserBySubject ?? emailMembership;
+  const requestedWorkspaceId = getRequestedWorkspaceId(requestLike.headers);
+  const workspaces = toWorkspaceSummaries(memberships);
 
   // A platform super admin must explicitly choose a workspace. The database
   // lookup below is the authorization boundary; an arbitrary client-supplied
   // ID never becomes an organization context on its own. Missing, stale, or
   // invalid context deliberately returns the admin-console setup state.
   if (superAdmin) {
-    const requestedWorkspaceId = getRequestedWorkspaceId(requestLike.headers);
     if (requestedWorkspaceId) {
       const workspace = await getOrganizationById(db, requestedWorkspaceId);
       if (workspace) {
         const billing = await getOrganizationBilling(db, workspace.id);
-        // Workspace header used to force actor.id = Hexclave subject even when
-        // the Super Admin already has a crm_users row in that org. Settings BCC
-        // and other crm_users FK paths then miss existing rows (TWI-711).
-        const workspaceMember = resolveSuperAdminWorkspaceMembership({
+        // Prefer membership in the selected workspace from the multi-membership
+        // list; fall back to email-linked membership for pre-provisioned admins.
+        const listedMember = memberships.find((row) => row.organizationId === workspace.id && row.active);
+        const workspaceMember = listedMember ?? resolveSuperAdminWorkspaceMembership({
           workspaceId: workspace.id,
           subjectMembership: crmUserBySubject,
-          emailMembership: crmUser
+          emailMembership
         });
         return {
           type: "user",
@@ -462,31 +516,56 @@ export async function resolveRequestActor(
           hexclaveSubject: subject,
           primaryEmailVerified,
           organizationName: workspace.name,
+          workspaceKind: workspace.workspaceKind === "personal" ? "personal" : "company",
           regionCode: workspace.residencyRegion as RegionCode,
           countryCode: workspaceMember?.countryCode ?? null,
-          billingStatus: billing?.status ?? "pending"
+          billingStatus: billing?.status ?? "pending",
+          workspaces
         };
       }
     }
-    if (crmUser?.active) {
-      const organization = await getOrganizationById(db, crmUser.organizationId);
-      const billing = await getOrganizationBilling(db, crmUser.organizationId);
-      return {
-        type: "user",
-        id: crmUser.id,
-        organizationId: crmUser.organizationId,
-        role: normalizeRole(crmUser.role) ?? "admin",
-        email: crmUser.email ?? email,
-        displayName: crmUser.displayName ?? displayName,
-        needsSetup: false,
-        isSuperAdmin: true,
-        hexclaveSubject: subject,
-        primaryEmailVerified,
-        organizationName: organization?.name ?? null,
-        regionCode: (organization?.residencyRegion as RegionCode | undefined) ?? null,
-        countryCode: crmUser.countryCode ?? null,
-        billingStatus: billing?.status ?? "pending"
-      };
+    const selected = selectMembershipForRequest(memberships, undefined);
+    if (selected || (crmUser && "active" in crmUser && crmUser.active)) {
+      const activeMembership = selected ?? (crmUser as SubjectMembershipRow | typeof crmUser);
+      const organizationId = "organizationId" in activeMembership
+        ? activeMembership.organizationId
+        : null;
+      if (organizationId) {
+        const organization = "organizationName" in activeMembership && activeMembership.organizationName
+          ? {
+              name: activeMembership.organizationName,
+              residencyRegion: "residencyRegion" in activeMembership
+                ? String(activeMembership.residencyRegion)
+                : null,
+              workspaceKind: "workspaceKind" in activeMembership
+                ? String(activeMembership.workspaceKind)
+                : "company"
+            }
+          : await getOrganizationById(db, organizationId);
+        const billing = await getOrganizationBilling(db, organizationId);
+        return {
+          type: "user",
+          id: activeMembership.id,
+          organizationId,
+          role: normalizeRole(activeMembership.role) ?? "admin",
+          email: activeMembership.email ?? email,
+          displayName: activeMembership.displayName ?? displayName,
+          needsSetup: false,
+          isSuperAdmin: true,
+          hexclaveSubject: subject,
+          primaryEmailVerified,
+          organizationName: organization && "name" in organization ? organization.name : null,
+          workspaceKind: organization && "workspaceKind" in organization && organization.workspaceKind === "personal"
+            ? "personal"
+            : "company",
+          regionCode: (organization && "residencyRegion" in organization
+            ? organization.residencyRegion as RegionCode
+            : null),
+          countryCode: activeMembership.countryCode ?? null,
+          billingStatus: billing?.status ?? "pending",
+          workspaces
+        };
+      }
     }
     return {
       type: "user",
@@ -499,11 +578,14 @@ export async function resolveRequestActor(
       isSuperAdmin: true,
       hexclaveSubject: subject,
       primaryEmailVerified,
-      organizationName: null
+      organizationName: null,
+      workspaceKind: null,
+      workspaces
     };
   }
 
-  if (!crmUser || !crmUser.active) {
+  const selectedMembership = selectMembershipForRequest(memberships, requestedWorkspaceId);
+  if (!selectedMembership) {
     return {
       type: "user",
       id: subject,
@@ -512,41 +594,42 @@ export async function resolveRequestActor(
       email,
       displayName,
       needsSetup: true,
-      isSuperAdmin: superAdmin,
+      isSuperAdmin: false,
       hexclaveSubject: subject,
       primaryEmailVerified,
-      organizationName: null
+      organizationName: null,
+      workspaceKind: null,
+      workspaces: []
     };
   }
 
-  const organization = await getOrganizationById(db, crmUser.organizationId);
-  const billing = await getOrganizationBilling(db, crmUser.organizationId);
-  const license = superAdmin
-    ? { billingStatus: billing?.status ?? "pending", check: null as LicenseCheck | null }
-    : await checkOrganizationLicense(db, env, {
-        organizationId: crmUser.organizationId,
-        userId: crmUser.id,
-        subject,
-        email: crmUser.email ?? email
-    }, billing?.status ?? "pending");
+  const billing = await getOrganizationBilling(db, selectedMembership.organizationId);
+  const license = await checkOrganizationLicense(db, env, {
+    organizationId: selectedMembership.organizationId,
+    userId: selectedMembership.id,
+    subject,
+    email: selectedMembership.email ?? email
+  }, billing?.status ?? "pending");
 
   return {
     type: "user",
-    id: crmUser.id,
-    organizationId: crmUser.organizationId,
-    role: normalizeRole(crmUser.role) ?? "member",
-    email: crmUser.email ?? email,
-    displayName: crmUser.displayName ?? displayName,
+    id: selectedMembership.id,
+    organizationId: selectedMembership.organizationId,
+    role: normalizeRole(selectedMembership.role) ?? "member",
+    email: selectedMembership.email ?? email,
+    displayName: selectedMembership.displayName ?? displayName,
     needsSetup: false,
-    isSuperAdmin: superAdmin,
+    isSuperAdmin: false,
     hexclaveSubject: subject,
     primaryEmailVerified,
-    organizationName: organization?.name ?? null,
-    regionCode: (organization?.residencyRegion as RegionCode | undefined) ?? null,
-    countryCode: crmUser.countryCode ?? null,
+    organizationName: selectedMembership.organizationName,
+    workspaceKind: selectedMembership.workspaceKind === "personal" ? "personal" : "company",
+    regionCode: selectedMembership.residencyRegion as RegionCode,
+    countryCode: selectedMembership.countryCode ?? null,
     billingStatus: license.billingStatus,
     licenseDecision: license.check?.decision,
     licenseReasonCode: license.check?.reasonCode,
-    licenseStatus: license.check?.licenseStatus
+    licenseStatus: license.check?.licenseStatus,
+    workspaces
   };
 }

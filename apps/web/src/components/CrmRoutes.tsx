@@ -2,6 +2,7 @@ import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { Me } from "../lib/me";
+import { AcceptInvitePage } from "../pages/AcceptInvitePage";
 import { AgentsPage } from "../pages/AgentsPage";
 import { AttentionPage } from "../pages/AttentionPage";
 import { BillingPage } from "../pages/BillingPage";
@@ -47,6 +48,8 @@ function WorkspaceGate() {
 export function CrmRoutes() {
   return (
     <Routes>
+      {/* Personal members can still accept a company invite without leaving CRM auth. */}
+      <Route path="accept-invite" element={<AcceptInvitePage />} />
       <Route element={<Shell />}>
         <Route element={<WorkspaceGate />}>
         <Route index element={<OverviewPage />} />

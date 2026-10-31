@@ -189,6 +189,7 @@ export function AuthGate() {
     return (
       <Routes>
         <Route path="billing" element={<BillingPage />} />
+        <Route path="accept-invite" element={<AcceptInvitePage />} />
         <Route path="*" element={<Navigate to="/billing" replace />} />
       </Routes>
     );

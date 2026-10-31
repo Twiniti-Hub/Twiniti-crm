@@ -6,6 +6,7 @@ import { assessExternalToolMetadata, hashRunCredential, mintRunCredential, valid
 import {
   getRequestedWorkspaceId,
   resolveSuperAdminWorkspaceMembership,
+  selectMembershipForRequest,
   WORKSPACE_CONTEXT_HEADER
 } from "@twiniti/auth";
 import { assertProductionApiConfiguration, loadEnv } from "@twiniti/config";
@@ -65,6 +66,8 @@ test("production configuration rejects a browser/server Hexclave project mismatc
     STRIPE_SECRET_KEY: "stripe-secret",
     STRIPE_WEBHOOK_SECRET: "stripe-webhook",
     STRIPE_PRICE_ID: "price_test",
+    STRIPE_PERSONAL_PRICE_ID: "price_personal",
+    STRIPE_PERSONAL_ORG_MEMBER_PRICE_ID: "price_personal_discount",
     LICENSE_API_URL: "https://license.example.invalid",
     LICENSE_API_API_KEY: "license-key"
   });
@@ -76,6 +79,45 @@ test("workspace context accepts only UUID headers", () => {
   assert.equal(
     getRequestedWorkspaceId({ [WORKSPACE_CONTEXT_HEADER]: "550e8400-e29b-41d4-a716-446655440000" }),
     "550e8400-e29b-41d4-a716-446655440000"
+  );
+});
+
+test("selectMembershipForRequest validates header and prefers company default", () => {
+  const personal = {
+    id: "m-personal",
+    organizationId: "11111111-1111-4111-8111-111111111111",
+    email: "a@example.com",
+    displayName: "A",
+    countryCode: "US",
+    role: "admin",
+    active: true,
+    organizationName: "Personal — A",
+    workspaceKind: "personal",
+    residencyRegion: "us"
+  };
+  const company = {
+    id: "m-company",
+    organizationId: "22222222-2222-4222-8222-222222222222",
+    email: "a@example.com",
+    displayName: "A",
+    countryCode: "US",
+    role: "member",
+    active: true,
+    organizationName: "Acme",
+    workspaceKind: "company",
+    residencyRegion: "us"
+  };
+  assert.equal(
+    selectMembershipForRequest([personal, company], personal.organizationId)?.id,
+    "m-personal"
+  );
+  assert.equal(
+    selectMembershipForRequest([personal, company], undefined)?.id,
+    "m-company"
+  );
+  assert.equal(
+    selectMembershipForRequest([personal, company], "33333333-3333-4333-8333-333333333333")?.id,
+    "m-company"
   );
 });
 
