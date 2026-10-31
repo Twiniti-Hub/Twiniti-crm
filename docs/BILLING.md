@@ -1,15 +1,24 @@
 # Organization billing
 
-Twiniti Loop bills one Stripe subscription per organization. Checkout always uses a single configured Stripe Price with quantity `1`; users are not metered or charged individually.
+Twiniti Loop bills one Stripe subscription per organization (company or personal workspace). Checkout uses quantity `1` on the Price for that workspace kind; users are not metered individually.
 
 ## Required API environment
 
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
-- `STRIPE_PRICE_ID`
+- `STRIPE_PRICE_ID` (company / organization monthly Price)
+- `STRIPE_PERSONAL_PRICE_ID` (personal monthly Price)
+- `STRIPE_PERSONAL_ORG_MEMBER_PRICE_ID` (discounted personal monthly Price when the payer has an active company membership)
 - `STRIPE_BILLING_PORTAL_CONFIGURATION_ID` (optional)
 
-In production, the API refuses to start without the first three values and without Hexclave server authentication.
+In production, the API refuses to start without the Stripe secret, webhook secret, all three Price IDs, and Hexclave server authentication.
+
+### Personal workspace pricing
+
+- Personal checkout uses `STRIPE_PERSONAL_PRICE_ID`, or `STRIPE_PERSONAL_ORG_MEMBER_PRICE_ID` when the Hexclave subject already has an active `crm_users` membership in a `workspace_kind=company` organization (evaluated at subscribe / checkout creation time).
+- Renewals stay on the Price selected at checkout (Stripe subscription line item). Changing company membership later does not auto-switch Prices; ops may move the subscription in Stripe if needed.
+- Personal checkout does not use the company trial period (`STRIPE_TRIAL_PERIOD_DAYS` applies to company only).
+- License_API provisioning remains keyed by the personal organization UUID (`externalOrganizationId`).
 
 ## Stripe webhook
 

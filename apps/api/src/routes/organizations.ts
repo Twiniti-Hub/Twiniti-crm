@@ -16,10 +16,12 @@ import {
   findInvitationByToken,
   getOrganizationById,
   getOrganizationBilling,
+  listMembershipsForSubject,
   listOrganizations,
   listOrgMembers,
   listPendingInvitations,
   getSuperAdminDashboard,
+  subjectHasActiveCompanyMembership,
   withServiceRls,
   updateMemberRole,
   updateOrganizationLicense,
@@ -352,6 +354,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         id: actor.id,
         organizationId: actor.organizationId,
         organizationName: actor.organizationName ?? null,
+        workspaceKind: actor.workspaceKind ?? null,
         regionCode: actor.regionCode ?? null,
         countryCode: actor.countryCode ?? null,
         role: actor.role ?? null,
@@ -363,7 +366,8 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         billingStatus: actor.billingStatus ?? "pending",
         licenseDecision: actor.licenseDecision ?? null,
         licenseReasonCode: actor.licenseReasonCode ?? null,
-        licenseStatus: actor.licenseStatus ?? null
+        licenseStatus: actor.licenseStatus ?? null,
+        workspaces: actor.workspaces ?? []
       }
     };
   });
@@ -505,15 +509,26 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       }
       const input = createOrganizationSchema.parse(request.body);
       const workspaceKind = input.workspaceKind ?? "company";
+      const subject = actor.hexclaveSubject ?? actor.id;
+      const memberships = actor.isSuperAdmin
+        ? []
+        : await listMembershipsForSubject(db, subject);
+      const hasPersonal = memberships.some((row) => row.workspaceKind === "personal");
+      const hasCompany = memberships.some((row) => row.workspaceKind === "company");
 
-      if (workspaceKind === "personal" && !actor.isSuperAdmin) {
-        return reply.code(403).send({
-          error: { code: "forbidden", message: "Only Super Admins can create personal workspaces" }
+      if (workspaceKind === "personal" && input.inviteAdminEmail) {
+        return reply.code(400).send({
+          error: { code: "invalid_invite", message: "Personal workspaces do not support invitations" }
         });
       }
 
-      if (!actor.needsSetup && !actor.isSuperAdmin) {
-        if (!actor.organizationId || actor.role !== "admin") {
+      if (!actor.isSuperAdmin) {
+        if (workspaceKind === "personal" && hasPersonal) {
+          return reply.code(409).send({
+            error: { code: "conflict", message: "You already have a personal workspace" }
+          });
+        }
+        if (workspaceKind === "company" && hasCompany && !actor.needsSetup) {
           return reply.code(409).send({
             error: { code: "conflict", message: "You already belong to a company" }
           });
@@ -522,7 +537,9 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
 
       const joinAsAdmin = actor.isSuperAdmin
         ? input.joinAsAdmin === true
-        : Boolean(actor.needsSetup);
+        : Boolean(actor.needsSetup)
+          || (workspaceKind === "personal" && !hasPersonal)
+          || (workspaceKind === "company" && !hasCompany);
 
       if (!joinAsAdmin && !actor.isSuperAdmin) {
         return reply.code(403).send({ error: { code: "forbidden", message: "Super admin required" } });
@@ -532,7 +549,6 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         assertVerifiedPrimaryEmail(actor);
       }
 
-      const subject = actor.hexclaveSubject ?? actor.id;
       const created = await createOrganization(db, {
         name: input.name,
         countryCode: input.countryCode,
@@ -556,7 +572,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       const billing = await ensureOrganizationBilling(db, created.organization.id);
 
       let invitation = null;
-      if (input.inviteAdminEmail) {
+      if (input.inviteAdminEmail && workspaceKind !== "personal") {
         const delivered = await createAndSendOrganizationAdminInvite(
           db,
           env,
@@ -591,9 +607,14 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       let checkoutUrl: string | null = null;
       let checkoutSessionId: string | null = null;
       if (joinAsAdmin) {
+        const orgMemberDiscount = workspaceKind === "personal"
+          && Boolean(subject)
+          && await subjectHasActiveCompanyMembership(db, subject);
         const checkout = await createOrganizationCheckoutSession(db, env, {
           organizationId: created.organization.id,
-          customerEmail: actor.email
+          customerEmail: actor.email,
+          workspaceKind,
+          orgMemberDiscount
         });
         checkoutUrl = checkout?.url ?? null;
         checkoutSessionId = checkout?.id ?? null;
@@ -830,6 +851,11 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       if (!org) {
         return reply.code(404).send({ error: { code: "not_found", message: "Company not found" } });
       }
+      if (org.workspaceKind === "personal") {
+        return reply.code(403).send({
+          error: { code: "forbidden", message: "Personal workspaces do not support invitations" }
+        });
+      }
       const invite = await createInvitation(db, {
         organizationId,
         email: input.email,
@@ -863,11 +889,6 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       const actor = requireActor(request);
       if (actor.type !== "user") {
         return reply.code(403).send({ error: { code: "forbidden", message: "Users only" } });
-      }
-      if (!actor.needsSetup) {
-        return reply.code(409).send({
-          error: { code: "conflict", message: "You already belong to a company" }
-        });
       }
       assertVerifiedPrimaryEmail(actor);
       const input = acceptInvitationSchema.parse(request.body);

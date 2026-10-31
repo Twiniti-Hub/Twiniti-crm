@@ -18,15 +18,21 @@ for (const [country, region] of Object.entries(expected)) {
 
 const createOrg = readFileSync(join(root, "packages/db/src/repositories.ts"), "utf8");
 const createFn = createOrg.slice(createOrg.indexOf("export async function createOrganization"));
-const earlyReturn = createFn.indexOf("if (existing[0]) return {");
+const earlyPersonal = createFn.indexOf('if (workspaceKind === "personal" && sameKind)');
+const earlyCompany = createFn.indexOf("if (existingByKey[0])");
+const earlyReturn = Math.min(
+  earlyPersonal > 0 ? earlyPersonal : Number.POSITIVE_INFINITY,
+  earlyCompany > 0 ? earlyCompany : Number.POSITIVE_INFINITY
+);
 const insert = createFn.indexOf("await db.insert(organizations)");
-assert.ok(earlyReturn > 0 && insert > earlyReturn, "existing subject returns before insert");
+assert.ok(Number.isFinite(earlyReturn) && insert > earlyReturn, "existing subject returns before insert");
 const beforeInsert = createFn.slice(0, insert);
 assert.equal(
   beforeInsert.includes(".set("),
   false,
   "an existing workspace must not be updated before the insert"
 );
+assert.match(createFn, /organizationProvisioningKey/, "personal and company use distinct provisioning keys");
 assert.match(
   createFn.slice(insert, insert + 400),
   /residencyRegion/,

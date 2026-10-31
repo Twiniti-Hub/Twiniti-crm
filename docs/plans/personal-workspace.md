@@ -1,7 +1,7 @@
 # Personal workspace in Loop (Twiniti CRM)
 
-**Linear:** [TWI-775](https://linear.app/twiniti/issue/TWI-775/plan-personal-loop-workspace-isolated-from-company-org)  
-**Status:** Plan only (no product or schema changes in this document)  
+**Linear:** [TWI-775](https://linear.app/twiniti/issue/TWI-775/plan-personal-loop-workspace-isolated-from-company-org) (plan), [TWI-1020](https://linear.app/twiniti/issue/TWI-1020/end-user-personal-workspace-multi-membership-signup-billing-ux) (implementation)  
+**Status:** Implementation in progress (TWI-1020) — multi-membership, Personal vs Organization signup, personal Stripe monthly + org-member discount, solo personal UX.  
 **Goal:** A person can use Loop as a **personal CRM** in a workspace that is completely separate from any **company** organization they belong to.
 
 ## Constraints (George)
