@@ -977,24 +977,54 @@ export async function acceptInvitation(
       throw error;
     }
 
+    // Prefer reactivating a deactivated membership over insert+conflict, so the
+    // invite is never burned while leaving the member inactive.
+    if (existingInOrg && !existingInOrg.active) {
+      const [reactivated] = await tx.update(crmUsers).set({
+        active: true,
+        role: invitation.role,
+        email: input.email ?? invitation.email,
+        displayName: input.displayName ?? existingInOrg.displayName
+      }).where(and(
+        eq(crmUsers.id, existingInOrg.id),
+        eq(crmUsers.organizationId, invitation.organizationId)
+      )).returning();
+      if (!reactivated) {
+        throw new Error("Unable to reactivate membership from invitation");
+      }
+      return {
+        user: reactivated,
+        organizationId: invitation.organizationId,
+        organizationName: found.organizationName
+      };
+    }
+
     const [user] = await tx.insert(crmUsers).values({
       organizationId: invitation.organizationId,
       hexclaveSubject: input.subject,
       email: input.email ?? invitation.email,
       displayName: input.displayName ?? null,
-      role: invitation.role
+      role: invitation.role,
+      active: true
     }).onConflictDoNothing({
       target: [crmUsers.hexclaveSubject, crmUsers.organizationId]
     }).returning();
 
     if (!user) {
-      const concurrent = await tx.select().from(crmUsers).where(and(
+      // Race: another request inserted/updated the same membership. Reactivate
+      // rather than returning a possibly inactive conflict row.
+      const [reactivated] = await tx.update(crmUsers).set({
+        active: true,
+        role: invitation.role,
+        email: input.email ?? invitation.email,
+        displayName: input.displayName ?? null
+      }).where(and(
         eq(crmUsers.hexclaveSubject, input.subject),
         eq(crmUsers.organizationId, invitation.organizationId)
-      )).limit(1);
-      if (concurrent[0]) {
+      )).returning();
+      if (reactivated) {
         return {
-          user: concurrent[0],
+          user: reactivated,
           organizationId: invitation.organizationId,
           organizationName: found.organizationName
         };
