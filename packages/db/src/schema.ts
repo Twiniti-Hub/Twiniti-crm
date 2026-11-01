@@ -110,7 +110,8 @@ export const crmUsers = pgTable("crm_users", {
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => ({
-  subjectIndex: uniqueIndex("crm_users_subject_idx").on(table.hexclaveSubject)
+  subjectOrgIndex: uniqueIndex("crm_users_subject_org_idx").on(table.hexclaveSubject, table.organizationId),
+  subjectIndex: index("crm_users_subject_idx").on(table.hexclaveSubject)
 }));
 
 export const organizationInvitations = pgTable("organization_invitations", {

@@ -16,10 +16,13 @@ import {
   findInvitationByToken,
   getOrganizationById,
   getOrganizationBilling,
+  listMembershipsForSubject,
   listOrganizations,
   listOrgMembers,
   listPendingInvitations,
   getSuperAdminDashboard,
+  subjectHasActiveCompanyMembership,
+  withIsolatedServiceRls,
   withServiceRls,
   updateMemberRole,
   updateOrganizationLicense,
@@ -28,7 +31,8 @@ import {
   listOrganizationResendDomains,
   getOrganizationResendDomain,
   getDefaultOrganizationResendDomain,
-  type Db
+  type Db,
+  type DbPool
 } from "@twiniti/db";
 import { getDb } from "@twiniti/db";
 import { regionForCountry, type RegionCode } from "@twiniti/contracts";
@@ -343,7 +347,7 @@ export function summarizeSuperAdminDashboardTotals(
   );
 }
 
-export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, env: AppEnv) {
+export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, env: AppEnv, pool: DbPool) {
   app.get("/api/v1/me", async (request) => {
     const actor = requireActor(request);
     return {
@@ -352,6 +356,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         id: actor.id,
         organizationId: actor.organizationId,
         organizationName: actor.organizationName ?? null,
+        workspaceKind: actor.workspaceKind ?? null,
         regionCode: actor.regionCode ?? null,
         countryCode: actor.countryCode ?? null,
         role: actor.role ?? null,
@@ -363,7 +368,8 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         billingStatus: actor.billingStatus ?? "pending",
         licenseDecision: actor.licenseDecision ?? null,
         licenseReasonCode: actor.licenseReasonCode ?? null,
-        licenseStatus: actor.licenseStatus ?? null
+        licenseStatus: actor.licenseStatus ?? null,
+        workspaces: actor.workspaces ?? []
       }
     };
   });
@@ -505,145 +511,167 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       }
       const input = createOrganizationSchema.parse(request.body);
       const workspaceKind = input.workspaceKind ?? "company";
+      const subject = actor.hexclaveSubject ?? actor.id;
 
-      if (workspaceKind === "personal" && !actor.isSuperAdmin) {
-        return reply.code(403).send({
-          error: { code: "forbidden", message: "Only Super Admins can create personal workspaces" }
-        });
-      }
+      // Cross-workspace create must not run inside the current org's twiniti_app
+      // transaction — inserts for a new organization_id fail RLS WITH CHECK.
+      return await withIsolatedServiceRls(pool, null, async (provisioningDb) => {
+        const memberships = actor.isSuperAdmin
+          ? []
+          : await listMembershipsForSubject(provisioningDb, subject);
+        const hasPersonal = memberships.some((row) => row.workspaceKind === "personal");
+        const hasCompany = memberships.some((row) => row.workspaceKind === "company");
 
-      if (!actor.needsSetup && !actor.isSuperAdmin) {
-        if (!actor.organizationId || actor.role !== "admin") {
-          return reply.code(409).send({
-            error: { code: "conflict", message: "You already belong to a company" }
+        if (workspaceKind === "personal" && input.inviteAdminEmail) {
+          return reply.code(400).send({
+            error: { code: "invalid_invite", message: "Personal workspaces do not support invitations" }
           });
         }
-      }
 
-      const joinAsAdmin = actor.isSuperAdmin
-        ? input.joinAsAdmin === true
-        : Boolean(actor.needsSetup);
+        if (!actor.isSuperAdmin) {
+          if (workspaceKind === "personal" && hasPersonal) {
+            return reply.code(409).send({
+              error: { code: "conflict", message: "You already have a personal workspace" }
+            });
+          }
+          if (workspaceKind === "company" && hasCompany && !actor.needsSetup) {
+            return reply.code(409).send({
+              error: { code: "conflict", message: "You already belong to a company" }
+            });
+          }
+        }
 
-      if (!joinAsAdmin && !actor.isSuperAdmin) {
-        return reply.code(403).send({ error: { code: "forbidden", message: "Super admin required" } });
-      }
+        const joinAsAdmin = actor.isSuperAdmin
+          ? input.joinAsAdmin === true
+          : Boolean(actor.needsSetup)
+            || (workspaceKind === "personal" && !hasPersonal)
+            || (workspaceKind === "company" && !hasCompany);
 
-      if (joinAsAdmin) {
-        assertVerifiedPrimaryEmail(actor);
-      }
+        if (!joinAsAdmin && !actor.isSuperAdmin) {
+          return reply.code(403).send({ error: { code: "forbidden", message: "Super admin required" } });
+        }
 
-      const subject = actor.hexclaveSubject ?? actor.id;
-      const created = await createOrganization(db, {
-        name: input.name,
-        countryCode: input.countryCode,
-        workspaceKind,
-        ...(joinAsAdmin
-          ? {
-              adminSubject: subject,
-              email: actor.email,
-              displayName: actor.displayName
+        if (joinAsAdmin) {
+          assertVerifiedPrimaryEmail(actor);
+        }
+
+        const created = await createOrganization(provisioningDb, {
+          name: input.name,
+          countryCode: input.countryCode,
+          workspaceKind,
+          ...(joinAsAdmin
+            ? {
+                adminSubject: subject,
+                email: actor.email,
+                displayName: actor.displayName
+              }
+          : {})
+        });
+        if (!created.created && joinAsAdmin && created.organization.residencyRegion !== regionForCountry(input.countryCode)) {
+          return reply.code(409).send({
+            error: {
+              code: "region_locked",
+              message: "This account already has a residency region and it cannot be changed"
             }
-        : {})
-      });
-      if (!created.created && joinAsAdmin && created.organization.residencyRegion !== regionForCountry(input.countryCode)) {
-        return reply.code(409).send({
-          error: {
-            code: "region_locked",
-            message: "This account already has a residency region and it cannot be changed"
+          });
+        }
+        const billing = await ensureOrganizationBilling(provisioningDb, created.organization.id);
+
+        let invitation = null;
+        if (input.inviteAdminEmail && workspaceKind !== "personal") {
+          const delivered = await createAndSendOrganizationAdminInvite(
+            provisioningDb,
+            env,
+            {
+              organizationId: created.organization.id,
+              organizationName: created.organization.name,
+              email: input.inviteAdminEmail,
+              invitedByUserId: joinAsAdmin ? created.admin?.id ?? null : actor.organizationId ? actor.id : null,
+              rollbackOnSendFailure: created.created
+            },
+            sendInviteEmail,
+            request.log
+          );
+          invitation = { ...mapInvitation(delivered.invite), ...delivered.emailResult };
+        }
+
+        if (actor.organizationId === created.organization.id || joinAsAdmin) {
+          await enqueueLicenseProvisioning(provisioningDb, env, {
+            externalOrganizationId: created.organization.id,
+            organizationName: created.organization.name,
+            billingEmail: actor.email,
+            externalUserId: created.admin?.id ?? actor.id,
+            userSubject: created.admin?.hexclaveSubject ?? subject,
+            userEmail: created.admin?.email ?? actor.email,
+            userDisplayName: created.admin?.displayName ?? actor.displayName,
+            productCode: env.LICENSE_API_PRODUCT_CODE,
+            planCode: env.LICENSE_API_PLAN_CODE,
+            source: "twiniti-crm"
+          });
+        }
+
+        let checkoutUrl: string | null = null;
+        let checkoutSessionId: string | null = null;
+        if (joinAsAdmin) {
+          const orgMemberDiscount = workspaceKind === "personal"
+            && Boolean(subject)
+            && await subjectHasActiveCompanyMembership(provisioningDb, subject);
+          const checkout = await createOrganizationCheckoutSession(provisioningDb, env, {
+            organizationId: created.organization.id,
+            customerEmail: actor.email,
+            workspaceKind,
+            orgMemberDiscount
+          });
+          checkoutUrl = checkout?.url ?? null;
+          checkoutSessionId = checkout?.id ?? null;
+        }
+
+        await writeAudit(provisioningDb, {
+          organizationId: created.organization.id,
+          actorType: actor.type,
+          actorId: actor.id,
+          action: "organization.create",
+          entityType: "organization",
+          entityId: created.organization.id,
+          metadata: {
+            name: created.organization.name,
+            joinedAsAdmin: joinAsAdmin,
+            workspaceKind: created.organization.workspaceKind
           }
         });
-      }
-      const billing = await ensureOrganizationBilling(db, created.organization.id);
 
-      let invitation = null;
-      if (input.inviteAdminEmail) {
-        const delivered = await createAndSendOrganizationAdminInvite(
-          db,
-          env,
-          {
-            organizationId: created.organization.id,
-            organizationName: created.organization.name,
-            email: input.inviteAdminEmail,
-            invitedByUserId: joinAsAdmin ? created.admin?.id ?? null : actor.organizationId ? actor.id : null,
-            rollbackOnSendFailure: created.created
-          },
-          sendInviteEmail,
-          request.log
-        );
-        invitation = { ...mapInvitation(delivered.invite), ...delivered.emailResult };
-      }
-
-      if (actor.organizationId === created.organization.id || joinAsAdmin) {
-        await enqueueLicenseProvisioning(db, env, {
-          externalOrganizationId: created.organization.id,
-          organizationName: created.organization.name,
-          billingEmail: actor.email,
-          externalUserId: created.admin?.id ?? actor.id,
-          userSubject: created.admin?.hexclaveSubject ?? subject,
-          userEmail: created.admin?.email ?? actor.email,
-          userDisplayName: created.admin?.displayName ?? actor.displayName,
-          productCode: env.LICENSE_API_PRODUCT_CODE,
-          planCode: env.LICENSE_API_PLAN_CODE,
-          source: "twiniti-crm"
-        });
-      }
-
-      let checkoutUrl: string | null = null;
-      let checkoutSessionId: string | null = null;
-      if (joinAsAdmin) {
-        const checkout = await createOrganizationCheckoutSession(db, env, {
-          organizationId: created.organization.id,
-          customerEmail: actor.email
-        });
-        checkoutUrl = checkout?.url ?? null;
-        checkoutSessionId = checkout?.id ?? null;
-      }
-
-      await writeAudit(db, {
-        organizationId: created.organization.id,
-        actorType: actor.type,
-        actorId: actor.id,
-        action: "organization.create",
-        entityType: "organization",
-        entityId: created.organization.id,
-        metadata: {
-          name: created.organization.name,
-          joinedAsAdmin: joinAsAdmin,
-          workspaceKind: created.organization.workspaceKind
+        if (created.created && joinAsAdmin && actor.needsSetup) {
+          await notifySupportOfSignup(
+            env,
+            {
+              organizationId: created.organization.id,
+              organizationName: created.organization.name,
+              adminEmail: created.admin?.email ?? actor.email ?? null,
+              adminDisplayName: created.admin?.displayName ?? actor.displayName ?? null,
+              countryCode: input.countryCode,
+              regionCode: created.organization.residencyRegion
+            },
+            request.log
+          );
         }
-      });
 
-      if (created.created && joinAsAdmin && actor.needsSetup) {
-        await notifySupportOfSignup(
-          env,
-          {
-            organizationId: created.organization.id,
-            organizationName: created.organization.name,
-            adminEmail: created.admin?.email ?? actor.email ?? null,
-            adminDisplayName: created.admin?.displayName ?? actor.displayName ?? null,
+        return {
+          data: {
+            id: created.organization.id,
+            name: created.organization.name,
+            workspaceKind: created.organization.workspaceKind,
+            regionCode: created.organization.residencyRegion,
             countryCode: input.countryCode,
-            regionCode: created.organization.residencyRegion
-          },
-          request.log
-        );
-      }
-
-      return {
-        data: {
-          id: created.organization.id,
-          name: created.organization.name,
-          workspaceKind: created.organization.workspaceKind,
-          regionCode: created.organization.residencyRegion,
-          countryCode: input.countryCode,
-          createdAt: created.organization.createdAt.toISOString(),
-          joinedAsAdmin: joinAsAdmin,
-          billingStatus: billing.status,
-          licenseProvisioningStatus: billing.licenseProvisioningStatus,
-          checkoutUrl,
-          checkoutSessionId,
-          invitation
-        }
-      };
+            createdAt: created.organization.createdAt.toISOString(),
+            joinedAsAdmin: joinAsAdmin,
+            billingStatus: billing.status,
+            licenseProvisioningStatus: billing.licenseProvisioningStatus,
+            checkoutUrl,
+            checkoutSessionId,
+            invitation
+          }
+        };
+      });
     } catch (error) {
       return sendError(reply, error);
     }
@@ -830,6 +858,11 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       if (!org) {
         return reply.code(404).send({ error: { code: "not_found", message: "Company not found" } });
       }
+      if (org.workspaceKind === "personal") {
+        return reply.code(403).send({
+          error: { code: "forbidden", message: "Personal workspaces do not support invitations" }
+        });
+      }
       const invite = await createInvitation(db, {
         organizationId,
         email: input.email,
@@ -864,36 +897,35 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       if (actor.type !== "user") {
         return reply.code(403).send({ error: { code: "forbidden", message: "Users only" } });
       }
-      if (!actor.needsSetup) {
-        return reply.code(409).send({
-          error: { code: "conflict", message: "You already belong to a company" }
-        });
-      }
       assertVerifiedPrimaryEmail(actor);
       const input = acceptInvitationSchema.parse(request.body);
       const subject = actor.hexclaveSubject ?? actor.id;
-      const result = await acceptInvitation(db, {
-        token: input.token,
-        subject,
-        email: actor.email,
-        displayName: actor.displayName
-      });
-      await writeAudit(db, {
-        organizationId: result.organizationId,
-        actorType: actor.type,
-        actorId: result.user.id,
-        action: "organization.invite.accept",
-        entityType: "crm_user",
-        entityId: result.user.id
-      });
-      return {
-        data: {
+      // Invite rows live in the target org; tenant RLS for the current workspace
+      // cannot see them. Provision membership under an isolated service context.
+      return await withIsolatedServiceRls(pool, null, async (provisioningDb) => {
+        const result = await acceptInvitation(provisioningDb, {
+          token: input.token,
+          subject,
+          email: actor.email,
+          displayName: actor.displayName
+        });
+        await writeAudit(provisioningDb, {
           organizationId: result.organizationId,
-          organizationName: result.organizationName,
-          role: result.user.role,
-          userId: result.user.id
-        }
-      };
+          actorType: actor.type,
+          actorId: result.user.id,
+          action: "organization.invite.accept",
+          entityType: "crm_user",
+          entityId: result.user.id
+        });
+        return {
+          data: {
+            organizationId: result.organizationId,
+            organizationName: result.organizationName,
+            role: result.user.role,
+            userId: result.user.id
+          }
+        };
+      });
     } catch (error) {
       return sendError(reply, error);
     }
@@ -903,7 +935,9 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
     try {
       requireActor(request);
       const { token } = request.params as { token: string };
-      const found = await findInvitationByToken(db, token);
+      const found = await withIsolatedServiceRls(pool, null, (provisioningDb) =>
+        findInvitationByToken(provisioningDb, token)
+      );
       if (!found || found.invitation.acceptedAt) {
         return reply.code(404).send({ error: { code: "not_found", message: "Invitation not found" } });
       }

@@ -162,6 +162,13 @@
       "when": 1793472000000,
       "tag": "0022_organization_workspace_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793475600000,
+      "tag": "0023_crm_users_multi_membership",
+      "breakpoints": true
     }
   ]
 }

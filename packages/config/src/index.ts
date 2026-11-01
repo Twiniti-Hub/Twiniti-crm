@@ -34,6 +34,10 @@ export const envSchema = z.object({
   STRIPE_SECRET_KEY: z.string().optional().default(""),
   STRIPE_WEBHOOK_SECRET: z.string().optional().default(""),
   STRIPE_PRICE_ID: z.string().optional().default(""),
+  /** Monthly Price for personal workspaces (standard). Falls back to STRIPE_PRICE_ID when unset in non-production. */
+  STRIPE_PERSONAL_PRICE_ID: z.string().optional().default(""),
+  /** Discounted monthly Price when the payer has an active company membership. */
+  STRIPE_PERSONAL_ORG_MEMBER_PRICE_ID: z.string().optional().default(""),
   STRIPE_TRIAL_PERIOD_DAYS: z.coerce.number().int().min(0).max(730).default(7),
   STRIPE_BILLING_PORTAL_CONFIGURATION_ID: z.string().optional().default(""),
   LICENSE_API_URL: optionalUrl,
@@ -152,7 +156,13 @@ export function assertProductionApiConfiguration(env: AppEnv) {
   if (env.HEXCLAVE_PROJECT_ID !== env.VITE_HEXCLAVE_PROJECT_ID) {
     throw new Error("Production API Hexclave project ID must match VITE_HEXCLAVE_PROJECT_ID");
   }
-  for (const key of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_ID"] as const) {
+  for (const key of [
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "STRIPE_PRICE_ID",
+    "STRIPE_PERSONAL_PRICE_ID",
+    "STRIPE_PERSONAL_ORG_MEMBER_PRICE_ID"
+  ] as const) {
     if (!env[key]) throw new Error(`Production API requires ${key}`);
   }
   const productionDatabaseKey = `DATABASE_URL_Prod_${env.REGION_CODE.toUpperCase()}` as

@@ -44,13 +44,46 @@ const navigationSections = [
   }
 ] as const;
 
+function kindLabel(kind: "company" | "personal" | null | undefined) {
+  if (kind === "personal") return "Personal";
+  if (kind === "company") return "Company";
+  return null;
+}
+
 function WorkspaceContext({ me }: { me: Me | null }) {
   if (!me) return null;
+  const workspaces = me.workspaces ?? [];
   const region = me.regionCode ? me.regionCode.toUpperCase() : null;
   const role = me.isSuperAdmin ? "Super Admin" : me.role === "admin" ? "Workspace Admin" : "Workspace member";
+  const kind = kindLabel(me.workspaceKind);
   const label = me.organizationName ?? (me.isSuperAdmin ? "Global platform" : "Your workspace");
-  const detail = [region, role].filter(Boolean).join(" · ");
+  const detail = [kind, region, role].filter(Boolean).join(" · ");
   const className = "workspace-context";
+
+  if (workspaces.length > 1) {
+    return (
+      <label className={`${className} workspace-switcher`}>
+        <span className="workspace-switcher-label">Workspace</span>
+        <select
+          aria-label="Active workspace"
+          value={me.organizationId ?? ""}
+          onChange={(event) => {
+            const nextId = event.target.value;
+            if (!nextId || nextId === me.organizationId) return;
+            setWorkspaceContextId(nextId);
+            window.location.assign("/");
+          }}
+        >
+          {workspaces.map((workspace) => (
+            <option key={workspace.id} value={workspace.id}>
+              {kindLabel(workspace.workspaceKind)} · {workspace.name}
+            </option>
+          ))}
+        </select>
+        <span>{detail}</span>
+      </label>
+    );
+  }
 
   const content = <><strong>{label}</strong><span>{detail}</span></>;
   return me.isSuperAdmin ? <NavLink to="/super-admin" className={className}>{content}</NavLink> : <div className={className}>{content}</div>;

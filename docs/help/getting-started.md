@@ -8,10 +8,12 @@ Use the canonical Loop URL for your environment:
 - Production: `https://loop.twiniti.ai/sign-in`
 
 Loop uses one public URL. You do not need to choose a regional hostname. New
-workspaces select their country during signup; Loop assigns the workspace to
-the corresponding US, EU, or UK data service. If you are a Super Admin, open
-**Super Admin**, select a workspace, and choose **Open workspace** before using
-CRM pages.
+accounts choose **Personal** or **Organization** during signup, then select
+their country; Loop assigns the workspace to the corresponding US, EU, or UK
+data service. Personal workspaces are private to you; company members never see
+that data. If you belong to more than one workspace, use the sidebar workspace
+switcher. If you are a Super Admin, open **Super Admin**, select a workspace,
+and choose **Open workspace** before using CRM pages.
 
 After signing in, Loop loads the workspace session before showing CRM pages. If
 the page does not render, reload the canonical Loop URL and contact an

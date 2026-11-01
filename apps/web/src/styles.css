@@ -14,6 +14,14 @@ button, a { font: inherit; }
 .workspace-context strong { overflow: hidden; color: #eff8f5; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-context span { color: #98b8b2; font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
 .workspace-context:hover { background: #21464b; }
+.workspace-switcher { gap: 6px; }
+.workspace-switcher-label { color: #98b8b2; font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.workspace-switcher select { width: 100%; border: 1px solid rgba(183, 212, 207, .25); border-radius: 8px; background: #102b31; color: #eff8f5; padding: 8px 10px; font-size: 12px; }
+.workspace-choice { border: 1px solid #d5e0dc; border-radius: 12px; padding: 12px 14px; display: grid; gap: 10px; }
+.workspace-choice legend { padding: 0 4px; font-size: 12px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: #5f746f; }
+.workspace-choice-option { display: flex; gap: 10px; align-items: flex-start; font-weight: 500; }
+.workspace-choice-option strong { display: block; }
+.workspace-choice-option .muted { display: block; font-weight: 400; }
 nav { display: grid; gap: 7px; }
 .navigation-disclosure { width: 100%; }
 .navigation-disclosure summary { display: none; }

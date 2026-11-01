@@ -33,7 +33,10 @@ export function registerAuthHook(app: FastifyInstance, db: Db, env: AppEnv, pool
       return;
     }
     request.actor = actor;
-    const billingRoute = url === "/api/v1/me" || url.startsWith("/api/v1/billing");
+    const billingRoute = url === "/api/v1/me"
+      || url.startsWith("/api/v1/billing")
+      || url === "/api/v1/invitations/accept"
+      || /^\/api\/v1\/invitations\/[^/]+$/.test(url);
     if (
       actor.organizationId
       && !actor.isSuperAdmin

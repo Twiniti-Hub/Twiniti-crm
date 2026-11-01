@@ -55,6 +55,7 @@ export function SettingsPage() {
   const [pendingDeleteResendId, setPendingDeleteResendId] = useState<string | null>(null);
 
   const isAdmin = me?.role === "admin" || me?.isSuperAdmin === true;
+  const isPersonalWorkspace = me?.workspaceKind === "personal";
 
   async function refresh() {
     const meRes = await api("/api/v1/me");
@@ -72,8 +73,12 @@ export function SettingsPage() {
     const membersRes = await api("/api/v1/organization/members");
     setMembers(membersRes.data as Member[]);
     if (nextMe.role === "admin") {
-      const invitesRes = await api("/api/v1/organization/invitations");
-      setInvitations(invitesRes.data as Invitation[]);
+      if (nextMe.workspaceKind !== "personal") {
+        const invitesRes = await api("/api/v1/organization/invitations");
+        setInvitations(invitesRes.data as Invitation[]);
+      } else {
+        setInvitations([]);
+      }
       const resendRes = await api("/api/v1/organization/integrations/resend/domains");
       setResendDomains(resendRes.data as ResendDomain[]);
     }
@@ -230,11 +235,12 @@ export function SettingsPage() {
       {message ? <div className="banner info">{message}</div> : null}
 
       <section className="panel">
-        <p className="eyebrow">Company</p>
-        <h3>{me?.organizationName ?? "No company"}</h3>
+        <p className="eyebrow">{isPersonalWorkspace ? "Personal workspace" : "Company workspace"}</p>
+        <h3>{me?.organizationName ?? (isPersonalWorkspace ? "No personal workspace" : "No company")}</h3>
         <p className="muted">
           Signed in as {me?.email ?? "unknown"} · Role: {me?.role ?? "none"}
           {me?.isSuperAdmin ? " · Super Admin" : ""}
+          {isPersonalWorkspace ? " · Visible only to you" : ""}
         </p>
       </section>
 
@@ -242,7 +248,7 @@ export function SettingsPage() {
         <div className="panel-heading">
           <div>
             <p className="eyebrow">People</p>
-            <h3>Members</h3>
+            <h3>{isPersonalWorkspace ? "Owner" : "Members"}</h3>
           </div>
         </div>
         <div className="table-wrap">
@@ -252,7 +258,7 @@ export function SettingsPage() {
                 <th>Name</th>
                 <th>Email</th>
                 <th>Role</th>
-                {isAdmin ? <th>Actions</th> : null}
+                {isAdmin && !isPersonalWorkspace ? <th>Actions</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -260,8 +266,12 @@ export function SettingsPage() {
                 <tr key={member.id}>
                   <td>{member.displayName ?? "—"}</td>
                   <td>{member.email ?? "—"}</td>
-                  <td>{member.role === "admin" ? "Company Admin" : "Member"}</td>
-                  {isAdmin ? (
+                  <td>
+                    {isPersonalWorkspace
+                      ? "Owner"
+                      : member.role === "admin" ? "Company Admin" : "Member"}
+                  </td>
+                  {isAdmin && !isPersonalWorkspace ? (
                     <td className="row-actions">
                       {member.role !== "admin" ? (
                         <button className="secondary" type="button" onClick={() => onRoleChange(member.id, "admin")}>
@@ -454,7 +464,7 @@ export function SettingsPage() {
         </section>
       ) : null}
 
-      {isAdmin ? (
+      {isAdmin && !isPersonalWorkspace ? (
         <section className="panel" style={{ marginTop: 15 }}>
           <p className="eyebrow">Invites</p>
           <h3>Invite by email</h3>
@@ -506,6 +516,16 @@ export function SettingsPage() {
           ) : (
             <p className="muted" style={{ marginTop: 12 }}>No pending invitations.</p>
           )}
+        </section>
+      ) : null}
+      {isAdmin && isPersonalWorkspace ? (
+        <section className="panel" style={{ marginTop: 15 }}>
+          <p className="eyebrow">Invites</p>
+          <h3>Solo workspace</h3>
+          <p className="muted">
+            Personal workspaces do not support inviting other members.{" "}
+            <Link to="/accept-invite">Accept a company invitation</Link> to add an organization workspace alongside this one.
+          </p>
         </section>
       ) : null}
 

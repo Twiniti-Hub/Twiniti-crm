@@ -51,6 +51,8 @@ test("assertProductionApiConfiguration rejects LICENSE_DEV_AUTO_TRIAL in product
     STRIPE_SECRET_KEY: "sk_test",
     STRIPE_WEBHOOK_SECRET: "whsec",
     STRIPE_PRICE_ID: "price",
+    STRIPE_PERSONAL_PRICE_ID: "price_personal",
+    STRIPE_PERSONAL_ORG_MEMBER_PRICE_ID: "price_personal_discount",
     DATABASE_URL_Prod_US: "postgres://example",
     LICENSE_API_URL: "https://license.example.test",
     LICENSE_API_API_KEY: "key",

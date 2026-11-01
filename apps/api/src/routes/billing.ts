@@ -22,6 +22,24 @@ function configuredStripe(env: AppEnv) {
   return new Stripe(env.STRIPE_SECRET_KEY);
 }
 
+function resolveCheckoutPriceId(
+  env: AppEnv,
+  input: {
+    workspaceKind?: "company" | "personal";
+    orgMemberDiscount?: boolean;
+  }
+): string {
+  if (input.workspaceKind === "personal") {
+    if (input.orgMemberDiscount) {
+      const discounted = env.STRIPE_PERSONAL_ORG_MEMBER_PRICE_ID || env.STRIPE_PERSONAL_PRICE_ID;
+      if (discounted) return discounted;
+    }
+    const personal = env.STRIPE_PERSONAL_PRICE_ID || env.STRIPE_PRICE_ID;
+    return personal;
+  }
+  return env.STRIPE_PRICE_ID;
+}
+
 export function stripeObjectId(value: unknown): string | null {
   if (typeof value === "string") return value;
   if (value && typeof value === "object" && "id" in value && typeof value.id === "string") return value.id;
@@ -86,7 +104,12 @@ function stripeDiscountIds(value: unknown) {
 export async function createOrganizationCheckoutSession(
   db: Db,
   env: AppEnv,
-  input: { organizationId: string; customerEmail?: string | null }
+  input: {
+    organizationId: string;
+    customerEmail?: string | null;
+    workspaceKind?: "company" | "personal";
+    orgMemberDiscount?: boolean;
+  }
 ) {
   const stripe = configuredStripe(env);
   if (!stripe) {
@@ -97,6 +120,16 @@ export async function createOrganizationCheckoutSession(
 
   const billing = await ensureOrganizationBilling(db, input.organizationId);
   if (["active", "trialing"].includes(billing.status)) return null;
+
+  const priceId = resolveCheckoutPriceId(env, {
+    workspaceKind: input.workspaceKind,
+    orgMemberDiscount: input.orgMemberDiscount
+  });
+  if (!priceId) {
+    const error = new Error("Stripe price is not configured") as Error & { statusCode: number };
+    error.statusCode = 503;
+    throw error;
+  }
 
   // Reuse only a still-open session. Stripe idempotency keys are durable, so
   // a fixed organization key can otherwise return an expired checkout forever.
@@ -109,19 +142,30 @@ export async function createOrganizationCheckoutSession(
     }
   }
 
+  const isPersonal = input.workspaceKind === "personal";
+  const trialDays = isPersonal ? 0 : env.STRIPE_TRIAL_PERIOD_DAYS;
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
-    line_items: [{ price: env.STRIPE_PRICE_ID, quantity: 1 }],
+    line_items: [{ price: priceId, quantity: 1 }],
     customer: billing.stripeCustomerId ?? undefined,
     customer_email: billing.stripeCustomerId ? undefined : input.customerEmail ?? undefined,
     client_reference_id: input.organizationId,
-    allow_promotion_codes: true,
-    metadata: { organizationId: input.organizationId, regionCode: env.REGION_CODE },
+    allow_promotion_codes: !isPersonal,
+    metadata: {
+      organizationId: input.organizationId,
+      regionCode: env.REGION_CODE,
+      workspaceKind: input.workspaceKind ?? "company",
+      orgMemberDiscount: input.orgMemberDiscount ? "true" : "false"
+    },
     subscription_data: {
-      metadata: { organizationId: input.organizationId, regionCode: env.REGION_CODE },
-      ...(env.STRIPE_TRIAL_PERIOD_DAYS > 0
+      metadata: {
+        organizationId: input.organizationId,
+        regionCode: env.REGION_CODE,
+        workspaceKind: input.workspaceKind ?? "company"
+      },
+      ...(trialDays > 0
         ? {
-            trial_period_days: env.STRIPE_TRIAL_PERIOD_DAYS,
+            trial_period_days: trialDays,
             trial_settings: { end_behavior: { missing_payment_method: "cancel" as const } }
           }
         : {})
@@ -134,7 +178,7 @@ export async function createOrganizationCheckoutSession(
     status: ["active", "trialing"].includes(billing.status) ? billing.status : "pending",
     stripeCheckoutSessionId: session.id,
     stripeCustomerId: stripeObjectId(session.customer),
-    stripePriceId: env.STRIPE_PRICE_ID
+    stripePriceId: priceId
   });
   return session;
 }
@@ -306,12 +350,19 @@ export async function registerBillingRoutes(app: FastifyInstance, db: Db, env: A
     try {
       const actor = requireActor(request);
       requireUserRole(actor, "admin");
+      const organizationId = requireOrgId(actor);
+      const workspaceKind = actor.workspaceKind === "personal" ? "personal" : "company";
+      const orgMemberDiscount = workspaceKind === "personal"
+        && Boolean(actor.hexclaveSubject)
+        && (actor.workspaces ?? []).some((workspace) => workspace.workspaceKind === "company");
       const session = await createOrganizationCheckoutSession(db, env, {
-        organizationId: requireOrgId(actor),
-        customerEmail: actor.email
+        organizationId,
+        customerEmail: actor.email,
+        workspaceKind,
+        orgMemberDiscount
       });
       if (!session) return { data: { status: "active", checkoutUrl: null } };
-      await audit(db, actor, "billing.checkout_session.create", "organization", requireOrgId(actor), { sessionId: session.id });
+      await audit(db, actor, "billing.checkout_session.create", "organization", organizationId, { sessionId: session.id });
       return { data: { status: "pending", checkoutUrl: session.url, sessionId: session.id } };
     } catch (error) {
       return sendError(reply, error);

@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, setWorkspaceContextId } from "../lib/api";
 import type { Me } from "../lib/me";
 import { Brand } from "../components/Brand";
+
+function workspaceKindLabel(kind: "company" | "personal" | null | undefined) {
+  if (kind === "personal") return "Personal";
+  if (kind === "company") return "Company";
+  return "Workspace";
+}
 
 type Billing = {
   status: string;
@@ -157,6 +163,30 @@ export function BillingPage() {
             </div>
           ) : null}
           {error ? <div className="banner error">{error}</div> : null}
+          {(me?.workspaces?.length ?? 0) > 1 ? (
+            <label className="stack-form" style={{ gap: 6 }}>
+              <span className="muted">Switch workspace</span>
+              <select
+                aria-label="Active workspace"
+                value={me?.organizationId ?? ""}
+                onChange={(event) => {
+                  const nextId = event.target.value;
+                  if (!nextId || nextId === me?.organizationId) return;
+                  setWorkspaceContextId(nextId);
+                  window.location.assign("/");
+                }}
+              >
+                {(me?.workspaces ?? []).map((workspace) => (
+                  <option key={workspace.id} value={workspace.id}>
+                    {workspaceKindLabel(workspace.workspaceKind)} · {workspace.name}
+                  </option>
+                ))}
+              </select>
+              <p className="muted">
+                Billing below applies to the selected workspace. Switch to an active company workspace if this personal subscription is still pending.
+              </p>
+            </label>
+          ) : null}
           <div className="panel">
             <strong>Status: {effectiveStatus}</strong>
             {billing?.status && billing.status !== effectiveStatus ? (
