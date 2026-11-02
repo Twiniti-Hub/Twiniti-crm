@@ -44,6 +44,21 @@ const navigationSections = [
   }
 ] as const;
 
+const personalNavigationSections = [
+  { label: "Relationships", links: [
+    { to: "/", label: "Overview", end: true },
+    { to: "/contacts", label: "Contacts" },
+    { to: "/companies", label: "Companies" },
+    { to: "/import", label: "Import data" }
+  ] },
+  { label: "Personal workspace", links: [
+    { to: "/agents", label: "Agent access" },
+    { to: "/settings", label: "Settings" },
+    { to: "/billing", label: "Billing" },
+    { to: "/help", label: "Help" }
+  ] }
+] as const;
+
 function kindLabel(kind: "company" | "personal" | null | undefined) {
   if (kind === "personal") return "Personal";
   if (kind === "company") return "Company";
@@ -140,7 +155,7 @@ export function Shell() {
           <details className="navigation-disclosure" open>
             <summary>Menu</summary>
             <div className="navigation-sections">
-              {(showCrmLinks ? navigationSections : []).map((section) => (
+              {(showCrmLinks ? (me?.workspaceKind === "personal" ? personalNavigationSections : navigationSections) : []).map((section) => (
                 <section className="navigation-section" key={section.label} aria-label={section.label}>
                   <p>{section.label}</p>
                   {section.links.map((link) => (

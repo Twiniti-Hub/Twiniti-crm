@@ -1,5 +1,9 @@
 # Getting started
 
+## Personal workspace navigation
+
+In a personal workspace, the menu focuses on Overview, Contacts, Companies, Import data, Agent access, Settings, Billing, and Help. Company Growth, digital workforce, and deliverability pages are available from company workspaces. The personal Overview and import experience are being developed further as part of the Personal CRM release.
+
 ## Sign in and choose a workspace
 
 Use the canonical Loop URL for your environment:
