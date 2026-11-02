@@ -1,5 +1,5 @@
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../lib/api";
 import type { Me } from "../lib/me";
 import { AcceptInvitePage } from "../pages/AcceptInvitePage";
@@ -45,6 +45,19 @@ function WorkspaceGate() {
   return <Navigate to="/super-admin" replace />;
 }
 
+function CompanyFeature({ children }: { children: ReactNode }) {
+  const [me, setMe] = useState<Me | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    api("/api/v1/me")
+      .then((res) => setMe(res.data as Me))
+      .catch(() => setMe(null))
+      .finally(() => setLoading(false));
+  }, []);
+  if (loading) return <div className="banner info">Loading workspace…</div>;
+  return me?.workspaceKind === "personal" ? <Navigate to="/" replace /> : <>{children}</>;
+}
+
 export function CrmRoutes() {
   return (
     <Routes>
@@ -58,14 +71,14 @@ export function CrmRoutes() {
         <Route path="import" element={<ImportPage />} />
         <Route path="companies" element={<CompaniesPage />} />
         <Route path="companies/:id" element={<CompanyDetailPage />} />
-        <Route path="segments" element={<SegmentsPage />} />
-        <Route path="campaigns" element={<CampaignsPage />} />
-        <Route path="forms" element={<FormsPage />} />
-        <Route path="workflows" element={<WorkflowsPage />} />
+        <Route path="segments" element={<CompanyFeature><SegmentsPage /></CompanyFeature>} />
+        <Route path="campaigns" element={<CompanyFeature><CampaignsPage /></CompanyFeature>} />
+        <Route path="forms" element={<CompanyFeature><FormsPage /></CompanyFeature>} />
+        <Route path="workflows" element={<CompanyFeature><WorkflowsPage /></CompanyFeature>} />
         <Route path="agents" element={<AgentsPage />} />
         <Route path="attention" element={<AttentionPage />} />
-        <Route path="digital-workers" element={<DigitalWorkersPage />} />
-        <Route path="deliverability" element={<DeliverabilityPage />} />
+        <Route path="digital-workers" element={<CompanyFeature><DigitalWorkersPage /></CompanyFeature>} />
+        <Route path="deliverability" element={<CompanyFeature><DeliverabilityPage /></CompanyFeature>} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="billing" element={<BillingPage />} />
         <Route path="help" element={<HelpPage />} />

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Begin personal CRM revision 0.10.55.3 (TWI-1026): show relationship-focused navigation in personal workspaces and redirect direct visits to company Growth, workforce, and deliverability pages. API and MCP restrictions remain a subsequent slice.
+
 - End-user personal workspaces (TWI-1020): multi-membership per Hexclave subject, membership-validated workspace switcher, Personal vs Organization signup, personal monthly Stripe Prices with org-member discount, and solo personal Settings (no invites). Migration `0023_crm_users_multi_membership` (additive/expand).
 - Allow Super Admins to create personal workspaces (`workspace_kind = personal`) and show a personal-workspace total on the Super Admin commercial dashboard.
 - Codify Linear hygiene in AGENTS.md so agents keep CRM issues, PR links, and Production receipts current.
