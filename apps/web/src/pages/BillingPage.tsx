@@ -11,6 +11,7 @@ function workspaceKindLabel(kind: "company" | "personal" | null | undefined) {
 
 type Billing = {
   status: string;
+  subscriptionId?: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
   licenseDecision?: string | null;
@@ -95,11 +96,11 @@ export function BillingPage() {
   }, [success]);
 
   useEffect(() => {
-    if (!unlocked) return;
+    if (!unlocked || !success) return;
     // AuthGate cages on a cached /me billingStatus. Hard-navigate so /me
     // reloads and the CRM shell unlocks once Stripe/License are active.
     window.location.assign("/");
-  }, [unlocked]);
+  }, [unlocked, success]);
 
   async function startCheckout() {
     setBusy(true);
@@ -149,7 +150,7 @@ export function BillingPage() {
               </p>
             ) : (
               <p className="muted">
-                Your subscription is billed once per client organization. Users are unlimited and are not billed individually.
+                {me?.workspaceKind === "personal" ? "Personal: $9 per month after your 7-day free trial." : "Organization: $29 per month after your 7-day free trial. Unlimited users."}
               </p>
             )}
           </div>
@@ -197,14 +198,14 @@ export function BillingPage() {
                 {billing?.trialKind === "three_month" ? "Three-month promotional trial" : "7-day free trial"} · {trialRemaining} {trialRemaining === 1 ? "day" : "days"} remaining
               </p>
             ) : null}
-            {!unlocked && !confirming && !isStripeActive(billing) ? <p className="muted">A payment method is required in Stripe Checkout. You can enter a promotion code there.</p> : null}
+            {!unlocked && !confirming && !isStripeActive(billing) ? <p className="muted">{billing?.subscriptionId ? "Add a payment method to restart your subscription." : "Start your 7-day free trial. No credit card required. Add a payment method before the trial ends to keep your workspace active."}</p> : null}
             {billing?.currentPeriodEnd ? <p className="muted">Current period ends {new Date(billing.currentPeriodEnd).toLocaleDateString()}.</p> : null}
             {licenseReason ? <p className="muted">License status: {licenseReason}</p> : null}
           </div>
           {unlocked ? (
             <>
               <button className="primary" type="button" onClick={enterWorkspace}>Enter workspace</button>
-              <button className="secondary" type="button" onClick={() => void openPortal()} disabled={busy}>Manage billing</button>
+              <button className="secondary" type="button" onClick={() => void openPortal()} disabled={busy}>{billing?.status === "trialing" ? "Add payment method / manage billing" : "Manage billing"}</button>
             </>
           ) : (
             <button className="primary" type="button" onClick={() => void startCheckout()} disabled={busy}>

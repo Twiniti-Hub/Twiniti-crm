@@ -160,8 +160,7 @@ export function assertProductionApiConfiguration(env: AppEnv) {
     "STRIPE_SECRET_KEY",
     "STRIPE_WEBHOOK_SECRET",
     "STRIPE_PRICE_ID",
-    "STRIPE_PERSONAL_PRICE_ID",
-    "STRIPE_PERSONAL_ORG_MEMBER_PRICE_ID"
+    "STRIPE_PERSONAL_PRICE_ID"
   ] as const) {
     if (!env[key]) throw new Error(`Production API requires ${key}`);
   }

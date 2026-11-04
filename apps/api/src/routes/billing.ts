@@ -22,22 +22,25 @@ function configuredStripe(env: AppEnv) {
   return new Stripe(env.STRIPE_SECRET_KEY);
 }
 
-function resolveCheckoutPriceId(
-  env: AppEnv,
-  input: {
-    workspaceKind?: "company" | "personal";
-    orgMemberDiscount?: boolean;
-  }
-): string {
-  if (input.workspaceKind === "personal") {
-    if (input.orgMemberDiscount) {
-      const discounted = env.STRIPE_PERSONAL_ORG_MEMBER_PRICE_ID || env.STRIPE_PERSONAL_PRICE_ID;
-      if (discounted) return discounted;
-    }
-    const personal = env.STRIPE_PERSONAL_PRICE_ID || env.STRIPE_PRICE_ID;
-    return personal;
-  }
-  return env.STRIPE_PRICE_ID;
+/** New workspaces get one cardless seven-day trial at their selected plan price. */
+export function checkoutTerms(
+  env: Pick<AppEnv, "STRIPE_PRICE_ID" | "STRIPE_PERSONAL_PRICE_ID">,
+  workspaceKind: "company" | "personal" | undefined,
+  billing: { stripeSubscriptionId?: string | null; trialStart?: Date | null }
+) {
+  // Never silently charge the organization price when Personal is misconfigured.
+  const priceId = workspaceKind === "personal" ? env.STRIPE_PERSONAL_PRICE_ID : env.STRIPE_PRICE_ID;
+  const trialDays = billing.stripeSubscriptionId || billing.trialStart ? 0 : 7;
+  return {
+    priceId,
+    trialDays,
+    sessionPolicy: `cardless-v1:${priceId}:${trialDays}`,
+    payment_method_collection: trialDays ? "if_required" as const : "always" as const,
+    subscription_data: trialDays ? {
+      trial_period_days: trialDays,
+      trial_settings: { end_behavior: { missing_payment_method: "cancel" as const } }
+    } : {}
+  };
 }
 
 export function stripeObjectId(value: unknown): string | null {
@@ -121,10 +124,8 @@ export async function createOrganizationCheckoutSession(
   const billing = await ensureOrganizationBilling(db, input.organizationId);
   if (["active", "trialing"].includes(billing.status)) return null;
 
-  const priceId = resolveCheckoutPriceId(env, {
-    workspaceKind: input.workspaceKind,
-    orgMemberDiscount: input.orgMemberDiscount
-  });
+  const terms = checkoutTerms(env, input.workspaceKind, billing);
+  const { priceId } = terms;
   if (!priceId) {
     const error = new Error("Stripe price is not configured") as Error & { statusCode: number };
     error.statusCode = 503;
@@ -136,16 +137,21 @@ export async function createOrganizationCheckoutSession(
   if (billing.stripeCheckoutSessionId) {
     try {
       const existing = await stripe.checkout.sessions.retrieve(billing.stripeCheckoutSessionId);
-      if (existing.status === "open" && existing.url) return existing;
-    } catch {
-      // Create a fresh session when the stored session was deleted or expired.
+      if (existing.status === "open" && existing.url) {
+        if (existing.metadata?.checkoutPolicy === terms.sessionPolicy) return existing;
+        // Retire pre-change sessions that require a card or use the wrong price.
+        await stripe.checkout.sessions.expire(existing.id);
+      }
+    } catch (error) {
+      // Do not create competing sessions after a network or expiration failure.
+      if (!(error instanceof Stripe.errors.StripeInvalidRequestError) || error.code !== "resource_missing") throw error;
     }
   }
 
   const isPersonal = input.workspaceKind === "personal";
-  const trialDays = isPersonal ? 0 : env.STRIPE_TRIAL_PERIOD_DAYS;
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
+    payment_method_collection: terms.payment_method_collection,
     line_items: [{ price: priceId, quantity: 1 }],
     customer: billing.stripeCustomerId ?? undefined,
     customer_email: billing.stripeCustomerId ? undefined : input.customerEmail ?? undefined,
@@ -155,7 +161,7 @@ export async function createOrganizationCheckoutSession(
       organizationId: input.organizationId,
       regionCode: env.REGION_CODE,
       workspaceKind: input.workspaceKind ?? "company",
-      orgMemberDiscount: input.orgMemberDiscount ? "true" : "false"
+      checkoutPolicy: terms.sessionPolicy
     },
     subscription_data: {
       metadata: {
@@ -163,12 +169,7 @@ export async function createOrganizationCheckoutSession(
         regionCode: env.REGION_CODE,
         workspaceKind: input.workspaceKind ?? "company"
       },
-      ...(trialDays > 0
-        ? {
-            trial_period_days: trialDays,
-            trial_settings: { end_behavior: { missing_payment_method: "cancel" as const } }
-          }
-        : {})
+      ...terms.subscription_data
     },
     success_url: `${env.WEB_ORIGIN.replace(/\/$/, "")}/billing?success=1`,
     cancel_url: `${env.WEB_ORIGIN.replace(/\/$/, "")}/billing?canceled=1`

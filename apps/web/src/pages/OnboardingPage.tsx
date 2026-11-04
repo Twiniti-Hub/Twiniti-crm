@@ -69,6 +69,7 @@ export function OnboardingPage() {
             <h1>Choose your workspace</h1>
             <p className="muted">Create a personal CRM or a company workspace to continue.</p>
           </div>
+          <p className="muted">{workspaceChoice === "personal" ? "Personal: $9/month" : "Organization: $29/month"} after 7 days free. No credit card required to start.</p>
           {error ? <div className="banner error">{error}</div> : null}
           <fieldset className="workspace-choice">
             <legend>Workspace type</legend>
