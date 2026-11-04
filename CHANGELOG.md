@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fix email verification blocking workspace creation and checkout (TWI-1035, revision 0.10.55.4): keep Hexclave callbacks reachable for signed-in users, add verification/resend controls, and retain signup details in the original tab until workspace creation. Server verification requirements remain enforced. No database changes; application package version remains 0.10.55 pending release.
+
 - Begin personal CRM revision 0.10.55.3 (TWI-1026): show relationship-focused navigation in personal workspaces and redirect direct visits to company Growth, workforce, and deliverability pages. API and MCP restrictions remain a subsequent slice.
 
 - End-user personal workspaces (TWI-1020): multi-membership per Hexclave subject, membership-validated workspace switcher, Personal vs Organization signup, personal monthly Stripe Prices with org-member discount, and solo personal Settings (no invites). Migration `0023_crm_users_multi_membership` (additive/expand).

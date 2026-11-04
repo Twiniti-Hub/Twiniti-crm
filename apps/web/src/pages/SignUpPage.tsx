@@ -5,6 +5,7 @@ import { api, setWorkspaceContextId } from "../lib/api";
 import { Brand } from "../components/Brand";
 import { CountrySelect } from "../components/CountrySelect";
 import { PAGE_META, usePageMeta } from "../lib/pageMeta";
+import { clearSignupDraft, saveSignupDraft } from "../lib/signupDraft";
 
 type WorkspaceChoice = "personal" | "organization";
 
@@ -42,6 +43,7 @@ export function SignUpPage() {
     setBusy(true);
     setError(null);
     try {
+      saveSignupDraft(window.sessionStorage, { email: email.trim(), workspaceChoice, displayName, companyName, countryCode });
       const result = await app.signUpWithCredential({
         email: email.trim(),
         password,
@@ -59,6 +61,12 @@ export function SignUpPage() {
         return;
       }
 
+      const user = await app.getUser();
+      if (!user?.primaryEmailVerified) {
+        navigate("/onboarding", { replace: true });
+        return;
+      }
+
       const organization = await api("/api/v1/organizations", {
         method: "POST",
         body: JSON.stringify({
@@ -69,6 +77,7 @@ export function SignUpPage() {
         })
       });
       if (organization.data.id) {
+        clearSignupDraft(window.sessionStorage);
         setWorkspaceContextId(organization.data.id);
       }
       if (organization.data.checkoutUrl) {

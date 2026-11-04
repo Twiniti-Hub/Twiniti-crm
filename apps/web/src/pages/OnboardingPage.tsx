@@ -1,4 +1,6 @@
 import { FormEvent, useState } from "react";
+import { useUser } from "@hexclave/react";
+import { clearSignupDraft, readSignupDraft } from "../lib/signupDraft";
 import { Link, useNavigate } from "react-router";
 import { api, setWorkspaceContextId } from "../lib/api";
 import { Brand } from "../components/Brand";
@@ -8,10 +10,12 @@ type WorkspaceChoice = "personal" | "organization";
 
 export function OnboardingPage() {
   const navigate = useNavigate();
-  const [workspaceChoice, setWorkspaceChoice] = useState<WorkspaceChoice>("organization");
-  const [displayName, setDisplayName] = useState("");
-  const [companyName, setCompanyName] = useState("");
-  const [countryCode, setCountryCode] = useState("");
+  const user = useUser();
+  const [draft] = useState(() => readSignupDraft(window.sessionStorage, user?.primaryEmail));
+  const [workspaceChoice, setWorkspaceChoice] = useState<WorkspaceChoice>(draft?.workspaceChoice ?? "organization");
+  const [displayName, setDisplayName] = useState(draft?.displayName ?? "");
+  const [companyName, setCompanyName] = useState(draft?.companyName ?? "");
+  const [countryCode, setCountryCode] = useState(draft?.countryCode ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -38,6 +42,7 @@ export function OnboardingPage() {
         })
       });
       if (organization.data.id) {
+        clearSignupDraft(window.sessionStorage);
         setWorkspaceContextId(organization.data.id);
       }
       if (organization.data.checkoutUrl) {

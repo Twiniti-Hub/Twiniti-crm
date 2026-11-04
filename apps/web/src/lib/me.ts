@@ -17,6 +17,7 @@ export type Me = {
   countryCode?: string | null;
   role?: string | null;
   email?: string | null;
+  primaryEmailVerified?: boolean | null;
   displayName?: string | null;
   needsSetup: boolean;
   isSuperAdmin: boolean;
