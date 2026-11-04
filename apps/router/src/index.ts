@@ -70,20 +70,37 @@ async function proxy(request: Request, env: Env, region: Region) {
   return withRouterHeaders(response, request, region);
 }
 
-async function discoverWorkspace(request: Request, env: Env) {
-  for (const region of regions) {
-    const response = await proxy(request, env, region);
-    if (!response.ok) continue;
-    const body = await response.clone().json().catch(() => null) as { data?: { organizationId?: string; regionCode?: string; isSuperAdmin?: boolean } } | null;
-    const organizationId = body?.data?.organizationId;
-    const discoveredRegion = isRegion(body?.data?.regionCode ?? null) ? body?.data?.regionCode as Region : region;
-    if (organizationId) {
-      await env.WORKSPACE_DIRECTORY.put(organizationId, discoveredRegion);
-      return response;
+/** Bounded parallel reads keep one unhealthy regional cell from hanging sign-in. */
+export async function discoverWorkspace(request: Request, env: Env, timeoutMs = 8000) {
+  const results = await Promise.all(regions.map(async (region) => {
+    try {
+      const bounded = new Request(request, { signal: AbortSignal.timeout(timeoutMs) });
+      const response = await proxy(bounded, env, region);
+      const body = response.ok
+        ? await response.clone().json() as { data?: { organizationId?: string; regionCode?: string; isSuperAdmin?: boolean } }
+        : null;
+      return { region, response, body };
+    } catch {
+      return null;
     }
-    if (body?.data?.isSuperAdmin) return response;
+  }));
+  // Preserve the established US/EU/UK selection order when multiple memberships exist.
+  for (const result of results) {
+    const organizationId = result?.body?.data?.organizationId;
+    if (!result || !organizationId) continue;
+    const discoveredRegion = isRegion(result.body?.data?.regionCode ?? null)
+      ? result.body!.data!.regionCode as Region : result.region;
+    await env.WORKSPACE_DIRECTORY.put(organizationId, discoveredRegion);
+    return result.response;
   }
-  return proxy(request, env, "us");
+  const admin = results.find((result) => result?.body?.data?.isSuperAdmin);
+  if (admin) return admin.response;
+  // Do not claim setup is needed when a cell could contain the user's workspace.
+  if (results.some((result) => !result || result.response.status >= 500)) {
+    return Response.json({ error: { code: "workspace_discovery_unavailable", message: "A workspace service is unavailable. Please retry." } },
+      { status: 503, headers: corsHeaders(request) });
+  }
+  return results.find((result) => result?.response.ok)?.response ?? results[0]!.response;
 }
 
 export default {
@@ -108,6 +125,7 @@ export default {
 
     const region = await env.WORKSPACE_DIRECTORY.get(workspaceId);
     if (!isRegion(region)) {
+      if (url.pathname === "/api/v1/me") return discoverWorkspace(request, env);
       return Response.json({ error: { code: "workspace_region_unknown", message: "Workspace region has not been resolved; refresh your session" } }, { status: 409, headers: corsHeaders(request) });
     }
     return proxy(request, env, region);

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/surface.test.ts",
+    "test": "tsx --test src/discovery.test.ts src/surface.test.ts",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
   },

@@ -76,3 +76,26 @@ Super Admins can force a Stripe → CRM → License_API refresh with:
 4. The user completes Checkout without a card for the seven-day trial.
 5. Stripe webhook events activate the organization.
 6. Access unlocks when billing is trialing or active and licensing allows access.
+
+## Trial recovery (revision 0.10.55.6, TWI-1049)
+
+If checkout returns but access is not ready, use **Refresh billing status**. Do
+not start a second paid checkout during a trial. Billing verifies the stored
+Checkout session and subscription against Stripe before allowing a replacement.
+A completed session is recovered even when its webhook never arrived. Stripe
+lookup failures or mismatched workspace metadata block replacement. Existing
+active, trialing, incomplete, past-due, unpaid or paused subscriptions cannot be
+replaced through checkout; use **Manage existing subscription**. Cancellation
+also cannot start a paid replacement before the recorded trial end.
+
+`GET /api/v1/billing` reconciles unresolved local records and returns
+`checkoutAllowed`. The frontend enables checkout only after a successful billing
+load explicitly allows it. Reconciliation updates local subscription state and
+queues licensing sync; the regular webhook remains required for renewals and
+cancellations. TWI-1041's webhook endpoint configuration remains an operator
+follow-up; this recovery path does not fix a misconfigured Stripe webhook.
+
+After deploying, re-smoke the TWI-1049 account: billing shows the existing trial,
+no second session is created, and access unlocks when licensing confirms it.
+Also test missing webhooks, Stripe unavailability, terminal subscription restart,
+and a completed session whose subscription has not yet been recorded locally.
