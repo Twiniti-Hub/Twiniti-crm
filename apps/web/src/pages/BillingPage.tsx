@@ -1,3 +1,4 @@
+import { canOfferCheckout } from "../lib/billingCheckout";
 import { useEffect, useState } from "react";
 import { api, setWorkspaceContextId } from "../lib/api";
 import type { Me } from "../lib/me";
@@ -12,6 +13,7 @@ function workspaceKindLabel(kind: "company" | "personal" | null | undefined) {
 type Billing = {
   status: string;
   subscriptionId?: string | null;
+  checkoutAllowed?: boolean;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
   licenseDecision?: string | null;
@@ -103,6 +105,7 @@ export function BillingPage() {
   }, [unlocked, success]);
 
   async function startCheckout() {
+    if (!canOfferCheckout(billing) || confirming) return;
     setBusy(true);
     setError(null);
     try {
@@ -143,7 +146,7 @@ export function BillingPage() {
         <div className="stack-form">
           <div>
             <p className="eyebrow">Client billing</p>
-            <h1>{unlocked ? "Billing is active" : licenseExpired ? "Your subscription has expired" : "Activate your client workspace"}</h1>
+            <h1>{unlocked ? "Billing is active" : billing?.status === "trialing" ? "Your trial is active" : licenseExpired ? "Your subscription has expired" : "Activate your client workspace"}</h1>
             {licenseExpired ? (
               <p className="muted">
                 Restart your subscription to pick up where you left off. Your client workspace and CRM data are still here.
@@ -156,7 +159,7 @@ export function BillingPage() {
           </div>
           {canceled ? <div className="banner warning">Checkout was canceled. Your workspace remains locked until billing is completed.</div> : null}
           {success && confirming && !unlocked ? <div className="banner info">Checkout returned successfully. We are waiting for Stripe to confirm your trial or subscription.</div> : null}
-          {success && !confirming && !unlocked ? <div className="banner warning">Stripe has not confirmed the subscription yet. Please retry checkout or contact support if this persists.</div> : null}
+          {success && !confirming && !unlocked ? <div className="banner warning">Your subscription is still being confirmed. Refresh billing or contact support; do not start another checkout.</div> : null}
           {!unlocked && isStripeActive(billing) && effectiveStatus !== "trialing" && effectiveStatus !== "active" ? (
             <div className="banner warning">
               Stripe shows {billing?.status}, but workspace access is still {effectiveStatus}
@@ -202,16 +205,18 @@ export function BillingPage() {
             {billing?.currentPeriodEnd ? <p className="muted">Current period ends {new Date(billing.currentPeriodEnd).toLocaleDateString()}.</p> : null}
             {licenseReason ? <p className="muted">License status: {licenseReason}</p> : null}
           </div>
+          {!unlocked ? <button className="secondary" disabled={busy} onClick={() => void load()}>Refresh billing status</button> : null}
+          {!unlocked && billing?.subscriptionId ? <button className="secondary" disabled={busy} onClick={() => void openPortal()}>Manage existing subscription</button> : null}
           {unlocked ? (
             <>
               <button className="primary" type="button" onClick={enterWorkspace}>Enter workspace</button>
               <button className="secondary" type="button" onClick={() => void openPortal()} disabled={busy}>{billing?.status === "trialing" ? "Add payment method / manage billing" : "Manage billing"}</button>
             </>
-          ) : (
-            <button className="primary" type="button" onClick={() => void startCheckout()} disabled={busy}>
+          ) : canOfferCheckout(billing) ? (
+            <button className="primary" type="button" onClick={() => void startCheckout()} disabled={busy || confirming || Boolean(error) || billing?.checkoutAllowed !== true || isStripeActive(billing)}>
               {busy ? "Opening checkout…" : licenseExpired ? "Restart subscription" : "Continue to secure checkout"}
             </button>
-          )}
+          ) : <p className="muted">{billing?.status === "trialing" ? "Your trial is active. No additional checkout or payment is needed during the trial." : "Refresh billing to confirm your existing subscription before continuing."}</p>}
         </div>
       </div>
     </div>

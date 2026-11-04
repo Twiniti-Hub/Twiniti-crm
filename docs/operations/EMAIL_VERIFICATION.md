@@ -49,3 +49,27 @@ No database, regional routing, billing API, or authorization policy changes.
 - Record deploy and smoke evidence in Linear before declaring the user journey fixed
   in the environment. Production follows the normal promotion policy.
 - Roll back by reverting the TWI-1035 change; no schema rollback is needed.
+
+## Session recovery (revision 0.10.55.6, TWI-1050 / TWI-1051)
+
+Sign out remains available on bootstrap, loading, error, setup, and billing screens.
+`/logout`, `/sign-out`, `/signout`, and `/handler/sign-out` open the independent
+logout screen without waiting for `/health`, `useUser`, or workspace discovery.
+It clears saved workspace context and calls Hexclave sign-out. If the auth service
+cannot respond, it displays a retry control rather than claiming sign-out succeeded.
+Use **Retry loading workspace** after transient service failures.
+
+Regional discovery probes US/EU/UK concurrently with an eight-second request
+limit and preserves region preference when multiple cells return a membership.
+A reachable membership wins over an unavailable unrelated cell. With no found
+membership and a failed cell, return a recoverable 503 rather than incorrectly
+sending the user to create another workspace. A missing KV mapping is rediscovered
+for `/me`. Browser `/me` calls abort after 15 seconds and do not overlap while polling.
+
+Read-only investigation on 4 November 2026: canonical and US hostnames served
+identical frontend bundles. US/EU unauthenticated `/me` returned promptly, while
+UK and canonical requests timed out. Render UK request logs showed 503s and later
+healthy responses; the UK service is on a free plan. No DNS, environment, Render
+plan, or webhook changes were made. Deployment must include the router as well as
+APIs/web. Verify authenticated discovery and sign-out on the canonical hostname
+and direct regional host. Session cookies remain hostname-specific.

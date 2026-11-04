@@ -34,3 +34,13 @@ test("signup draft survives round trip for its owner, rejects malformed or diffe
   storage.setItem("twiniti.signupDraft", "broken json");
   assert.equal(readSignupDraft(storage, draft.email), null);
 });
+
+import { isSignOutPath } from "./sessionRoutes";
+test("logout escape paths are recognized independently of session/workspace state", () => {
+  for (const path of ["/logout", "/logout/", "/sign-out", "/signout", "/handler/sign-out"]) {
+    assert.equal(isSignOutPath(path), true);
+  }
+  for (const path of ["/", "/sign-in", "/logout-other", "/handler/email-verification"]) {
+    assert.equal(isSignOutPath(path), false);
+  }
+});

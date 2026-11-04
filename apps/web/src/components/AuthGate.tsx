@@ -22,6 +22,7 @@ export function AuthGate() {
   const location = useLocation();
   const [authorizationHeader, setAuthorizationHeader] = useState<string | null>(null);
   const [me, setMe] = useState<Me | null>(null);
+  const [retry, setRetry] = useState(0);
   const [meError, setMeError] = useState<string | null>(null);
   const meRef = useRef<Me | null>(null);
   meRef.current = me;
@@ -77,9 +78,13 @@ export function AuthGate() {
 
     let cancelled = false;
     let settled = false;
+    let inFlight = false;
+    const controller = new AbortController();
 
-    const loadMe = () =>
-      api("/api/v1/me")
+    const loadMe = () => {
+      if (inFlight || cancelled) return;
+      inFlight = true;
+      return api("/api/v1/me", { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) })
         .then((res) => {
           if (cancelled) return;
           settled = true;
@@ -90,7 +95,9 @@ export function AuthGate() {
         })
         .catch((err) => {
           if (cancelled) return;
-          const message = err instanceof Error ? err.message : "Failed to load session";
+          const message = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")
+            ? "Workspace request timed out. Please retry or sign out."
+            : err instanceof Error ? err.message : "Failed to load session";
           if (!authorizationHeader && /unauthorized|authentication required/i.test(message)) {
             return;
           }
@@ -101,7 +108,8 @@ export function AuthGate() {
           }
           settled = true;
           setMeError(message);
-        });
+        }).finally(() => { inFlight = false; });
+    };
 
     // Cookie-backed Hexclave sessions can authenticate /me without a bearer
     // header. Fetch immediately; retry when the header later appears.
@@ -131,10 +139,11 @@ export function AuthGate() {
 
     return () => {
       cancelled = true;
+      controller.abort();
       window.clearTimeout(timeoutId);
       if (pollId !== undefined) window.clearInterval(pollId);
     };
-  }, [userId, authorizationHeader, location.pathname]);
+  }, [userId, authorizationHeader, location.pathname, retry]);
 
   // Email/reset callbacks must run before session, setup, and billing gates.
   // In particular, verification links are normally opened while signed in.
@@ -171,6 +180,7 @@ export function AuthGate() {
       <div className="auth-page">
         <div className="auth-form-wrap">
           <div className="banner error">{meError}</div>
+          <button onClick={() => { setMeError(null); setRetry((value) => value + 1); }}>Retry loading workspace</button>
         </div>
       </div>
     );

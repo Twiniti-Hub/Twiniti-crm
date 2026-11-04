@@ -15,6 +15,8 @@ import { audit, requireActor, requireOrgId, requireSuperAdmin, requireUserRole, 
 import { buildSubscriptionState, enqueueLicenseSubscriptionSync } from "../license-jobs.js";
 import type { TrialKind } from "@twiniti/license-api";
 
+import { billingConfirmationError, mayReplaceSubscription, recoverCheckoutSubscription } from "../billing-recovery.js";
+
 type RawBodyRequest = FastifyRequest & { rawBody?: string | Buffer };
 
 function configuredStripe(env: AppEnv) {
@@ -121,8 +123,15 @@ export async function createOrganizationCheckoutSession(
     throw error;
   }
 
-  const billing = await ensureOrganizationBilling(db, input.organizationId);
+  let billing = await ensureOrganizationBilling(db, input.organizationId);
   if (["active", "trialing"].includes(billing.status)) return null;
+
+  const recovered = await reconcileCheckoutBilling(db, env, stripe, billing);
+  billing = recovered.billing;
+  if (["active", "trialing"].includes(billing.status)) return null;
+  if (recovered.subscription && !mayReplaceSubscription(recovered.subscription)) {
+    throw billingConfirmationError("An existing subscription needs attention. Manage billing instead of starting another checkout.");
+  }
 
   const terms = checkoutTerms(env, input.workspaceKind, billing);
   const { priceId } = terms;
@@ -182,6 +191,34 @@ export async function createOrganizationCheckoutSession(
     stripePriceId: priceId
   });
   return session;
+}
+
+/** Repair local billing from Stripe; webhook delivery remains the primary sync path. */
+async function reconcileCheckoutBilling(
+  db: Db, env: AppEnv, stripe: Stripe,
+  billing: NonNullable<Awaited<ReturnType<typeof getOrganizationBilling>>>
+) {
+  const subscription = await recoverCheckoutSubscription(billing, {
+    session: (id) => stripe.checkout.sessions.retrieve(id),
+    subscription: (id) => stripe.subscriptions.retrieve(id)
+  });
+  if (!subscription) return { billing, subscription };
+  const event = {
+    id: `checkout-recovery:${subscription.id}:${Date.now()}`,
+    created: Math.floor(Date.now() / 1000),
+    type: "customer.subscription.updated",
+    data: { object: subscription }
+  } as unknown as Stripe.Event;
+  await applySubscriptionEvent(db, event, subscription as unknown as Record<string, unknown>);
+  const updated = await getOrganizationBilling(db, billing.organizationId);
+  if (!updated) throw billingConfirmationError();
+  if (billing.stripeSubscriptionStatus !== subscription.status || billing.stripeSubscriptionId !== subscription.id) {
+    await enqueueLicenseSubscriptionSync(db, env, buildSubscriptionState(updated, {
+      eventId: event.id, eventCreatedAt: new Date(event.created * 1000),
+      gracePeriodDays: env.LICENSE_API_GRACE_PERIOD_DAYS
+    }));
+  }
+  return { billing: updated, subscription };
 }
 
 export async function applySubscriptionEvent(db: Db, event: Stripe.Event, subscription: Record<string, unknown>) {
@@ -319,10 +356,21 @@ export async function registerBillingRoutes(app: FastifyInstance, db: Db, env: A
     try {
       const actor = requireActor(request);
       const organizationId = requireOrgId(actor);
-      const billing = await getOrganizationBilling(db, organizationId);
+      let billing = await getOrganizationBilling(db, organizationId);
+      let checkoutAllowed = !billing?.stripeSubscriptionId;
+      if (billing && !["active", "trialing"].includes(billing.status)
+        && (billing.stripeCheckoutSessionId || billing.stripeSubscriptionId)) {
+        const stripe = configuredStripe(env);
+        if (!stripe) throw billingConfirmationError();
+        const recovered = await reconcileCheckoutBilling(db, env, stripe, billing);
+        billing = recovered.billing;
+        checkoutAllowed = !recovered.subscription || mayReplaceSubscription(recovered.subscription);
+      }
+      checkoutAllowed = checkoutAllowed && !["active", "trialing"].includes(billing?.status ?? "pending");
       return {
         data: {
           organizationId,
+          checkoutAllowed,
           status: billing?.status ?? "pending",
           customerId: billing?.stripeCustomerId ?? null,
           subscriptionId: billing?.stripeSubscriptionId ?? null,
@@ -362,7 +410,7 @@ export async function registerBillingRoutes(app: FastifyInstance, db: Db, env: A
         workspaceKind,
         orgMemberDiscount
       });
-      if (!session) return { data: { status: "active", checkoutUrl: null } };
+      if (!session) return { data: { status: (await getOrganizationBilling(db, organizationId))?.status ?? "pending", checkoutUrl: null } };
       await audit(db, actor, "billing.checkout_session.create", "organization", organizationId, { sessionId: session.id });
       return { data: { status: "pending", checkoutUrl: session.url, sessionId: session.id } };
     } catch (error) {

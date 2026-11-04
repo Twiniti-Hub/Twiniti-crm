@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Revision 0.10.55.6 (TWI-1049, TWI-1050, TWI-1051): recover existing Stripe trials before offering another checkout, block payment retries while confirmation is unresolved, expose an independent logout route and loading-state sign-out controls, and bound regional workspace discovery with retry and missing-KV recovery. No DB migration or live configuration changes. Application package version remains 0.10.55 pending release.
+
 - TWI-1047 (revision 0.10.55.5): select Personal $9/month or Organization $29/month via the corresponding Stripe Price ID, offer both new workspaces seven cardless trial days, replace stale checkout sessions, and keep Billing accessible for adding a payment method. Retire new-session member-discount pricing; prevent repeat workspace trials. No database changes; package version remains 0.10.55 pending release.
 
 - Fix email verification blocking workspace creation and checkout (TWI-1035, revision 0.10.55.4): keep Hexclave callbacks reachable for signed-in users, add verification/resend controls, and retain signup details in the original tab until workspace creation. Server verification requirements remain enforced. No database changes; application package version remains 0.10.55 pending release.

@@ -1,5 +1,13 @@
 # Agent instructions (Twiniti CRM)
 
+## Session recovery safeguards (0.10.55.6)
+
+TWI-1049/1050/1051: reconcile existing Stripe subscriptions before replacement
+checkout; fail closed during an unconfirmed or active trial. Keep logout outside
+workspace/bootstrap gates. Bound regional discovery and preserve membership checks.
+See `docs/BILLING.md` and `docs/operations/EMAIL_VERIFICATION.md`.
+
+
 ## Billing flow
 
 Follow `docs/BILLING.md` (revision 0.10.55.5): one workspace-specific recurring
