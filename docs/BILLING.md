@@ -8,17 +8,37 @@ Twiniti Loop bills one Stripe subscription per organization (company or personal
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PRICE_ID` (company / organization monthly Price)
 - `STRIPE_PERSONAL_PRICE_ID` (personal monthly Price)
-- `STRIPE_PERSONAL_ORG_MEMBER_PRICE_ID` (discounted personal monthly Price when the payer has an active company membership)
 - `STRIPE_BILLING_PORTAL_CONFIGURATION_ID` (optional)
 
-In production, the API refuses to start without the Stripe secret, webhook secret, all three Price IDs, and Hexclave server authentication.
+In production, the API refuses to start without the Stripe secret, webhook secret, both Price IDs, and Hexclave server authentication.
 
-### Personal workspace pricing
+### Plan selection and trials (revision 0.10.55.5, TWI-1047)
 
-- Personal checkout uses `STRIPE_PERSONAL_PRICE_ID`, or `STRIPE_PERSONAL_ORG_MEMBER_PRICE_ID` when the Hexclave subject already has an active `crm_users` membership in a `workspace_kind=company` organization (evaluated at subscribe / checkout creation time).
-- Renewals stay on the Price selected at checkout (Stripe subscription line item). Changing company membership later does not auto-switch Prices; ops may move the subscription in Stripe if needed.
-- Personal checkout does not use the company trial period (`STRIPE_TRIAL_PERIOD_DAYS` applies to company only).
-- License_API provisioning remains keyed by the personal organization UUID (`externalOrganizationId`).
+- Personal selects only `STRIPE_PERSONAL_PRICE_ID` (USD $9/month); Organization
+  selects only `STRIPE_PRICE_ID` (USD $29/month). Missing Personal configuration
+  fails instead of falling back to the Organization price.
+- Both new workspaces receive seven free days with `payment_method_collection=if_required`.
+  No card is needed to start. Do not add a $0 line item or catalog Trial Offer.
+- The seven-day signup contract is fixed in `checkoutTerms`, independent of the
+  legacy `STRIPE_TRIAL_PERIOD_DAYS` setting. The org-member discount setting remains
+  readable for compatibility but is not used for new sessions. Existing subscriptions
+  keep their price; this change does not migrate them.
+- During the trial, open Billing and select Add payment method / manage billing.
+  Enable payment-method updates in the Stripe customer portal. Without a payment
+  method at trial end, Stripe cancels the subscription and workspace access locks.
+  CRM data is retained. Restarting requires payment and gives no second workspace trial.
+- Previous-policy open sessions are expired and replaced on the next checkout request.
+  Completed subscriptions are unchanged.
+
+### Agent and operator validation
+
+Run billing tests, API/web typechecks, web build and repository policy checks.
+After Development deployment, verify both Price IDs resolve to the USD monthly
+amounts above in the correct Stripe environment. Test both plans without a card,
+trialing webhook activation, portal payment-method updates, and test-clock trial
+expiry with and without a card. Record regional deployment and smoke receipts in
+Linear before Production promotion. DB: none. Rollback: revert TWI-1047; already
+created Stripe subscriptions retain their terms.
 
 ## Stripe webhook
 
@@ -50,9 +70,9 @@ Super Admins can force a Stripe → CRM → License_API refresh with:
 
 ## Registration flow
 
-1. Hexclave creates the user account.
+1. Hexclave creates the user account and the user verifies their email.
 2. The API creates the organization and makes that user its `admin`.
 3. The API creates a pending billing record and a Stripe Checkout Session.
-4. The user completes Checkout.
+4. The user completes Checkout without a card for the seven-day trial.
 5. Stripe webhook events activate the organization.
-6. All workspace and MCP data routes remain blocked until billing is active.
+6. Access unlocks when billing is trialing or active and licensing allows access.

@@ -1,5 +1,11 @@
 # Agent instructions (Twiniti CRM)
 
+## Billing flow
+
+Follow `docs/BILLING.md` (revision 0.10.55.5): one workspace-specific recurring
+price, seven cardless trial days for new workspaces, no repeat trial on restart.
+Verify actual Stripe prices and portal payment-method updates during deployment.
+
 ## Authentication flow
 
 For signup, verification, or checkout changes, follow
