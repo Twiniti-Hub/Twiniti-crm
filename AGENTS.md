@@ -1,5 +1,12 @@
 # Agent instructions (Twiniti CRM)
 
+## Authentication flow
+
+For signup, verification, or checkout changes, follow
+`docs/operations/EMAIL_VERIFICATION.md` (revision 0.10.55.4, TWI-1035).
+Auth callbacks must remain reachable before workspace and billing gates;
+never remove server email verification checks to unblock checkout.
+
 ## GitHub identity (non-negotiable)
 
 Cloud Agents launched by George still authenticate Cursor’s built-in GitHub PR

@@ -12,6 +12,8 @@ import { OnboardingPage } from "../pages/OnboardingPage";
 import { ForgotPasswordPage } from "../pages/ForgotPasswordPage";
 import { SignInPage } from "../pages/SignInPage";
 import { SignUpPage } from "../pages/SignUpPage";
+import { VerifyEmailPage } from "../pages/VerifyEmailPage";
+import { authFlowStage } from "../lib/authFlow";
 import { CrmRoutes } from "./CrmRoutes";
 
 /** Guests see landing + auth pages; signed-in users get setup gates or CRM shell. */
@@ -134,6 +136,12 @@ export function AuthGate() {
     };
   }, [userId, authorizationHeader, location.pathname]);
 
+  // Email/reset callbacks must run before session, setup, and billing gates.
+  // In particular, verification links are normally opened while signed in.
+  if (authFlowStage(location.pathname, me) === "callback") {
+    return <HexclaveHandler fullPage />;
+  }
+
   if (!user) {
     return (
       <Routes>
@@ -166,6 +174,10 @@ export function AuthGate() {
         </div>
       </div>
     );
+  }
+
+  if (authFlowStage(location.pathname, me) === "verification") {
+    return <VerifyEmailPage />;
   }
 
   if (me?.needsSetup) {
