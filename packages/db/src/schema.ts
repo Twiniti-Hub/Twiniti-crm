@@ -108,6 +108,7 @@ export const crmUsers = pgTable("crm_users", {
   countryCode: varchar("country_code", { length: 2 }),
   role: varchar("role", { length: 32 }).notNull().default("member"),
   active: boolean("active").notNull().default(true),
+  licenseVerification: jsonb("license_verification").$type<Record<string, unknown>>(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => ({
   subjectOrgIndex: uniqueIndex("crm_users_subject_org_idx").on(table.hexclaveSubject, table.organizationId),

@@ -13,9 +13,9 @@ import {
   createInvitation,
   createOrganization,
   ensureOrganizationBilling,
+  enqueueLicenseVerification,
   findInvitationByToken,
   getOrganizationById,
-  getOrganizationBilling,
   listMembershipsForSubject,
   listOrganizations,
   listOrgMembers,
@@ -25,7 +25,6 @@ import {
   withIsolatedServiceRls,
   withServiceRls,
   updateMemberRole,
-  updateOrganizationLicense,
   writeAudit,
   organizationResendDomains,
   listOrganizationResendDomains,
@@ -60,40 +59,16 @@ import { createAndSendOrganizationAdminInvite } from "../organization-admin-invi
 async function refreshSuperAdminLicenseStatuses(
   db: Db,
   env: AppEnv,
-  rows: Awaited<ReturnType<typeof getSuperAdminDashboard>>,
-  log: { warn: (context: unknown, message: string) => void }
+  rows: Awaited<ReturnType<typeof getSuperAdminDashboard>>
 ) {
   const client = createLicenseApiClient(env);
   if (!client.configured) return;
 
   await Promise.all(rows.map(async (row) => {
-    if (row.licenseProvisioningStatus !== "provisioned") return;
-    const billing = await getOrganizationBilling(db, row.id);
-    if (!billing || !["active", "trialing"].includes(billing.status)) return;
     const members = await listOrgMembers(db, row.id);
     const member = members.find((candidate) => candidate.active && ["owner", "admin"].includes(candidate.role ?? ""))
       ?? members.find((candidate) => candidate.active);
-    if (!member) return;
-
-    try {
-      const check = await client.checkUserLicense({
-        externalOrganizationId: row.id,
-        externalUserId: member.id,
-        email: member.email,
-        productCode: env.LICENSE_API_PRODUCT_CODE,
-        source: "twiniti-crm"
-      });
-      await updateOrganizationLicense(db, row.id, {
-        licenseDecision: check.decision,
-        licenseStatus: check.licenseStatus ?? null,
-        licenseId: check.licenseId ?? billing.licenseId ?? null,
-        licenseReasonCode: check.reasonCode,
-        licenseOrganizationId: check.organizationId,
-        lastLicenseCheckedAt: new Date()
-      });
-    } catch (error) {
-      log.warn({ error, organizationId: row.id }, "SuperAdmin license status refresh failed");
-    }
+    if (member) await enqueueLicenseVerification(db, row.id, member.id);
   }));
 }
 
@@ -366,6 +341,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         primaryEmailVerified: actor.primaryEmailVerified ?? null,
         isSuperAdmin: Boolean(actor.isSuperAdmin),
         billingStatus: actor.billingStatus ?? "pending",
+        licenseWarning: actor.licenseWarning ?? null,
         licenseDecision: actor.licenseDecision ?? null,
         licenseReasonCode: actor.licenseReasonCode ?? null,
         licenseStatus: actor.licenseStatus ?? null,
@@ -706,7 +682,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       const regionalRows = await Promise.all(
         regionalDbs.map(({ region, db: regionalDb }) => withServiceRls(regionalDb, null, async (serviceDb) => {
           const rows = await getSuperAdminDashboard(serviceDb, region);
-          await refreshSuperAdminLicenseStatuses(serviceDb, env, rows, request.log);
+          await refreshSuperAdminLicenseStatuses(serviceDb, env, rows);
           return getSuperAdminDashboard(serviceDb, region);
         }))
       );

@@ -1,3 +1,4 @@
+import { LicenseNotice } from "../components/LicenseNotice";
 import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { api } from "../lib/api";
@@ -231,6 +232,7 @@ export function SettingsPage() {
           <h1>Settings</h1>
         </div>
       </header>
+      <LicenseNotice />
       {error ? <div className="banner error">{error}</div> : null}
       {message ? <div className="banner info">{message}</div> : null}
 

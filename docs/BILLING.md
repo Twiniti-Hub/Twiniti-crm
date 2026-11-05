@@ -1,5 +1,16 @@
 # Organization billing
 
+## License verification messages (revision 0.10.55.8)
+
+License verification runs in the background. If it is pending or failing, a
+warning appears in the workspace, account Settings, and Billing. It shows
+whether temporary access remains available and its deadline. You can continue
+working while access is available; no second checkout is needed to repair a
+verification outage. The message refreshes automatically and clears after a
+successful check. If it continues, contact support with the displayed reference.
+After the deadline, access requires successful verification. Explicit expired,
+revoked, or restricted licenses still follow normal access restrictions.
+
 Twiniti Loop bills one Stripe subscription per organization (company or personal workspace). Checkout uses quantity `1` on the Price for that workspace kind; users are not metered individually.
 
 ## Required API environment

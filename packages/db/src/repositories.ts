@@ -1451,6 +1451,26 @@ export async function enqueueJob(
   throw new Error("Unable to enqueue job");
 }
 
+export async function getLicensePrincipal(db: Db, organizationId: string, userId: string): Promise<typeof crmUsers.$inferSelect | null> {
+  const [user] = await db.select().from(crmUsers).where(and(
+    eq(crmUsers.id, userId), eq(crmUsers.organizationId, organizationId), eq(crmUsers.active, true)
+  )).limit(1);
+  return user ?? null;
+}
+
+export async function saveLicenseVerification(db: Db, organizationId: string, userId: string, verification: Record<string, unknown>) {
+  await db.update(crmUsers).set({ licenseVerification: verification }).where(and(
+    eq(crmUsers.id, userId), eq(crmUsers.organizationId, organizationId), eq(crmUsers.active, true)
+  ));
+}
+
+export async function enqueueLicenseVerification(db: Db, organizationId: string, userId: string, now = Date.now()) {
+  return enqueueJob(db, {
+    organizationId, kind: "license.verify", payload: { organizationId, userId },
+    dedupeKey: `license-verify:${organizationId}:${userId}:${Math.floor(now / 300_000)}`
+  });
+}
+
 export async function claimJobs(db: Db, limit = 10) {
   const queued = await db.select().from(jobs).where(and(
     eq(jobs.status, "queued"),

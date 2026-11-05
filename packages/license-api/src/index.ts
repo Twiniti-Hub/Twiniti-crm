@@ -1,5 +1,6 @@
 import type { AppEnv } from "@twiniti/config";
 import { randomUUID } from "node:crypto";
+export * from "./entitlement.js";
 
 export type LicenseDecision = "allow" | "restricted" | "deny" | "retry";
 export type TrialKind = "none" | "seven_day" | "three_month" | "unknown";
@@ -23,6 +24,7 @@ export type LicenseCheck = {
   agentAccess?: boolean;
   limits?: Record<string, unknown>;
   requestId?: string;
+  httpStatus?: number;
 };
 
 export type ProvisionOrganizationInput = {
@@ -88,7 +90,9 @@ type ApiEnvelope<T> = {
   success?: boolean;
   data?: T;
   requestId?: string;
-  error?: string;
+  error?: string | { code?: string; message?: string };
+  code?: string;
+  reasonCode?: string;
   message?: string;
 };
 
@@ -112,14 +116,21 @@ export class LicenseApiError extends Error {
   readonly status: number;
   readonly retryable: boolean;
   readonly requestId?: string;
+  readonly code?: string;
 
-  constructor(message: string, options: { status?: number; retryable?: boolean; requestId?: string } = {}) {
+  constructor(message: string, options: { status?: number; retryable?: boolean; requestId?: string; code?: string } = {}) {
     super(message);
     this.name = "LicenseApiError";
     this.status = options.status ?? 0;
     this.retryable = options.retryable ?? true;
     this.requestId = options.requestId;
+    this.code = options.code;
   }
+}
+
+export function licenseErrorDecision(code?: string): LicenseDecision {
+  if (["LICENSE_REVOKED", "LICENSE_EXPIRED", "LICENSE_SUSPENDED", "LICENSE_DENIED"].includes(code ?? "")) return "deny";
+  return code === "LICENSE_RESTRICTED" ? "restricted" : "retry";
 }
 
 function normalizeDecision(value: unknown): LicenseDecision {
@@ -202,11 +213,14 @@ export class LicenseApiClient {
       try {
         parsed = text ? JSON.parse(text) as ApiEnvelope<T> : {};
       } catch {
-        parsed = {};
+        throw new LicenseApiError("License_API returned invalid JSON", { status: response.status, retryable: true, code: "LICENSE_API_INVALID_RESPONSE", requestId });
       }
-      if (!response.ok) {
-        throw new LicenseApiError(parsed.message ?? parsed.error ?? `License_API request failed (${response.status})`, {
+      if (!response.ok || parsed.success === false) {
+        const error = typeof parsed.error === "object" ? parsed.error : null;
+        const code = error?.code ?? parsed.reasonCode ?? parsed.code;
+        throw new LicenseApiError(error?.message ?? parsed.message ?? (typeof parsed.error === "string" ? parsed.error : `License_API request failed (${response.status})`), {
           status: response.status,
+          code,
           retryable: response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500,
           requestId: parsed.requestId ?? requestId
         });
@@ -239,21 +253,22 @@ export class LicenseApiClient {
     return this.request<Record<string, unknown>>(this.config.LICENSE_API_SYNC_PATH, input, idempotencyKey);
   }
 
-  async checkUserLicense(input: CheckUserLicenseInput): Promise<LicenseCheck> {
+  async checkUserLicense(input: CheckUserLicenseInput, options: { fresh?: boolean } = {}): Promise<LicenseCheck> {
     const cacheKey = [input.externalOrganizationId, input.externalUserId ?? "", input.productCode].join(":");
     const cached = this.cache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    if (!options.fresh && cached && cached.expiresAt > Date.now()) return cached.value;
     try {
-      const data = await this.request<unknown>(this.config.LICENSE_API_CHECK_PATH, input, `license-check:${cacheKey}`);
+      const data = await this.request<unknown>(this.config.LICENSE_API_CHECK_PATH, input, `license-check:${cacheKey}${options.fresh ? `:${randomUUID()}` : ""}`);
       const value = normalizeCheck(data, input.externalOrganizationId);
       this.cache.set(cacheKey, { expiresAt: Date.now() + this.config.LICENSE_API_CACHE_TTL_MS, value });
       return value;
     } catch (error) {
       if (error instanceof LicenseApiError) {
         return {
-          decision: "retry",
-          reasonCode: error.retryable ? "LICENSE_API_UNAVAILABLE" : "LICENSE_API_REQUEST_FAILED",
+          decision: licenseErrorDecision(error.code),
+          reasonCode: error.code ?? (error.retryable ? "LICENSE_API_UNAVAILABLE" : "LICENSE_API_REQUEST_FAILED"),
           organizationId: input.externalOrganizationId,
+          httpStatus: error.status,
           requestId: error.requestId
         };
       }
@@ -281,8 +296,8 @@ export class LicenseApiClient {
     } catch (error) {
       if (error instanceof LicenseApiError) {
         return {
-          decision: "retry",
-          reasonCode: error.retryable ? "LICENSE_API_UNAVAILABLE" : "LICENSE_API_REQUEST_FAILED",
+          decision: licenseErrorDecision(error.code),
+          reasonCode: error.code ?? (error.retryable ? "LICENSE_API_UNAVAILABLE" : "LICENSE_API_REQUEST_FAILED"),
           organizationId: input.externalOrganizationId,
           agentAccess: false,
           requestId: error.requestId
@@ -318,3 +333,5 @@ export function createLicenseApiClient(env: LicenseApiConfig) {
 export type { LicenseApiConfig };
 
 const clientCache = new Map<string, LicenseApiClient>();
+
+export { buildSubscriptionState } from "./subscription.js";

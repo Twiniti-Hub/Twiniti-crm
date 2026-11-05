@@ -1,5 +1,14 @@
 # Agent instructions (Twiniti CRM)
 
+## Background human licensing (0.10.55.8)
+
+TWI-1045/TWI-1051: human requests read per-membership license verification;
+only worker jobs call LicenseHub. Preserve explicit denials across retries.
+Outage access is at most 24 hours from the last allowance or confirmed Stripe
+trial start, capped by entitlement/billing expiry. Never reset this on failure.
+Apply additive migration 0024 before deploying the worker and API. See
+`docs/LICENSING_DEPLOYMENT.md`; agent entitlement enforcement remains separate.
+
 ## Loop Dev configuration receipt (0.10.55.7)
 
 TWI-1044: Dev US service `srv-d9potpr9ik0c73cd5a6g` uses the direct
