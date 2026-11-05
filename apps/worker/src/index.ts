@@ -1,3 +1,4 @@
+import { licenseJobHandlers } from "./license-jobs.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
@@ -60,7 +61,6 @@ import {
   upsertContactByEmail,
   upsertContactIdentity,
   updateContact,
-  updateOrganizationLicense,
   upsertExternalRecordId,
   upsertPropertyDefinitionFromHubspot,
   webhookEvents,
@@ -1026,26 +1026,6 @@ async function processContactCompanyReconciliation(payload: { organizationId: st
   });
 }
 
-async function processLicenseProvision(payload: ProvisionOrganizationInput & { idempotencyKey: string }) {
-  const result = await licenseApi.provisionOrganization(payload, payload.idempotencyKey);
-  const data = result && typeof result === "object" ? result as Record<string, unknown> : {};
-  const read = (keys: string[]) => keys.map((key) => data[key]).find((value): value is string => typeof value === "string") ?? null;
-  await updateOrganizationLicense(db, payload.externalOrganizationId, {
-    licenseProvisioningStatus: "provisioned",
-    licenseOrganizationId: read(["organizationId", "organization_id", "id"]),
-    licenseId: read(["licenseId", "license_id"]),
-    licenseUserId: read(["userId", "user_id"])
-  });
-}
-
-async function processLicenseSubscriptionSync(payload: SubscriptionStateInput & { idempotencyKey: string }) {
-  await licenseApi.synchronizeSubscriptionState(payload, payload.idempotencyKey);
-  await updateOrganizationLicense(db, payload.externalOrganizationId, {
-    licenseProvisioningStatus: "provisioned",
-    lastLicenseSyncAt: new Date()
-  });
-}
-
 async function processLicenseAgentProvision(payload: AgentProvisionInput & { idempotencyKey: string }) {
   await licenseApi.provisionAgent(payload, payload.idempotencyKey);
 }
@@ -1098,11 +1078,15 @@ async function assertWorkerLicense(organizationId: string) {
 
 async function handleJob(kind: string, payload: Record<string, unknown>, organizationId: string | null) {
   switch (kind) {
+    case "license.verify":
+      if (!organizationId || organizationId !== payload.organizationId) throw new Error("License verification workspace mismatch");
+      await licenseJobHandlers(db, env).verify(organizationId, String(payload.userId));
+      return;
     case "license.provision":
-      await processLicenseProvision(payload as ProvisionOrganizationInput & { idempotencyKey: string });
+      await licenseJobHandlers(db, env).provision(payload as ProvisionOrganizationInput, String(payload.idempotencyKey));
       return;
     case "license.subscription.sync":
-      await processLicenseSubscriptionSync(payload as SubscriptionStateInput & { idempotencyKey: string });
+      await licenseJobHandlers(db, env).sync(payload as SubscriptionStateInput & { idempotencyKey: string });
       return;
     case "license.agent.provision":
       await processLicenseAgentProvision(payload as AgentProvisionInput & { idempotencyKey: string });

@@ -23,6 +23,7 @@ export type Me = {
   isSuperAdmin: boolean;
   billingStatus?: string;
   licenseDecision?: string | null;
+  licenseWarning?: { reason: string; graceUntil: string | null; accessContinues: boolean } | null;
   licenseReasonCode?: string | null;
   licenseStatus?: string | null;
   workspaces?: MeWorkspace[];

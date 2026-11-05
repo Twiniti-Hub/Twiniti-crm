@@ -1,3 +1,4 @@
+import { LicenseNotice } from "./LicenseNotice";
 import { useHexclaveApp, useUser } from "@hexclave/react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router";
@@ -193,6 +194,7 @@ export function Shell() {
         </div>
       </aside>
       <section className="content">
+        <LicenseNotice />
         {!authConfigured ? (
           <div className="banner warning" role="status">
             Hexclave is not configured (`VITE_HEXCLAVE_PROJECT_ID` missing). The API may run in

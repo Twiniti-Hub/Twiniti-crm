@@ -9,7 +9,7 @@
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/pollingConfig.test.ts"
+    "test": "tsx --test src/pollingConfig.test.ts src/license-jobs.test.ts"
   },
   "dependencies": {
     "@twiniti/contracts": "workspace:*",

@@ -6,9 +6,11 @@ import {
   type AppEnv
 } from "@twiniti/config";
 import type { RegionCode } from "@twiniti/contracts";
-import { createLicenseApiClient, type LicenseCheck } from "@twiniti/license-api";
+import { createLicenseApiClient, type LicenseCheck, localEntitlement, LICENSE_REFRESH_MS, type LicenseVerification, type LicenseWarning } from "@twiniti/license-api";
 import {
   ensureBootstrapOrg,
+  getLicensePrincipal,
+  enqueueLicenseVerification,
   findAgentByCredentialHash,
   findCrmUserByEmail,
   findCrmUserBySubject,
@@ -48,6 +50,7 @@ export type AuthActor = {
   regionCode?: RegionCode | null;
   countryCode?: string | null;
   billingStatus?: string;
+  licenseWarning?: LicenseWarning | null;
   licenseDecision?: string;
   licenseReasonCode?: string;
   licenseStatus?: string | null;
@@ -318,73 +321,24 @@ function parseLicenseDate(value: string | null | undefined) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-async function checkOrganizationLicense(
+export async function checkOrganizationLicense(
   db: Db,
   env: AppEnv,
   input: { organizationId: string; userId?: string | null; subject?: string | null; email?: string | null },
-  localStatus: string
+  localStatus: string,
+  deps = { getOrganizationBilling, getLicensePrincipal, enqueueLicenseVerification }
 ) {
-  const billingActive = localStatus === "active" || localStatus === "trialing";
-  if (isLicenseDevAutoTrialEnabled(env)) {
-    return {
-      billingStatus: billingActive ? localStatus : "trialing",
-      check: null as LicenseCheck | null
-    };
+  if (isLicenseDevAutoTrialEnabled(env) || (!env.LICENSE_API_REQUIRED && !createLicenseApiClient(env).configured)) {
+    return { billingStatus: isLicenseDevAutoTrialEnabled(env) ? "trialing" : localStatus, check: null as LicenseCheck | null, warning: null };
   }
-
-  const client = createLicenseApiClient(env);
-  const billing = await getOrganizationBilling(db, input.organizationId);
-  const provisioned =
-    Boolean(billing?.licenseId)
-    && billing?.licenseProvisioningStatus === "provisioned";
-
-  // Stripe-active/trialing orgs that already completed License_API provisioning
-  // must not stay permanently caged when a regional API is missing License_API
-  // secrets or the check endpoint is temporarily unreachable.
-  if (!client.configured) {
-    if (!client.required) {
-      return { billingStatus: localStatus, check: null as LicenseCheck | null };
-    }
-    if (billingActive && provisioned) {
-      return { billingStatus: localStatus, check: null as LicenseCheck | null };
-    }
-    return {
-      billingStatus: "license_unavailable",
-      check: null as LicenseCheck | null
-    };
+  const billing = await deps.getOrganizationBilling(db, input.organizationId);
+  const principal = input.userId ? await deps.getLicensePrincipal(db, input.organizationId, input.userId) : null;
+  if (!principal) return { billingStatus: "license_denied", check: null, warning: null };
+  const verification = principal.licenseVerification as LicenseVerification | null;
+  if (!verification || Date.now() - Date.parse(verification.lastAttemptAt) >= LICENSE_REFRESH_MS) {
+    await deps.enqueueLicenseVerification(db, input.organizationId, principal.id);
   }
-
-  const check = await client.checkUserLicense({
-    externalOrganizationId: input.organizationId,
-    externalUserId: input.userId ?? null,
-    userSubject: input.subject ?? null,
-    email: input.email ?? null,
-    productCode: env.LICENSE_API_PRODUCT_CODE,
-    source: "twiniti-crm"
-  });
-  await updateOrganizationLicense(db, input.organizationId, {
-    licenseDecision: check.decision,
-    licenseStatus: check.licenseStatus ?? null,
-    licenseId: check.licenseId ?? billing?.licenseId ?? null,
-    licenseReasonCode: check.reasonCode,
-    licenseOrganizationId: check.organizationId,
-    licenseExpiresAt: parseLicenseDate(check.expiresAt),
-    licenseGraceCutoff: parseLicenseDate(check.graceCutoff),
-    lastLicenseCheckedAt: new Date()
-  });
-
-  if (check.decision === "allow" && billingActive) {
-    return { billingStatus: localStatus, check };
-  }
-  if (check.decision === "retry" && billingActive && provisioned) {
-    return { billingStatus: localStatus, check };
-  }
-  return {
-    billingStatus: check.decision === "restricted"
-      ? "restricted"
-      : check.decision === "deny" ? "license_denied" : "license_unavailable",
-    check
-  };
+  return localEntitlement(billing, verification);
 }
 
 export async function resolveRequestActor(
@@ -630,6 +584,7 @@ export async function resolveRequestActor(
     licenseDecision: license.check?.decision,
     licenseReasonCode: license.check?.reasonCode,
     licenseStatus: license.check?.licenseStatus,
+    licenseWarning: license.warning,
     workspaces
   };
 }

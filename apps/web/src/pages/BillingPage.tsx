@@ -1,3 +1,4 @@
+import { LicenseNotice } from "../components/LicenseNotice";
 import { canOfferCheckout } from "../lib/billingCheckout";
 import { useEffect, useState } from "react";
 import { api, setWorkspaceContextId } from "../lib/api";
@@ -144,6 +145,7 @@ export function BillingPage() {
       <div className="auth-page-header"><Brand link /></div>
       <div className="auth-form-wrap">
         <div className="stack-form">
+          <LicenseNotice />
           <div>
             <p className="eyebrow">Client billing</p>
             <h1>{unlocked ? "Billing is active" : billing?.status === "trialing" ? "Your trial is active" : licenseExpired ? "Your subscription has expired" : "Activate your client workspace"}</h1>
