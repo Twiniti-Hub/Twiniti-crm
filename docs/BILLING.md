@@ -4,6 +4,40 @@ Twiniti Loop bills one Stripe subscription per organization (company or personal
 
 ## Required API environment
 
+### Loop Dev operations receipt (revision 0.10.55.7, 5 November 2026)
+
+George authorized `WEB_ORIGIN=https://twiniti-crm-dev-us.onrender.com` on
+Dev US service `srv-d9potpr9ik0c73cd5a6g` in Twiniti Workspace (TWI-1044).
+The service-level setting was saved and triggered deploy
+`dep-dbm7tqdbedkc73bgdj30`, using Development commit
+`53e06b7a57d604990edafe0919f1614846f0048f`.
+Render reported the deployment live; the direct US `/health` returned HTTP
+200 with `status: ok`, `regionCode: us`, and `authMode: hexclave`.
+The canonical-host defaults in `render.yaml` describe a differently named
+service; do not overwrite this explicit service override during reconciliation.
+No Production, EU, UK, or shared environment-group values were changed.
+
+For Dev testing, sign up and return to Billing on the direct US host above.
+Existing Stripe Checkout sessions retain their original return URLs; use a
+newly created session for return-flow verification. A successful deployment
+alone does not prove that the authenticated checkout return works.
+
+TWI-1041 remains pending: keep `/api/v1/webhooks/stripe` unchanged and add
+`checkout.session.completed`, `customer.subscription.created`,
+`customer.subscription.updated`, `customer.subscription.deleted`,
+`customer.subscription.trial_will_end`, `customer.subscription.paused`,
+`invoice.paid`, and `invoice.payment_failed` to the sandbox endpoint,
+preserving other enabled events. Dashboard access was unavailable during
+this change. Trial-ending and paused event handling is tracked in TWI-1043.
+
+TWI-1048 configuration is approved only when its resolver PR is ready:
+`STRIPE_PERSONAL_PRODUCT_ID=prod_VZHFTI67L1MAXG` and
+`STRIPE_ORG_PRODUCT_ID=prod_VZHIU3nMtv82nB`, on Dev US only.
+No resolver PR was open at this receipt; these variables were not set.
+Keep existing Price IDs until the compatible resolver has merged.
+
+### Current required keys
+
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PRICE_ID` (company / organization monthly Price)
