@@ -1,5 +1,12 @@
 # Agent instructions (Twiniti CRM)
 
+## Loop Dev configuration receipt (0.10.55.7)
+
+TWI-1044: Dev US service `srv-d9potpr9ik0c73cd5a6g` uses the direct
+onrender host for WEB_ORIGIN. This is a service-level override, not a change
+to the canonical-host Blueprint. Preserve it during configuration reconciliation.
+See `docs/BILLING.md` for the pending Stripe event and Product ID rollout.
+
 ## Session recovery safeguards (0.10.55.6)
 
 TWI-1049/1050/1051: reconcile existing Stripe subscriptions before replacement
