@@ -1,10 +1,13 @@
+# TWI-1027 (2026-11-06): mute version-update PRs (limit 0); security still opens;
+# monthly cadence; keep minor-patch group for when limit is raised.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: "/"
     target-branch: development
     schedule:
-      interval: weekly
+      interval: monthly
+    open-pull-requests-limit: 0
     groups:
       minor-patch:
         applies-to: version-updates
@@ -18,7 +21,8 @@ updates:
     directory: "/"
     target-branch: development
     schedule:
-      interval: weekly
+      interval: monthly
+    open-pull-requests-limit: 0
     groups:
       minor-patch:
         applies-to: version-updates
