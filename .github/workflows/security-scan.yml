@@ -30,6 +30,26 @@ jobs:
         with:
           fetch-depth: 0
 
+      - id: lockfiles
+        name: Detect lockfile-only changes
+        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
+        with:
+          filters: |
+            lockfiles:
+              - "**/package-lock.json"
+              - "**/pnpm-lock.yaml"
+              - "**/yarn.lock"
+              - "**/npm-shrinkwrap.json"
+              - "**/bun.lock"
+              - "**/bun.lockb"
+              - "**/deno.lock"
+              - "**/composer.lock"
+              - "**/Gemfile.lock"
+              - "**/Pipfile.lock"
+              - "**/poetry.lock"
+              - "**/uv.lock"
+              - "**/Cargo.lock"
+
       - name: Install Semgrep
         if: steps.lockfiles.outputs.lockfiles == 'false'
         run: pip install semgrep
@@ -54,26 +74,6 @@ jobs:
             echo "::error::Semgrep exited with status $scanner_status"
           fi
           echo "scanner_status=$scanner_status" >> "$GITHUB_OUTPUT"
-
-      - id: lockfiles
-        name: Detect lockfile-only changes
-        uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad # v3
-        with:
-          filters: |
-            lockfiles:
-              - "**/package-lock.json"
-              - "**/pnpm-lock.yaml"
-              - "**/yarn.lock"
-              - "**/npm-shrinkwrap.json"
-              - "**/bun.lock"
-              - "**/bun.lockb"
-              - "**/deno.lock"
-              - "**/composer.lock"
-              - "**/Gemfile.lock"
-              - "**/Pipfile.lock"
-              - "**/poetry.lock"
-              - "**/uv.lock"
-              - "**/Cargo.lock"
 
       - name: Install Gitleaks
         run: |
