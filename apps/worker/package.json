@@ -18,10 +18,10 @@
     "@twiniti/email": "workspace:*",
     "@twiniti/license-api": "workspace:*",
     "dotenv": "^16.5.0",
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.4"
   },
   "devDependencies": {
-    "tsx": "^4.19.4",
+    "tsx": "^4.23.15",
     "typescript": "^5.8.3"
   }
 }
