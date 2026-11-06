@@ -15,6 +15,19 @@ type Region = "us" | "eu" | "uk";
 
 const regions: Region[] = ["us", "eu", "uk"];
 
+/** Mirrors packages/contracts regionForCountry — kept inline so the Worker stays dependency-free. */
+const EU_COUNTRY_CODES = new Set([
+  "AT", "BE", "BG", "HR", "CY", "CZ", "DE", "DK", "EE", "ES", "FI", "FR", "GR",
+  "HU", "IE", "IT", "LT", "LU", "LV", "MT", "NL", "PL", "PT", "RO", "SE", "SI", "SK"
+]);
+
+export function regionForCountry(countryCode: string): Region {
+  const normalized = countryCode.trim().toUpperCase();
+  if (normalized === "GB") return "uk";
+  if (EU_COUNTRY_CODES.has(normalized)) return "eu";
+  return "us";
+}
+
 function originFor(env: Env, region: Region) {
   return ({ us: env.API_ORIGIN_US, eu: env.API_ORIGIN_EU, uk: env.API_ORIGIN_UK })[region];
 }
@@ -103,6 +116,74 @@ export async function discoverWorkspace(request: Request, env: Env, timeoutMs = 
   return results.find((result) => result?.response.ok)?.response ?? results[0]!.response;
 }
 
+/**
+ * First-time Personal/Org create has no X-Twiniti-Workspace-Id yet.
+ * Route by countryCode → residency region and seed KV from the create response.
+ */
+export async function proxyBootstrapCreate(request: Request, env: Env) {
+  let countryCode = "";
+  try {
+    const body = await request.clone().json() as { countryCode?: unknown };
+    countryCode = typeof body.countryCode === "string" ? body.countryCode : "";
+  } catch {
+    return Response.json(
+      { error: { code: "invalid_body", message: "Request body must be JSON with countryCode" } },
+      { status: 400, headers: corsHeaders(request) }
+    );
+  }
+  if (!countryCode.trim()) {
+    return Response.json(
+      { error: { code: "invalid_body", message: "countryCode is required" } },
+      { status: 400, headers: corsHeaders(request) }
+    );
+  }
+  const region = regionForCountry(countryCode);
+  const response = await proxy(request, env, region);
+  if (response.ok) {
+    try {
+      const json = await response.clone().json() as { data?: { id?: string; regionCode?: string } };
+      const organizationId = json.data?.id;
+      if (organizationId) {
+        const stored = isRegion(json.data?.regionCode ?? null) ? (json.data!.regionCode as Region) : region;
+        await env.WORKSPACE_DIRECTORY.put(organizationId, stored);
+      }
+    } catch {
+      // Regional body shape can vary; create already succeeded.
+    }
+  }
+  return response;
+}
+
+/** Invite accept/lookup: no workspace header and no reliable country — fan out like /me. */
+export async function proxyBootstrapFanout(request: Request, env: Env, timeoutMs = 8000) {
+  const results = await Promise.all(regions.map(async (region) => {
+    try {
+      const bounded = new Request(request, { signal: AbortSignal.timeout(timeoutMs) });
+      const response = await proxy(bounded, env, region);
+      return { region, response };
+    } catch {
+      return null;
+    }
+  }));
+  const hit = results.find((result) => result && result.response.status !== 404 && result.response.status < 500);
+  if (hit) return hit.response;
+  if (results.some((result) => !result || result.response.status >= 500)) {
+    return Response.json(
+      { error: { code: "workspace_discovery_unavailable", message: "A workspace service is unavailable. Please retry." } },
+      { status: 503, headers: corsHeaders(request) }
+    );
+  }
+  return results.find((result) => result)?.response
+    ?? Response.json(
+      { error: { code: "workspace_discovery_unavailable", message: "A workspace service is unavailable. Please retry." } },
+      { status: 503, headers: corsHeaders(request) }
+    );
+}
+
+function isInvitationLookup(pathname: string) {
+  return /^\/api\/v1\/invitations\/[^/]+$/.test(pathname);
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(request) });
@@ -118,6 +199,16 @@ export default {
     if (!workspaceId && url.pathname === "/api/v1/me") return discoverWorkspace(request, env);
     if (!workspaceId && url.pathname.startsWith("/api/v1/super-admin/")) {
       return proxy(request, env, isRegion(env.DEFAULT_REGION) ? env.DEFAULT_REGION : "us");
+    }
+    // Pre-workspace bootstrap: onboarding create + invite flows (TWI-1059).
+    if (!workspaceId && request.method === "POST" && url.pathname === "/api/v1/organizations") {
+      return proxyBootstrapCreate(request, env);
+    }
+    if (!workspaceId && request.method === "POST" && url.pathname === "/api/v1/invitations/accept") {
+      return proxyBootstrapFanout(request, env);
+    }
+    if (!workspaceId && request.method === "GET" && isInvitationLookup(url.pathname)) {
+      return proxyBootstrapFanout(request, env);
     }
     if (!workspaceId) {
       return Response.json({ error: { code: "workspace_context_required", message: "Select a workspace before using this endpoint" } }, { status: 409, headers: corsHeaders(request) });
