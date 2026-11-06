@@ -17,7 +17,7 @@
     "@twiniti/contracts": "workspace:*",
     "@twiniti/license-api": "workspace:*",
     "@twiniti/db": "workspace:*",
-    "zod": "^3.25.67"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "typescript": "^5.8.3"
