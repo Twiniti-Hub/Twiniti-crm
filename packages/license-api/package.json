@@ -16,7 +16,7 @@
     "@twiniti/config": "workspace:*"
   },
   "devDependencies": {
-    "tsx": "^4.19.4",
+    "tsx": "^4.23.15",
     "typescript": "^5.8.3"
   }
 }

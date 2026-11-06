@@ -12,7 +12,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@hexclave/js": "^1.0.55",
+    "@hexclave/js": "^1.0.134",
     "@twiniti/config": "workspace:*",
     "@twiniti/contracts": "workspace:*",
     "@twiniti/license-api": "workspace:*",
