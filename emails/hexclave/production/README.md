@@ -1,6 +1,6 @@
 # Loop production email templates
 
-Revision **0.10.55.9**, TWI-1061. Native Hexclave React Email TSX, with subjects,
+Revision **0.10.55.10**, TWI-1061. Native Hexclave React Email TSX, with subjects,
 Transactional categories, exact built-in variable schemas and fictitious previews.
 Hexclave generates HTML and plain text from this source. These are not Mustache
 or HTML-import templates; no application dependencies are required.
@@ -42,7 +42,7 @@ https://loop.twiniti.ai/branding/loop-logo-light.png
 
 This is the existing `apps/landing/public/branding/loop-logo-light.png`, also
 present in the web app. Verified HTTP 200, image/png on 6 November 2026. Each email
-uses a presentation table to center the original square image at the top at
+uses a React Email Section with a centered Img for the original square image at
 160 × 160, with alt text. Preserve its aspect ratio and internal white space.
 Inline styles and React Email components avoid scripts, web fonts and external CSS.
 
@@ -84,3 +84,18 @@ Checked against Hexclave commit `c696b868eb400022ed881364dd7367a6f992c993`:
 - [Templates and themes](https://github.com/hexclave/hexclave/blob/c696b868eb400022ed881364dd7367a6f992c993/docs-mintlify/guides/apps/emails/templates-and-themes.mdx)
 - [Built-in schemas](https://github.com/hexclave/hexclave/blob/c696b868eb400022ed881364dd7367a6f992c993/packages/shared/src/helpers/emails.ts)
 - [Renderer and plain text](https://github.com/hexclave/hexclave/blob/c696b868eb400022ed881364dd7367a6f992c993/apps/backend/src/lib/email-rendering.tsx)
+
+## Hosted-editor compatibility (0.10.55.10)
+
+George supplied the working `hexclave-verify-template-0.10.55.9-fix1.tsx` on
+6 November 2026. All eight production templates follow that structure: no
+`Preview` import/component and no literal table/tbody/tr/td logo wrapper.
+`Section` contains `Img` directly; centered styles and public URL are retained.
+`EmailTemplate.PreviewVariables` remains: it is sample data, not the rejected
+React Email `Preview` component. Local React Email rendering did not expose the
+hosted-editor incompatibility, so use the working file as the compatibility
+baseline and still preview each event in the target Hexclave editor.
+
+The existing Development verification source is retained under
+`../development/email-verification.tsx`; its environment header differs but its
+body follows the same fix. Event URLs still come from the selected project.

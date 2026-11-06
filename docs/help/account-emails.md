@@ -14,3 +14,6 @@ your plan, payment method and trial end in Billing.
 
 These designs require publishing in the sending provider before they appear in
 inboxes. Administrators can follow the [setup guide](../../emails/hexclave/production/README.md).
+
+Administrators: revision 0.10.55.10 matches the verified Hexclave editor format.
+Use the full corrected source files and preview each event before publishing.

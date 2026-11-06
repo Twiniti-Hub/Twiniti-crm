@@ -1,9 +1,11 @@
 # Agent instructions (Twiniti CRM)
 
-## Production email templates (0.10.55.9)
+## Production email templates (0.10.55.10)
 
 TWI-1061: `emails/hexclave/production` contains eight native Hexclave TSX templates
-and a logo-free companion theme. Preserve upstream schemas, token links and
+and a logo-free companion theme. Match the user-verified fix: omit the Preview
+component and literal table logo wrappers; retain PreviewVariables and put Img
+directly inside Section. Preserve upstream schemas, token links and
 transactional categories. Each template owns its centered public logo. Installation
 does not wire CRM/Resend invitations or direct Stripe events into Hexclave. Follow
 the directory README for publishing and rollback; preserve cardless-trial wording.

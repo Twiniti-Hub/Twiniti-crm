@@ -1,7 +1,7 @@
-// Loop production email revision 0.10.55.9 — TWI-1061.
+// Loop production email revision 0.10.55.10 (no Preview; Section logo) — TWI-1061.
 // Paste this complete file into the matching Hexclave built-in template.
 import { type } from "arktype";
-import { Button, Container, Heading, Hr, Img, Link, Preview, Section, Text } from "@react-email/components";
+import { Button, Container, Heading, Hr, Img, Link, Section, Text } from "@react-email/components";
 import { Subject, NotificationCategory, Props } from "@hexclave/emails";
 
 export const variablesSchema = type({
@@ -16,12 +16,9 @@ export function EmailTemplate({ user, variables }: Props<typeof variablesSchema.
     <>
       <Subject value="Action needed: your Loop payment" />
       <NotificationCategory value="Transactional" />
-      <Preview>Please review your payment — Twiniti Loop</Preview>
       <Container style={{ maxWidth: "560px", width: "100%", backgroundColor: "#ffffff", color: "#172033", fontFamily: "Arial, Helvetica, sans-serif", fontSize: "16px", lineHeight: "1.6" }}>
         <Section style={{ textAlign: "center", padding: "8px 0 20px" }}>
-          <table role="presentation" align="center" cellPadding="0" cellSpacing="0"><tbody><tr><td align="center">
-            <Img src="https://loop.twiniti.ai/branding/loop-logo-light.png" alt="Twiniti Loop" width="160" height="160" style={{ display: "block", margin: "0 auto", border: "0" }} />
-          </td></tr></tbody></table>
+          <Img src="https://loop.twiniti.ai/branding/loop-logo-light.png" alt="Twiniti Loop" width="160" height="160" style={{ display: "block", margin: "0 auto", border: "0" }} />
         </Section>
         <Heading as="h1" style={{ fontSize: "26px", lineHeight: "1.3", margin: "0 0 24px", textAlign: "center" }}>Please review your payment</Heading>
         <Text>Hi{user?.displayName ? ` ${user.displayName}` : ""},</Text>
