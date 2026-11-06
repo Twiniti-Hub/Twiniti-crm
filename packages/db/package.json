@@ -20,7 +20,7 @@
     "@twiniti/contracts": "workspace:*",
     "dotenv": "^16.6.1",
     "drizzle-orm": "^0.45.2",
-    "zod": "^3.25.67"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.4",
