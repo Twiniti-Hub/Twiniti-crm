@@ -16,12 +16,14 @@ import {
 export const organizations = pgTable("organizations", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: varchar("name", { length: 200 }).notNull(),
+  workspaceKind: varchar("workspace_kind", { length: 32 }).notNull().default("company"),
   residencyRegion: varchar("residency_region", { length: 2 }).notNull().default("us"),
   routingPolicyVersion: varchar("routing_policy_version", { length: 40 }).notNull().default("country-v1"),
   provisioningKey: varchar("provisioning_key", { length: 255 }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => ({
-  provisioningKeyIndex: uniqueIndex("organizations_provisioning_key_idx").on(table.provisioningKey)
+  provisioningKeyIndex: uniqueIndex("organizations_provisioning_key_idx").on(table.provisioningKey),
+  workspaceKindIndex: index("organizations_workspace_kind_idx").on(table.workspaceKind)
 }));
 
 export const organizationBilling = pgTable("organization_billing", {
@@ -106,9 +108,11 @@ export const crmUsers = pgTable("crm_users", {
   countryCode: varchar("country_code", { length: 2 }),
   role: varchar("role", { length: 32 }).notNull().default("member"),
   active: boolean("active").notNull().default(true),
+  licenseVerification: jsonb("license_verification").$type<Record<string, unknown>>(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 }, (table) => ({
-  subjectIndex: uniqueIndex("crm_users_subject_idx").on(table.hexclaveSubject)
+  subjectOrgIndex: uniqueIndex("crm_users_subject_org_idx").on(table.hexclaveSubject, table.organizationId),
+  subjectIndex: index("crm_users_subject_idx").on(table.hexclaveSubject)
 }));
 
 export const organizationInvitations = pgTable("organization_invitations", {

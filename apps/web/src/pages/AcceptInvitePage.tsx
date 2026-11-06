@@ -1,7 +1,7 @@
 import { useUser } from "@hexclave/react";
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { api } from "../lib/api";
+import { api, setWorkspaceContextId } from "../lib/api";
 import { Brand } from "../components/Brand";
 
 type InvitePreview = {
@@ -52,10 +52,13 @@ export function AcceptInvitePage() {
     setBusy(true);
     setError(null);
     try {
-      await api("/api/v1/invitations/accept", {
+      const accepted = await api("/api/v1/invitations/accept", {
         method: "POST",
         body: JSON.stringify({ token: token.trim() })
       });
+      if (accepted.data?.organizationId) {
+        setWorkspaceContextId(accepted.data.organizationId);
+      }
       navigate("/", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not accept invitation.");

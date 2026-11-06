@@ -1,5 +1,42 @@
 # Agent instructions (Twiniti CRM)
 
+## Background human licensing (0.10.55.8)
+
+TWI-1045/TWI-1051: human requests read per-membership license verification;
+only worker jobs call LicenseHub. Preserve explicit denials across retries.
+Outage access is at most 24 hours from the last allowance or confirmed Stripe
+trial start, capped by entitlement/billing expiry. Never reset this on failure.
+Apply additive migration 0024 before deploying the worker and API. See
+`docs/LICENSING_DEPLOYMENT.md`; agent entitlement enforcement remains separate.
+
+## Loop Dev configuration receipt (0.10.55.7)
+
+TWI-1044: Dev US service `srv-d9potpr9ik0c73cd5a6g` uses the direct
+onrender host for WEB_ORIGIN. This is a service-level override, not a change
+to the canonical-host Blueprint. Preserve it during configuration reconciliation.
+See `docs/BILLING.md` for the pending Stripe event and Product ID rollout.
+
+## Session recovery safeguards (0.10.55.6)
+
+TWI-1049/1050/1051: reconcile existing Stripe subscriptions before replacement
+checkout; fail closed during an unconfirmed or active trial. Keep logout outside
+workspace/bootstrap gates. Bound regional discovery and preserve membership checks.
+See `docs/BILLING.md` and `docs/operations/EMAIL_VERIFICATION.md`.
+
+
+## Billing flow
+
+Follow `docs/BILLING.md` (revision 0.10.55.5): one workspace-specific recurring
+price, seven cardless trial days for new workspaces, no repeat trial on restart.
+Verify actual Stripe prices and portal payment-method updates during deployment.
+
+## Authentication flow
+
+For signup, verification, or checkout changes, follow
+`docs/operations/EMAIL_VERIFICATION.md` (revision 0.10.55.4, TWI-1035).
+Auth callbacks must remain reachable before workspace and billing gates;
+never remove server email verification checks to unblock checkout.
+
 ## GitHub identity (non-negotiable)
 
 Cloud Agents launched by George still authenticate Cursor’s built-in GitHub PR

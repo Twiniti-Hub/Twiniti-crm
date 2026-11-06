@@ -23,7 +23,69 @@ On License_API, set the same key as `TWINITI_CRM_API_KEY`. The License_API publi
 
 ## SuperAdmin status refresh
 
-The SuperAdmin organization dashboard refreshes the License API decision for provisioned organizations when the dashboard is opened. This keeps `licenseDecision`, `licenseStatus`, and `licenseReasonCode` current even though SuperAdmin authentication itself does not run the normal member license check.
+The SuperAdmin organization dashboard queues a background check for an active
+administrator (or active member). It reads the last stored organization summary;
+it does not wait for LicenseHub. The worker updates that summary after verification.
+
+## Background human verification (revision 0.10.55.8)
+
+Authenticated human requests validate the selected active CRM membership, read
+its `license_verification` snapshot, and enqueue `license.verify` when the last
+attempt is at least five minutes old. Jobs deduplicate per organization, member,
+and five-minute interval. LicenseHub latency is absent from the human request
+path. Agent checks and their `TCRM_AGENT_ACCESS` requirement are unchanged.
+
+The snapshot keeps the last definitive decision separately from the latest
+attempt and failure reason/request ID. A retry or missing-user result cannot
+erase an earlier denial or extend a previous allowance. Explicit `deny`,
+`restricted`, revoked/suspended/expired status, and known expiry remain enforced.
+
+With locally active Stripe billing, a previously allowed member may continue
+for at most 24 hours from their last confirmed check. A new member without a
+decision can continue during a server-confirmed Stripe trial for at most 24
+hours from its recorded start. Both deadlines are capped by the billing period
+or trial end and any known license expiry. Pending/unconfirmed billing grants
+no temporary access. Active paid users without a per-member snapshot wait for
+their first worker check; organization-level snapshots are not copied to users.
+New revocations are detected on the next successful background check; an outage
+can delay detection until the fixed grace deadline.
+
+The worker provisions the active principal before subscription synchronization,
+independently of the original provision job's terminal status. Provisioning uses
+stable organization/user idempotency keys and records returned flat or nested
+LicenseHub organization/user/license IDs. Verification repairs missing-user
+responses and retries the check without a stale adapter cache. Initial recovery
+also synchronizes the current stored Stripe state. Definitive denials do not
+trigger a new trial or reset billing. Failed jobs retain normal queue retries;
+later page activity schedules another bounded verification job if needed.
+
+No new environment variables are needed. The existing regional worker must be
+running with access to the same regional queues and LicenseHub credentials.
+Read-only Dev logs on 5 November 2026 showed service
+`srv-d9iham4vikkc73998e2g` with `polling=disabled` for US/EU/UK. This blocks
+all queued license work. Before live verification, obtain approval to enable
+`JOBS_POLL_ENABLED=true` and set `WORKER_POLL_INTERVAL_MS=2000` on that worker;
+the Dev default interval is otherwise two hours. Review queued non-license
+work first because enabling this loop also processes other job kinds. No live
+configuration changes were made as part of this implementation.
+`LICENSE_API_GRACE_PERIOD_DAYS` remains the subscription payment-grace setting;
+it does not control the fixed 24-hour outage allowance.
+
+### Rollout and verification
+
+Migration `0024_user_license_verification` adds one nullable JSONB column to
+`crm_users`, protected by its existing RLS. Classification: additive, no backfill.
+Apply the canonical regional migration chain before deploying the updated worker
+and API. Old code can coexist with the added column; new code requires it.
+Do not run live migrations as part of local tests. Follow the regional release
+policy and record receipts for each target. Rollback application/worker commits
+while retaining the nullable column; no destructive rollback is needed.
+
+On Development, test Personal and Organization signup through checkout, worker
+provision/sync/verify, stored returned IDs, and access to `/me` and `/overview`.
+Exercise an unavailable LicenseHub, expired grace, and explicit denial. Confirm
+warnings clear after recovery. Inspect failed regional jobs and their `lastError`
+and snapshot failure request IDs; do not include API keys in receipts.
 
 ## Render setup
 

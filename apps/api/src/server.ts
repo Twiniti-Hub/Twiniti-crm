@@ -78,7 +78,7 @@ app.get("/api/v1/bootstrap", async (request, reply) => {
   return { data: { organizationId: org.id, name: org.name } };
 });
 
-await registerOrganizationRoutes(app, db, env);
+await registerOrganizationRoutes(app, db, env, pool);
 await registerBillingRoutes(app, db, env);
 await registerCrmRoutes(app, db);
 await registerBoardRoutes(app, db);

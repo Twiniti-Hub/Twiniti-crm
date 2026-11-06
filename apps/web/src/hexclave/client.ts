@@ -17,6 +17,8 @@ export const hexclaveApp = authConfigured
       ...(publishableClientKey ? { publishableClientKey } : {}),
       tokenStore: "cookie",
       urls: {
+        handler: "/handler",
+        emailVerification: "/handler/email-verification",
         signIn: "/sign-in",
         signUp: "/sign-up",
         forgotPassword: "/forgot-password",

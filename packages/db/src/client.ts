@@ -48,6 +48,18 @@ export function enterDbContext(db: Db) {
   requestDb.enterWith(db);
 }
 
+export function getDbContext(): Db | undefined {
+  return requestDb.getStore();
+}
+
+export function restoreDbContext(previous: Db | undefined) {
+  if (previous) {
+    requestDb.enterWith(previous);
+    return;
+  }
+  clearDbContext();
+}
+
 export function clearDbContext() {
   requestDb.enterWith(undefined as unknown as Db);
 }

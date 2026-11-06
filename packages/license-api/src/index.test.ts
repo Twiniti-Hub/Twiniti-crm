@@ -17,6 +17,27 @@ const config = {
   LICENSE_API_REQUIRED: true
 } as const;
 
+test("preserves upstream error codes and explicit revocations, rejecting false success envelopes", async () => {
+  const originalFetch = globalThis.fetch;
+  const input = { externalOrganizationId: "org", externalUserId: "user", productCode: "loop", source: "twiniti-crm" as const };
+  try {
+    for (const [code, status, expected] of [["LICENSE_OR_USER_NOT_FOUND", 404, "retry"], ["LICENSE_REVOKED", 403, "deny"], ["UPSTREAM_TIMEOUT", 503, "retry"]] as const) {
+      globalThis.fetch = async () => Response.json({ error: { code, message: "failed" }, requestId: "request-1" }, { status });
+      const result = await new LicenseApiClient(config).checkUserLicense(input, { fresh: true });
+      assert.equal(result.reasonCode, code);
+      assert.equal(result.decision, expected);
+      assert.equal(result.requestId, "request-1");
+      assert.equal(result.httpStatus, status);
+    }
+    globalThis.fetch = async () => Response.json({ success: false, error: { code: "PROVISION_FAILED", message: "Not created" } });
+    await assert.rejects(new LicenseApiClient(config).provisionOrganization({ externalOrganizationId: "org", organizationName: "Org", externalUserId: "user", userSubject: "subject", productCode: "loop", planCode: "standard", source: "twiniti-crm" }, "key"), /Not created/);
+    globalThis.fetch = async () => new Response("not-json", { status: 502 });
+    const invalid = await new LicenseApiClient(config).checkUserLicense(input);
+    assert.equal(invalid.reasonCode, "LICENSE_API_INVALID_RESPONSE");
+    assert.equal(invalid.httpStatus, 502);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test("normalizes an organization-aware license decision and sends server headers", async () => {
   const originalFetch = globalThis.fetch;
   let request: { url: string; headers: Headers; body: Record<string, unknown> } | null = null;

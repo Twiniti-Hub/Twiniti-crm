@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 // neon-http workers use optimistic claim rather than SKIP LOCKED transactions
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Db } from "./client.js";
@@ -412,11 +412,23 @@ export async function ensureBootstrapOrg(
   return org;
 }
 
+export function organizationProvisioningKey(
+  subject: string,
+  workspaceKind: "company" | "personal"
+): string {
+  // Company keeps the historical key so existing orgs remain idempotent.
+  // Personal uses a distinct key so the same subject can own both kinds.
+  return workspaceKind === "personal"
+    ? `twiniti-crm:user:${subject}:personal`
+    : `twiniti-crm:user:${subject}`;
+}
+
 export async function createOrganization(
   db: Db,
   input: {
     name: string;
     countryCode: string;
+    workspaceKind?: "company" | "personal";
     adminSubject?: string;
     email?: string | null;
     displayName?: string | null;
@@ -424,17 +436,32 @@ export async function createOrganization(
 ) {
   const countryCode = countryCodeSchema.parse(input.countryCode);
   const residencyRegion: RegionCode = regionForCountry(countryCode);
-  const provisioningKey = input.adminSubject ? `twiniti-crm:user:${input.adminSubject}` : null;
+  const workspaceKind = input.workspaceKind === "personal" ? "personal" : "company";
+  const provisioningKey = input.adminSubject
+    ? organizationProvisioningKey(input.adminSubject, workspaceKind)
+    : null;
   if (input.adminSubject) {
-    const existing = await db.select({ organization: organizations, admin: crmUsers })
-      .from(crmUsers)
-      .innerJoin(organizations, eq(organizations.id, crmUsers.organizationId))
-      .where(eq(crmUsers.hexclaveSubject, input.adminSubject))
-      .limit(1);
-    if (existing[0]) return { organization: existing[0].organization, admin: existing[0].admin, created: false };
+    const memberships = await listMembershipsForSubject(db, input.adminSubject);
+    const sameKind = memberships.find((row) => row.workspaceKind === workspaceKind);
+    if (workspaceKind === "personal" && sameKind) {
+      const organization = await getOrganizationById(db, sameKind.organizationId);
+      const admin = await findMembership(db, input.adminSubject, sameKind.organizationId);
+      if (!organization) throw new Error("Unable to load personal organization");
+      return { organization, admin: admin ?? null, created: false };
+    }
+    if (workspaceKind === "company" && provisioningKey) {
+      const existingByKey = await db.select().from(organizations)
+        .where(eq(organizations.provisioningKey, provisioningKey))
+        .limit(1);
+      if (existingByKey[0]) {
+        const admin = await findMembership(db, input.adminSubject, existingByKey[0].id);
+        return { organization: existingByKey[0], admin: admin ?? null, created: false };
+      }
+    }
   }
   const [org] = await db.insert(organizations).values({
     name: input.name.trim(),
+    workspaceKind,
     residencyRegion,
     provisioningKey
   }).onConflictDoNothing({ target: organizations.provisioningKey }).returning();
@@ -443,9 +470,9 @@ export async function createOrganization(
       .where(eq(organizations.provisioningKey, provisioningKey))
       .limit(1);
     if (existing[0]) {
-      const [admin] = await db.select().from(crmUsers)
-        .where(eq(crmUsers.hexclaveSubject, input.adminSubject!))
-        .limit(1);
+      const admin = input.adminSubject
+        ? await findMembership(db, input.adminSubject, existing[0].id)
+        : null;
       return { organization: existing[0], admin: admin ?? null, created: false };
     }
     throw new Error("Unable to create organization");
@@ -461,10 +488,23 @@ export async function createOrganization(
       displayName: input.displayName ?? null,
       countryCode,
       role: "admin"
-    }).onConflictDoNothing({ target: crmUsers.hexclaveSubject }).returning();
-    admin = created ?? await findCrmUserBySubject(db, input.adminSubject);
+    }).onConflictDoNothing({
+      target: [crmUsers.hexclaveSubject, crmUsers.organizationId]
+    }).returning();
+    admin = created ?? await findMembership(db, input.adminSubject, org.id);
   }
   return { organization: org, admin, created: true };
+}
+
+/** Removes org signup rows when admin invite delivery fails during create (new org only). */
+export async function deleteOrganizationSignupRollback(db: Db, organizationId: string) {
+  await db.transaction(async (tx) => {
+    await tx.delete(organizationInvitations).where(eq(organizationInvitations.organizationId, organizationId));
+    await tx.delete(crmUsers).where(eq(crmUsers.organizationId, organizationId));
+    await tx.delete(organizationBilling).where(eq(organizationBilling.organizationId, organizationId));
+    await tx.delete(propertyDefinitions).where(eq(propertyDefinitions.organizationId, organizationId));
+    await tx.delete(organizations).where(eq(organizations.id, organizationId));
+  });
 }
 
 export async function getOrganizationBilling(db: Db, organizationId: string) {
@@ -580,9 +620,62 @@ export async function markStripeEventProcessed(db: Db, stripeEventId: string) {
     .where(eq(stripeEvents.stripeEventId, stripeEventId));
 }
 
+/** First active membership for a subject (stable by createdAt). Prefer listMembershipsForSubject. */
 export async function findCrmUserBySubject(db: Db, subject: string) {
-  const rows = await db.select().from(crmUsers).where(eq(crmUsers.hexclaveSubject, subject)).limit(1);
+  const rows = await db.select().from(crmUsers)
+    .where(and(eq(crmUsers.hexclaveSubject, subject), eq(crmUsers.active, true)))
+    .orderBy(asc(crmUsers.createdAt))
+    .limit(1);
   return rows[0] ?? null;
+}
+
+export async function findMembership(db: Db, subject: string, organizationId: string) {
+  const rows = await db.select().from(crmUsers)
+    .where(and(
+      eq(crmUsers.hexclaveSubject, subject),
+      eq(crmUsers.organizationId, organizationId)
+    ))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function listMembershipsForSubject(db: Db, subject: string) {
+  return db
+    .select({
+      id: crmUsers.id,
+      organizationId: crmUsers.organizationId,
+      hexclaveSubject: crmUsers.hexclaveSubject,
+      email: crmUsers.email,
+      displayName: crmUsers.displayName,
+      countryCode: crmUsers.countryCode,
+      role: crmUsers.role,
+      active: crmUsers.active,
+      createdAt: crmUsers.createdAt,
+      organizationName: organizations.name,
+      workspaceKind: organizations.workspaceKind,
+      residencyRegion: organizations.residencyRegion,
+      routingPolicyVersion: organizations.routingPolicyVersion,
+      provisioningKey: organizations.provisioningKey,
+      organizationCreatedAt: organizations.createdAt
+    })
+    .from(crmUsers)
+    .innerJoin(organizations, eq(organizations.id, crmUsers.organizationId))
+    .where(and(eq(crmUsers.hexclaveSubject, subject), eq(crmUsers.active, true)))
+    .orderBy(asc(crmUsers.createdAt));
+}
+
+export async function subjectHasActiveCompanyMembership(db: Db, subject: string) {
+  const rows = await db
+    .select({ id: crmUsers.id })
+    .from(crmUsers)
+    .innerJoin(organizations, eq(organizations.id, crmUsers.organizationId))
+    .where(and(
+      eq(crmUsers.hexclaveSubject, subject),
+      eq(crmUsers.active, true),
+      eq(organizations.workspaceKind, "company")
+    ))
+    .limit(1);
+  return Boolean(rows[0]);
 }
 
 /** Resolve a legacy or pre-provisioned membership for a verified platform identity. */
@@ -601,6 +694,7 @@ export async function listOrganizations(db: Db) {
     .select({
       id: organizations.id,
       name: organizations.name,
+      workspaceKind: organizations.workspaceKind,
       residencyRegion: organizations.residencyRegion,
       createdAt: organizations.createdAt,
       memberCount: count(crmUsers.id)
@@ -617,6 +711,7 @@ export async function getSuperAdminDashboard(db: Db, regionCode: RegionCode) {
     .select({
       id: organizations.id,
       name: organizations.name,
+      workspaceKind: organizations.workspaceKind,
       regionCode: sql<string>`${regionCode}`,
       createdAt: organizations.createdAt,
       billingStatus: organizationBilling.status,
@@ -703,7 +798,7 @@ export async function findOrCreateCrmUser(
     defaultRole?: string;
   }
 ) {
-  const existing = await findCrmUserBySubject(db, input.subject);
+  const existing = await findMembership(db, input.subject, input.organizationId);
   if (existing) return existing;
   const [created] = await db.insert(crmUsers).values({
     organizationId: input.organizationId,
@@ -712,8 +807,13 @@ export async function findOrCreateCrmUser(
     displayName: input.displayName ?? null,
     countryCode: input.countryCode ? countryCodeSchema.parse(input.countryCode) : null,
     role: input.defaultRole ?? "member"
+  }).onConflictDoNothing({
+    target: [crmUsers.hexclaveSubject, crmUsers.organizationId]
   }).returning();
-  return created;
+  if (created) return created;
+  const concurrent = await findMembership(db, input.subject, input.organizationId);
+  if (!concurrent) throw new Error("Unable to create CRM user");
+  return concurrent;
 }
 
 export function createInviteToken(): string {
@@ -730,6 +830,18 @@ export async function createInvitation(
     expiresInDays?: number;
   }
 ) {
+  const organization = await getOrganizationById(db, input.organizationId);
+  if (!organization) {
+    const error = new Error("Company not found") as Error & { statusCode: number };
+    error.statusCode = 404;
+    throw error;
+  }
+  if (organization.workspaceKind === "personal") {
+    const error = new Error("Personal workspaces do not support invitations") as Error & { statusCode: number };
+    error.statusCode = 403;
+    throw error;
+  }
+
   const emailNormalized = normalizeEmail(input.email);
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + (input.expiresInDays ?? 14));
@@ -822,9 +934,16 @@ export async function acceptInvitation(
     throw error;
   }
 
-  const existingUser = await findCrmUserBySubject(db, input.subject);
-  if (existingUser) {
-    const error = new Error("You already belong to a company") as Error & { statusCode: number };
+  const organization = await getOrganizationById(db, invitation.organizationId);
+  if (organization?.workspaceKind === "personal") {
+    const error = new Error("Personal workspaces cannot accept invitations") as Error & { statusCode: number };
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const existingInOrg = await findMembership(db, input.subject, invitation.organizationId);
+  if (existingInOrg?.active) {
+    const error = new Error("You already belong to this workspace") as Error & { statusCode: number };
     error.statusCode = 409;
     throw error;
   }
@@ -835,20 +954,86 @@ export async function acceptInvitation(
     throw error;
   }
 
-  const [user] = await db.insert(crmUsers).values({
-    organizationId: invitation.organizationId,
-    hexclaveSubject: input.subject,
-    email: input.email ?? invitation.email,
-    displayName: input.displayName ?? null,
-    role: invitation.role
-  }).returning();
+  return db.transaction(async (tx) => {
+    const now = new Date();
+    const [claimed] = await tx
+      .update(organizationInvitations)
+      .set({ acceptedAt: now })
+      .where(and(
+        eq(organizationInvitations.id, invitation.id),
+        isNull(organizationInvitations.acceptedAt),
+        gt(organizationInvitations.expiresAt, now)
+      ))
+      .returning();
 
-  await db
-    .update(organizationInvitations)
-    .set({ acceptedAt: new Date() })
-    .where(eq(organizationInvitations.id, invitation.id));
+    if (!claimed) {
+      if (invitation.expiresAt.getTime() < now.getTime()) {
+        const error = new Error("Invitation expired") as Error & { statusCode: number };
+        error.statusCode = 410;
+        throw error;
+      }
+      const error = new Error("Invitation already accepted") as Error & { statusCode: number };
+      error.statusCode = 409;
+      throw error;
+    }
 
-  return { user, organizationId: invitation.organizationId, organizationName: found.organizationName };
+    // Prefer reactivating a deactivated membership over insert+conflict, so the
+    // invite is never burned while leaving the member inactive.
+    if (existingInOrg && !existingInOrg.active) {
+      const [reactivated] = await tx.update(crmUsers).set({
+        active: true,
+        role: invitation.role,
+        email: input.email ?? invitation.email,
+        displayName: input.displayName ?? existingInOrg.displayName
+      }).where(and(
+        eq(crmUsers.id, existingInOrg.id),
+        eq(crmUsers.organizationId, invitation.organizationId)
+      )).returning();
+      if (!reactivated) {
+        throw new Error("Unable to reactivate membership from invitation");
+      }
+      return {
+        user: reactivated,
+        organizationId: invitation.organizationId,
+        organizationName: found.organizationName
+      };
+    }
+
+    const [user] = await tx.insert(crmUsers).values({
+      organizationId: invitation.organizationId,
+      hexclaveSubject: input.subject,
+      email: input.email ?? invitation.email,
+      displayName: input.displayName ?? null,
+      role: invitation.role,
+      active: true
+    }).onConflictDoNothing({
+      target: [crmUsers.hexclaveSubject, crmUsers.organizationId]
+    }).returning();
+
+    if (!user) {
+      // Race: another request inserted/updated the same membership. Reactivate
+      // rather than returning a possibly inactive conflict row.
+      const [reactivated] = await tx.update(crmUsers).set({
+        active: true,
+        role: invitation.role,
+        email: input.email ?? invitation.email,
+        displayName: input.displayName ?? null
+      }).where(and(
+        eq(crmUsers.hexclaveSubject, input.subject),
+        eq(crmUsers.organizationId, invitation.organizationId)
+      )).returning();
+      if (reactivated) {
+        return {
+          user: reactivated,
+          organizationId: invitation.organizationId,
+          organizationName: found.organizationName
+        };
+      }
+      throw new Error("Unable to create user from invitation");
+    }
+
+    return { user, organizationId: invitation.organizationId, organizationName: found.organizationName };
+  });
 }
 
 export async function searchContacts(
@@ -1264,6 +1449,26 @@ export async function enqueueJob(
     if (existing[0]) return existing[0];
   }
   throw new Error("Unable to enqueue job");
+}
+
+export async function getLicensePrincipal(db: Db, organizationId: string, userId: string): Promise<typeof crmUsers.$inferSelect | null> {
+  const [user] = await db.select().from(crmUsers).where(and(
+    eq(crmUsers.id, userId), eq(crmUsers.organizationId, organizationId), eq(crmUsers.active, true)
+  )).limit(1);
+  return user ?? null;
+}
+
+export async function saveLicenseVerification(db: Db, organizationId: string, userId: string, verification: Record<string, unknown>) {
+  await db.update(crmUsers).set({ licenseVerification: verification }).where(and(
+    eq(crmUsers.id, userId), eq(crmUsers.organizationId, organizationId), eq(crmUsers.active, true)
+  ));
+}
+
+export async function enqueueLicenseVerification(db: Db, organizationId: string, userId: string, now = Date.now()) {
+  return enqueueJob(db, {
+    organizationId, kind: "license.verify", payload: { organizationId, userId },
+    dedupeKey: `license-verify:${organizationId}:${userId}:${Math.floor(now / 300_000)}`
+  });
 }
 
 export async function claimJobs(db: Db, limit = 10) {

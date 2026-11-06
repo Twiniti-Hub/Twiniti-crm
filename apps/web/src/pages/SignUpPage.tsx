@@ -1,13 +1,20 @@
 import { useHexclaveApp } from "@hexclave/react";
 import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { api } from "../lib/api";
+import { api, setWorkspaceContextId } from "../lib/api";
 import { Brand } from "../components/Brand";
 import { CountrySelect } from "../components/CountrySelect";
+import { PAGE_META, usePageMeta } from "../lib/pageMeta";
+import { clearSignupDraft, saveSignupDraft } from "../lib/signupDraft";
+
+type WorkspaceChoice = "personal" | "organization";
 
 export function SignUpPage() {
   const app = useHexclaveApp();
+  usePageMeta(PAGE_META.signUp.title, PAGE_META.signUp.description);
   const navigate = useNavigate();
+  const [workspaceChoice, setWorkspaceChoice] = useState<WorkspaceChoice>("organization");
+  const [displayName, setDisplayName] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [countryCode, setCountryCode] = useState("");
   const [email, setEmail] = useState("");
@@ -21,14 +28,22 @@ export function SignUpPage() {
       setError("Authentication is not configured.");
       return;
     }
-    const name = companyName.trim();
-    if (!name) {
+    const isPersonal = workspaceChoice === "personal";
+    const name = isPersonal
+      ? (displayName.trim() || "Personal")
+      : companyName.trim();
+    if (!isPersonal && !name) {
       setError("Company name is required.");
+      return;
+    }
+    if (isPersonal && !displayName.trim()) {
+      setError("Display name is required.");
       return;
     }
     setBusy(true);
     setError(null);
     try {
+      saveSignupDraft(window.sessionStorage, { email: email.trim(), workspaceChoice, displayName, companyName, countryCode });
       const result = await app.signUpWithCredential({
         email: email.trim(),
         password,
@@ -46,10 +61,25 @@ export function SignUpPage() {
         return;
       }
 
+      const user = await app.getUser();
+      if (!user?.primaryEmailVerified) {
+        navigate("/onboarding", { replace: true });
+        return;
+      }
+
       const organization = await api("/api/v1/organizations", {
         method: "POST",
-        body: JSON.stringify({ name, countryCode, joinAsAdmin: true })
+        body: JSON.stringify({
+          name: isPersonal ? `Personal — ${displayName.trim()}` : name,
+          countryCode,
+          joinAsAdmin: true,
+          workspaceKind: isPersonal ? "personal" : "company"
+        })
       });
+      if (organization.data.id) {
+        clearSignupDraft(window.sessionStorage);
+        setWorkspaceContextId(organization.data.id);
+      }
       if (organization.data.checkoutUrl) {
         window.location.assign(organization.data.checkoutUrl);
       } else {
@@ -71,31 +101,76 @@ export function SignUpPage() {
         <form className="stack-form" onSubmit={onSubmit}>
           <div>
             <p className="eyebrow">Create account</p>
-            <h1>Start your company workspace</h1>
-            <p className="muted">You'll be the Company Admin for this workspace.</p>
+            <h1>Start your Loop workspace</h1>
+            <p className="muted">
+              Choose a personal CRM (only you) or an organization workspace for your company.
+            </p>
           </div>
+          <p className="muted">{workspaceChoice === "personal" ? "Personal: $9/month" : "Organization: $29/month"} after 7 days free. No credit card required to start.</p>
           {error ? <div className="banner error">{error}</div> : null}
-          <label>
-            Company name
-            <input
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              placeholder="Acme Marketing"
-              required
-              autoComplete="organization"
-            />
-          </label>
+          <fieldset className="workspace-choice">
+            <legend>Workspace type</legend>
+            <label className="workspace-choice-option">
+              <input
+                type="radio"
+                name="workspaceChoice"
+                value="personal"
+                checked={workspaceChoice === "personal"}
+                onChange={() => setWorkspaceChoice("personal")}
+              />
+              <span>
+                <strong>Personal</strong>
+                <span className="muted"> Private CRM for you. Full Loop features; no teammates.</span>
+              </span>
+            </label>
+            <label className="workspace-choice-option">
+              <input
+                type="radio"
+                name="workspaceChoice"
+                value="organization"
+                checked={workspaceChoice === "organization"}
+                onChange={() => setWorkspaceChoice("organization")}
+              />
+              <span>
+                <strong>Organization</strong>
+                <span className="muted"> Company workspace with members and invites.</span>
+              </span>
+            </label>
+          </fieldset>
+          {workspaceChoice === "personal" ? (
+            <label>
+              Display name
+              <input
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Jane Doe"
+                required
+                autoComplete="name"
+              />
+            </label>
+          ) : (
+            <label>
+              Company name
+              <input
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="Acme Marketing"
+                required
+                autoComplete="organization"
+              />
+            </label>
+          )}
           <label>
             Country
             <CountrySelect value={countryCode} onChange={setCountryCode} />
           </label>
           <label>
-            Work email
+            {workspaceChoice === "personal" ? "Email" : "Work email"}
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@company.com"
+              placeholder={workspaceChoice === "personal" ? "you@example.com" : "you@company.com"}
               required
               autoComplete="email"
             />

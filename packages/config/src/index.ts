@@ -34,6 +34,10 @@ export const envSchema = z.object({
   STRIPE_SECRET_KEY: z.string().optional().default(""),
   STRIPE_WEBHOOK_SECRET: z.string().optional().default(""),
   STRIPE_PRICE_ID: z.string().optional().default(""),
+  /** Monthly Price for personal workspaces (standard). Falls back to STRIPE_PRICE_ID when unset in non-production. */
+  STRIPE_PERSONAL_PRICE_ID: z.string().optional().default(""),
+  /** Discounted monthly Price when the payer has an active company membership. */
+  STRIPE_PERSONAL_ORG_MEMBER_PRICE_ID: z.string().optional().default(""),
   STRIPE_TRIAL_PERIOD_DAYS: z.coerce.number().int().min(0).max(730).default(7),
   STRIPE_BILLING_PORTAL_CONFIGURATION_ID: z.string().optional().default(""),
   LICENSE_API_URL: optionalUrl,
@@ -49,6 +53,8 @@ export const envSchema = z.object({
   LICENSE_API_SYNC_PATH: z.string().default("/api/v1/integrations/twiniti-crm/subscription"),
   LICENSE_API_CHECK_PATH: z.string().default("/api/v1/integrations/twiniti-crm/license/check"),
   LICENSE_API_REQUIRED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  // Non-production only: treat orgs as trialing for License_API gating (see isLicenseDevAutoTrialEnabled).
+  LICENSE_DEV_AUTO_TRIAL: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   BOOTSTRAP_ORG_NAME: z.string().default("Twiniti"),
   BOOTSTRAP_OWNER_SUBJECT: z.string().optional().default(""),
   SUPER_ADMIN_EMAILS: z.string().default("george.broadbent@twiniti.ai"),
@@ -105,6 +111,14 @@ export function isSuperAdminEmail(email: string | null | undefined, env: Pick<Ap
   return parseSuperAdminEmails(env.SUPER_ADMIN_EMAILS).includes(email.trim().toLowerCase());
 }
 
+/** Dev/staging license gate bypass; never active when DEPLOYMENT_ENV is production. */
+export function isLicenseDevAutoTrialEnabled(
+  env: Pick<AppEnv, "DEPLOYMENT_ENV" | "LICENSE_DEV_AUTO_TRIAL">
+): boolean {
+  if (env.DEPLOYMENT_ENV === "production") return false;
+  return env.LICENSE_DEV_AUTO_TRIAL;
+}
+
 export function hasHexclaveServerConfiguration(
   env: Pick<AppEnv, "AUTH_DISABLED" | "HEXCLAVE_PROJECT_ID" | "HEXCLAVE_SECRET_SERVER_KEY">
 ) {
@@ -142,7 +156,12 @@ export function assertProductionApiConfiguration(env: AppEnv) {
   if (env.HEXCLAVE_PROJECT_ID !== env.VITE_HEXCLAVE_PROJECT_ID) {
     throw new Error("Production API Hexclave project ID must match VITE_HEXCLAVE_PROJECT_ID");
   }
-  for (const key of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_ID"] as const) {
+  for (const key of [
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "STRIPE_PRICE_ID",
+    "STRIPE_PERSONAL_PRICE_ID"
+  ] as const) {
     if (!env[key]) throw new Error(`Production API requires ${key}`);
   }
   const productionDatabaseKey = `DATABASE_URL_Prod_${env.REGION_CODE.toUpperCase()}` as
@@ -154,5 +173,8 @@ export function assertProductionApiConfiguration(env: AppEnv) {
   }
   if (!env.LICENSE_API_URL || !env.LICENSE_API_API_KEY) {
     throw new Error("Production API requires License_API URL and API key");
+  }
+  if (env.LICENSE_DEV_AUTO_TRIAL) {
+    throw new Error("Production API forbids LICENSE_DEV_AUTO_TRIAL");
   }
 }

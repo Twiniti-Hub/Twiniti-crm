@@ -1,8 +1,14 @@
+import { licenseJobHandlers } from "./license-jobs.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { loadEnv, regionalDatabaseUrls } from "@twiniti/config";
+import {
+  resolvePollDelayMs,
+  resolveWorkerPollingConfig,
+  resolveWorkerRuntimeEnvironment
+} from "./pollingConfig.js";
 import type { RegionCode } from "@twiniti/contracts";
 import {
   createLicenseApiClient,
@@ -31,6 +37,7 @@ import {
   findContactByExternalRecordId,
   resolveContactsForReceivedEmail,
   getDb,
+  getPool,
   withServiceRls,
   scopedDb,
   HUBSPOT_CORE_CONTACT_FIELDS,
@@ -54,7 +61,6 @@ import {
   upsertContactByEmail,
   upsertContactIdentity,
   updateContact,
-  updateOrganizationLicense,
   upsertExternalRecordId,
   upsertPropertyDefinitionFromHubspot,
   webhookEvents,
@@ -75,10 +81,40 @@ const env = loadEnv({
 });
 
 const regionalDatabaseEntries = Object.entries(regionalDatabaseUrls(env)) as Array<[RegionCode, string]>;
-const regionalDatabases = regionalDatabaseEntries.map(([region, url]) => ({ region, db: scopedDb(getDb(url)) }));
-let activeRegion: RegionCode = regionalDatabases[0]?.region ?? "us";
-let db = regionalDatabases[0]?.db ?? getDb();
+type RegionalDatabase = { region: RegionCode; db: ReturnType<typeof scopedDb> };
+let regionalDatabases: RegionalDatabase[] | null = null;
+let activeRegion: RegionCode = regionalDatabaseEntries[0]?.[0] ?? "us";
+let db!: ReturnType<typeof scopedDb>;
+
+function getRegionalDatabases(): RegionalDatabase[] {
+  if (!regionalDatabases) {
+    regionalDatabases = regionalDatabaseEntries.map(([region, url]) => {
+      const pool = getPool(url);
+      pool.on("error", (error: Error) => {
+        console.error(`[worker] database pool error (${region}):`, error);
+      });
+      return {
+        region,
+        db: scopedDb(getDb(url))
+      };
+    });
+    activeRegion = regionalDatabases[0]?.region ?? "us";
+    db = regionalDatabases[0]?.db ?? scopedDb(getDb());
+  }
+  return regionalDatabases;
+}
+
 const licenseApi = createLicenseApiClient(env);
+const workerRuntimeEnv = resolveWorkerRuntimeEnvironment({
+  appEnv: process.env.APP_ENV,
+  deploymentEnv: process.env.DEPLOYMENT_ENV ?? env.DEPLOYMENT_ENV
+});
+const workerPolling = resolveWorkerPollingConfig({
+  deploymentEnv: workerRuntimeEnv,
+  jobsPollEnabled: process.env.JOBS_POLL_ENABLED,
+  workerPollingEnabled: process.env.WORKER_POLLING_ENABLED,
+  workerPollIntervalMs: process.env.WORKER_POLL_INTERVAL_MS
+});
 const CHECKPOINT_EVERY = 25;
 
 type ContactImportStats = {
@@ -990,26 +1026,6 @@ async function processContactCompanyReconciliation(payload: { organizationId: st
   });
 }
 
-async function processLicenseProvision(payload: ProvisionOrganizationInput & { idempotencyKey: string }) {
-  const result = await licenseApi.provisionOrganization(payload, payload.idempotencyKey);
-  const data = result && typeof result === "object" ? result as Record<string, unknown> : {};
-  const read = (keys: string[]) => keys.map((key) => data[key]).find((value): value is string => typeof value === "string") ?? null;
-  await updateOrganizationLicense(db, payload.externalOrganizationId, {
-    licenseProvisioningStatus: "provisioned",
-    licenseOrganizationId: read(["organizationId", "organization_id", "id"]),
-    licenseId: read(["licenseId", "license_id"]),
-    licenseUserId: read(["userId", "user_id"])
-  });
-}
-
-async function processLicenseSubscriptionSync(payload: SubscriptionStateInput & { idempotencyKey: string }) {
-  await licenseApi.synchronizeSubscriptionState(payload, payload.idempotencyKey);
-  await updateOrganizationLicense(db, payload.externalOrganizationId, {
-    licenseProvisioningStatus: "provisioned",
-    lastLicenseSyncAt: new Date()
-  });
-}
-
 async function processLicenseAgentProvision(payload: AgentProvisionInput & { idempotencyKey: string }) {
   await licenseApi.provisionAgent(payload, payload.idempotencyKey);
 }
@@ -1062,11 +1078,15 @@ async function assertWorkerLicense(organizationId: string) {
 
 async function handleJob(kind: string, payload: Record<string, unknown>, organizationId: string | null) {
   switch (kind) {
+    case "license.verify":
+      if (!organizationId || organizationId !== payload.organizationId) throw new Error("License verification workspace mismatch");
+      await licenseJobHandlers(db, env).verify(organizationId, String(payload.userId));
+      return;
     case "license.provision":
-      await processLicenseProvision(payload as ProvisionOrganizationInput & { idempotencyKey: string });
+      await licenseJobHandlers(db, env).provision(payload as ProvisionOrganizationInput, String(payload.idempotencyKey));
       return;
     case "license.subscription.sync":
-      await processLicenseSubscriptionSync(payload as SubscriptionStateInput & { idempotencyKey: string });
+      await licenseJobHandlers(db, env).sync(payload as SubscriptionStateInput & { idempotencyKey: string });
       return;
     case "license.agent.provision":
       await processLicenseAgentProvision(payload as AgentProvisionInput & { idempotencyKey: string });
@@ -1140,14 +1160,16 @@ async function handleJob(kind: string, payload: Record<string, unknown>, organiz
   }
 }
 
-async function tick() {
-  if (ticking) return;
+async function tick(): Promise<boolean> {
+  if (ticking) return false;
   ticking = true;
+  let hadWork = false;
   try {
-    for (const target of regionalDatabases) {
+    for (const target of getRegionalDatabases()) {
       activeRegion = target.region;
       db = target.db;
       const claimed = await withServiceRls(db, null, (serviceDb) => claimJobs(serviceDb, 5));
+      if (claimed.length > 0) hadWork = true;
       for (const job of claimed) {
         try {
           await withServiceRls(db, job.organizationId, async (tenantDb) => {
@@ -1162,14 +1184,32 @@ async function tick() {
         }
       }
     }
+    return hadWork;
   } finally {
     ticking = false;
   }
 }
 
 let ticking = false;
-console.log(`[worker] started for regions: ${regionalDatabases.map(({ region }) => region).join(", ")}`);
-setInterval(() => {
-  void tick();
-}, 2000);
-void tick();
+async function runPollCycle() {
+  let hadWork = false;
+  try {
+    hadWork = await tick();
+  } catch (error) {
+    console.error("[worker] poll cycle failed:", error);
+  }
+  const delayMs = resolvePollDelayMs({ hadWork, intervalMs: workerPolling.intervalMs });
+  setTimeout(() => {
+    void runPollCycle();
+  }, delayMs);
+}
+
+const configuredRegions = regionalDatabaseEntries.map(([region]) => region).join(", ");
+console.log(
+  `[worker] APP_ENV=${process.env.APP_ENV ?? "(unset)"} runtime=${workerRuntimeEnv} regions=${configuredRegions} polling=${workerPolling.enabled ? `busy ${workerPolling.intervalMs}ms, idle >= 60s` : "disabled"}`
+);
+if (workerPolling.enabled) {
+  void runPollCycle();
+} else {
+  console.log("[worker] JOBS_POLL_ENABLED/WORKER_POLLING_ENABLED=false; no database polling until re-enabled and redeployed");
+}

@@ -1,3 +1,5 @@
+import { SessionExit, SessionExitLink } from "./components/SessionExit";
+import { isSignOutPath } from "./lib/sessionRoutes";
 import { StrictMode, Suspense, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { HexclaveProvider, HexclaveTheme } from "@hexclave/react";
@@ -53,7 +55,7 @@ function BootstrapApp() {
       setAuthEnabled(false);
       return;
     }
-    fetch("/health", { credentials: "include" })
+    fetch("/health", { credentials: "include", signal: AbortSignal.timeout(8000) })
       .then(async (res) => {
         const health = (await res.json().catch(() => ({}))) as HealthResponse;
         if (!cancelled) {
@@ -71,12 +73,14 @@ function BootstrapApp() {
     };
   }, []);
 
+  if (isSignOutPath(window.location.pathname)) return <SessionExit />;
+
   if (authEnabled == null) {
-    return <div className="banner info">Loading workspace…</div>;
+    return <div className="banner info">Loading workspace…<SessionExitLink /></div>;
   }
 
   const appTree = (
-    <Suspense fallback={<div className="banner info">Loading…</div>}>
+    <Suspense fallback={<div className="banner info">Loading…<SessionExitLink /></div>}>
       <App authEnabled={authEnabled} />
     </Suspense>
   );

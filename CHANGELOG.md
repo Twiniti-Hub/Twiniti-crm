@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+- Revision 0.10.55.8 (TWI-1045, TWI-1051, #159): move human license checks into regional worker jobs, recover provisioning before subscription sync, retain per-membership decisions with bounded 24-hour outage access, and show account/settings verification warnings. Preserve upstream error codes and explicit denials. Additive migration 0024 adds nullable `crm_users.license_verification`; package version remains 0.10.55 pending release. Deployment and live smoke verification remain required.
+
+- Revision 0.10.55.7 (TWI-1044): record the authorized Loop Dev US WEB_ORIGIN override to keep checkout returns on the signup host. Document pending TWI-1041 webhook subscriptions and the conditional TWI-1048 Product ID rollout. Documentation only; no DB or package version changes.
+
+- Revision 0.10.55.6 (TWI-1049, TWI-1050, TWI-1051): recover existing Stripe trials before offering another checkout, block payment retries while confirmation is unresolved, expose an independent logout route and loading-state sign-out controls, and bound regional workspace discovery with retry and missing-KV recovery. No DB migration or live configuration changes. Application package version remains 0.10.55 pending release.
+
+- TWI-1047 (revision 0.10.55.5): select Personal $9/month or Organization $29/month via the corresponding Stripe Price ID, offer both new workspaces seven cardless trial days, replace stale checkout sessions, and keep Billing accessible for adding a payment method. Retire new-session member-discount pricing; prevent repeat workspace trials. No database changes; package version remains 0.10.55 pending release.
+
+- Fix email verification blocking workspace creation and checkout (TWI-1035, revision 0.10.55.4): keep Hexclave callbacks reachable for signed-in users, add verification/resend controls, and retain signup details in the original tab until workspace creation. Server verification requirements remain enforced. No database changes; application package version remains 0.10.55 pending release.
+
+- Begin personal CRM revision 0.10.55.3 (TWI-1026): show relationship-focused navigation in personal workspaces and redirect direct visits to company Growth, workforce, and deliverability pages. API and MCP restrictions remain a subsequent slice.
+
+- End-user personal workspaces (TWI-1020): multi-membership per Hexclave subject, membership-validated workspace switcher, Personal vs Organization signup, personal monthly Stripe Prices with org-member discount, and solo personal Settings (no invites). Migration `0023_crm_users_multi_membership` (additive/expand).
+- Allow Super Admins to create personal workspaces (`workspace_kind = personal`) and show a personal-workspace total on the Super Admin commercial dashboard.
 - Codify Linear hygiene in AGENTS.md so agents keep CRM issues, PR links, and Production receipts current.
 - Document Resend email setup end-to-end (domains, MX receiving, webhook URL and
   signing secret, BCC smoke-test, troubleshooting) and refresh Help / Settings /

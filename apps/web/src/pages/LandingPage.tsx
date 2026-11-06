@@ -1,6 +1,7 @@
 import { useHexclaveApp } from "@hexclave/react";
 import { Link } from "react-router";
 import { Brand } from "../components/Brand";
+import { PAGE_META, usePageMeta } from "../lib/pageMeta";
 import {
   LandingIntroVideo,
   LOOP_INTRO_VIDEO_THUMBNAIL_HQ,
@@ -11,6 +12,7 @@ import {
 
 export function LandingPage() {
   const app = useHexclaveApp();
+  usePageMeta(PAGE_META.root.title, PAGE_META.root.description);
 
   return (
     <div className="landing">

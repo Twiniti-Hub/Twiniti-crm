@@ -15,11 +15,34 @@ import { audit, requireActor, requireOrgId, requireSuperAdmin, requireUserRole, 
 import { buildSubscriptionState, enqueueLicenseSubscriptionSync } from "../license-jobs.js";
 import type { TrialKind } from "@twiniti/license-api";
 
+import { billingConfirmationError, mayReplaceSubscription, recoverCheckoutSubscription } from "../billing-recovery.js";
+
 type RawBodyRequest = FastifyRequest & { rawBody?: string | Buffer };
 
 function configuredStripe(env: AppEnv) {
   if (!env.STRIPE_SECRET_KEY || !env.STRIPE_PRICE_ID) return null;
   return new Stripe(env.STRIPE_SECRET_KEY);
+}
+
+/** New workspaces get one cardless seven-day trial at their selected plan price. */
+export function checkoutTerms(
+  env: Pick<AppEnv, "STRIPE_PRICE_ID" | "STRIPE_PERSONAL_PRICE_ID">,
+  workspaceKind: "company" | "personal" | undefined,
+  billing: { stripeSubscriptionId?: string | null; trialStart?: Date | null }
+) {
+  // Never silently charge the organization price when Personal is misconfigured.
+  const priceId = workspaceKind === "personal" ? env.STRIPE_PERSONAL_PRICE_ID : env.STRIPE_PRICE_ID;
+  const trialDays = billing.stripeSubscriptionId || billing.trialStart ? 0 : 7;
+  return {
+    priceId,
+    trialDays,
+    sessionPolicy: `cardless-v1:${priceId}:${trialDays}`,
+    payment_method_collection: trialDays ? "if_required" as const : "always" as const,
+    subscription_data: trialDays ? {
+      trial_period_days: trialDays,
+      trial_settings: { end_behavior: { missing_payment_method: "cancel" as const } }
+    } : {}
+  };
 }
 
 export function stripeObjectId(value: unknown): string | null {
@@ -86,7 +109,12 @@ function stripeDiscountIds(value: unknown) {
 export async function createOrganizationCheckoutSession(
   db: Db,
   env: AppEnv,
-  input: { organizationId: string; customerEmail?: string | null }
+  input: {
+    organizationId: string;
+    customerEmail?: string | null;
+    workspaceKind?: "company" | "personal";
+    orgMemberDiscount?: boolean;
+  }
 ) {
   const stripe = configuredStripe(env);
   if (!stripe) {
@@ -95,36 +123,62 @@ export async function createOrganizationCheckoutSession(
     throw error;
   }
 
-  const billing = await ensureOrganizationBilling(db, input.organizationId);
+  let billing = await ensureOrganizationBilling(db, input.organizationId);
   if (["active", "trialing"].includes(billing.status)) return null;
+
+  const recovered = await reconcileCheckoutBilling(db, env, stripe, billing);
+  billing = recovered.billing;
+  if (["active", "trialing"].includes(billing.status)) return null;
+  if (recovered.subscription && !mayReplaceSubscription(recovered.subscription)) {
+    throw billingConfirmationError("An existing subscription needs attention. Manage billing instead of starting another checkout.");
+  }
+
+  const terms = checkoutTerms(env, input.workspaceKind, billing);
+  const { priceId } = terms;
+  if (!priceId) {
+    const error = new Error("Stripe price is not configured") as Error & { statusCode: number };
+    error.statusCode = 503;
+    throw error;
+  }
 
   // Reuse only a still-open session. Stripe idempotency keys are durable, so
   // a fixed organization key can otherwise return an expired checkout forever.
   if (billing.stripeCheckoutSessionId) {
     try {
       const existing = await stripe.checkout.sessions.retrieve(billing.stripeCheckoutSessionId);
-      if (existing.status === "open" && existing.url) return existing;
-    } catch {
-      // Create a fresh session when the stored session was deleted or expired.
+      if (existing.status === "open" && existing.url) {
+        if (existing.metadata?.checkoutPolicy === terms.sessionPolicy) return existing;
+        // Retire pre-change sessions that require a card or use the wrong price.
+        await stripe.checkout.sessions.expire(existing.id);
+      }
+    } catch (error) {
+      // Do not create competing sessions after a network or expiration failure.
+      if (!(error instanceof Stripe.errors.StripeInvalidRequestError) || error.code !== "resource_missing") throw error;
     }
   }
 
+  const isPersonal = input.workspaceKind === "personal";
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
-    line_items: [{ price: env.STRIPE_PRICE_ID, quantity: 1 }],
+    payment_method_collection: terms.payment_method_collection,
+    line_items: [{ price: priceId, quantity: 1 }],
     customer: billing.stripeCustomerId ?? undefined,
     customer_email: billing.stripeCustomerId ? undefined : input.customerEmail ?? undefined,
     client_reference_id: input.organizationId,
-    allow_promotion_codes: true,
-    metadata: { organizationId: input.organizationId, regionCode: env.REGION_CODE },
+    allow_promotion_codes: !isPersonal,
+    metadata: {
+      organizationId: input.organizationId,
+      regionCode: env.REGION_CODE,
+      workspaceKind: input.workspaceKind ?? "company",
+      checkoutPolicy: terms.sessionPolicy
+    },
     subscription_data: {
-      metadata: { organizationId: input.organizationId, regionCode: env.REGION_CODE },
-      ...(env.STRIPE_TRIAL_PERIOD_DAYS > 0
-        ? {
-            trial_period_days: env.STRIPE_TRIAL_PERIOD_DAYS,
-            trial_settings: { end_behavior: { missing_payment_method: "cancel" as const } }
-          }
-        : {})
+      metadata: {
+        organizationId: input.organizationId,
+        regionCode: env.REGION_CODE,
+        workspaceKind: input.workspaceKind ?? "company"
+      },
+      ...terms.subscription_data
     },
     success_url: `${env.WEB_ORIGIN.replace(/\/$/, "")}/billing?success=1`,
     cancel_url: `${env.WEB_ORIGIN.replace(/\/$/, "")}/billing?canceled=1`
@@ -134,9 +188,37 @@ export async function createOrganizationCheckoutSession(
     status: ["active", "trialing"].includes(billing.status) ? billing.status : "pending",
     stripeCheckoutSessionId: session.id,
     stripeCustomerId: stripeObjectId(session.customer),
-    stripePriceId: env.STRIPE_PRICE_ID
+    stripePriceId: priceId
   });
   return session;
+}
+
+/** Repair local billing from Stripe; webhook delivery remains the primary sync path. */
+async function reconcileCheckoutBilling(
+  db: Db, env: AppEnv, stripe: Stripe,
+  billing: NonNullable<Awaited<ReturnType<typeof getOrganizationBilling>>>
+) {
+  const subscription = await recoverCheckoutSubscription(billing, {
+    session: (id) => stripe.checkout.sessions.retrieve(id),
+    subscription: (id) => stripe.subscriptions.retrieve(id)
+  });
+  if (!subscription) return { billing, subscription };
+  const event = {
+    id: `checkout-recovery:${subscription.id}:${Date.now()}`,
+    created: Math.floor(Date.now() / 1000),
+    type: "customer.subscription.updated",
+    data: { object: subscription }
+  } as unknown as Stripe.Event;
+  await applySubscriptionEvent(db, event, subscription as unknown as Record<string, unknown>);
+  const updated = await getOrganizationBilling(db, billing.organizationId);
+  if (!updated) throw billingConfirmationError();
+  if (billing.stripeSubscriptionStatus !== subscription.status || billing.stripeSubscriptionId !== subscription.id) {
+    await enqueueLicenseSubscriptionSync(db, env, buildSubscriptionState(updated, {
+      eventId: event.id, eventCreatedAt: new Date(event.created * 1000),
+      gracePeriodDays: env.LICENSE_API_GRACE_PERIOD_DAYS
+    }));
+  }
+  return { billing: updated, subscription };
 }
 
 export async function applySubscriptionEvent(db: Db, event: Stripe.Event, subscription: Record<string, unknown>) {
@@ -274,10 +356,21 @@ export async function registerBillingRoutes(app: FastifyInstance, db: Db, env: A
     try {
       const actor = requireActor(request);
       const organizationId = requireOrgId(actor);
-      const billing = await getOrganizationBilling(db, organizationId);
+      let billing = await getOrganizationBilling(db, organizationId);
+      let checkoutAllowed = !billing?.stripeSubscriptionId;
+      if (billing && !["active", "trialing"].includes(billing.status)
+        && (billing.stripeCheckoutSessionId || billing.stripeSubscriptionId)) {
+        const stripe = configuredStripe(env);
+        if (!stripe) throw billingConfirmationError();
+        const recovered = await reconcileCheckoutBilling(db, env, stripe, billing);
+        billing = recovered.billing;
+        checkoutAllowed = !recovered.subscription || mayReplaceSubscription(recovered.subscription);
+      }
+      checkoutAllowed = checkoutAllowed && !["active", "trialing"].includes(billing?.status ?? "pending");
       return {
         data: {
           organizationId,
+          checkoutAllowed,
           status: billing?.status ?? "pending",
           customerId: billing?.stripeCustomerId ?? null,
           subscriptionId: billing?.stripeSubscriptionId ?? null,
@@ -306,12 +399,19 @@ export async function registerBillingRoutes(app: FastifyInstance, db: Db, env: A
     try {
       const actor = requireActor(request);
       requireUserRole(actor, "admin");
+      const organizationId = requireOrgId(actor);
+      const workspaceKind = actor.workspaceKind === "personal" ? "personal" : "company";
+      const orgMemberDiscount = workspaceKind === "personal"
+        && Boolean(actor.hexclaveSubject)
+        && (actor.workspaces ?? []).some((workspace) => workspace.workspaceKind === "company");
       const session = await createOrganizationCheckoutSession(db, env, {
-        organizationId: requireOrgId(actor),
-        customerEmail: actor.email
+        organizationId,
+        customerEmail: actor.email,
+        workspaceKind,
+        orgMemberDiscount
       });
-      if (!session) return { data: { status: "active", checkoutUrl: null } };
-      await audit(db, actor, "billing.checkout_session.create", "organization", requireOrgId(actor), { sessionId: session.id });
+      if (!session) return { data: { status: (await getOrganizationBilling(db, organizationId))?.status ?? "pending", checkoutUrl: null } };
+      await audit(db, actor, "billing.checkout_session.create", "organization", organizationId, { sessionId: session.id });
       return { data: { status: "pending", checkoutUrl: session.url, sessionId: session.id } };
     } catch (error) {
       return sendError(reply, error);

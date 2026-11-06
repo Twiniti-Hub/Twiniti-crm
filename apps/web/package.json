@@ -14,12 +14,12 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.3.0",
-    "vite": "^7.3.6"
+    "vite": "^7.3.7"
   },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "tsx --test src/lib/csv.test.ts src/lib/board.test.ts src/lib/formatFilterAst.test.ts src/lib/resendWebhookUrl.test.ts src/lib/postAuthNavigation.test.ts",
+    "test": "tsx --test src/lib/billingCheckout.test.ts src/lib/authFlow.test.ts src/lib/csv.test.ts src/lib/board.test.ts src/lib/formatFilterAst.test.ts src/lib/resendWebhookUrl.test.ts src/lib/postAuthNavigation.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit"
   },

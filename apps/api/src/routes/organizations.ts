@@ -13,26 +13,35 @@ import {
   createInvitation,
   createOrganization,
   ensureOrganizationBilling,
+  enqueueLicenseVerification,
   findInvitationByToken,
   getOrganizationById,
-  getOrganizationBilling,
+  listMembershipsForSubject,
   listOrganizations,
   listOrgMembers,
   listPendingInvitations,
   getSuperAdminDashboard,
+  subjectHasActiveCompanyMembership,
+  withIsolatedServiceRls,
   withServiceRls,
   updateMemberRole,
-  updateOrganizationLicense,
   writeAudit,
   organizationResendDomains,
   listOrganizationResendDomains,
   getOrganizationResendDomain,
   getDefaultOrganizationResendDomain,
-  type Db
+  type Db,
+  type DbPool
 } from "@twiniti/db";
 import { getDb } from "@twiniti/db";
 import { regionForCountry, type RegionCode } from "@twiniti/contracts";
-import { decryptResendSecret, encryptResendSecret, sendEmail, validateResendApiKey } from "@twiniti/email";
+import {
+  decryptResendSecret,
+  encryptResendSecret,
+  sendEmail,
+  validateResendApiKey,
+  type SendEmailDeps
+} from "@twiniti/email";
 import {
   audit,
   requireActor,
@@ -44,66 +53,105 @@ import {
 import { createOrganizationCheckoutSession } from "./billing.js";
 import { enqueueLicenseProvisioning } from "../license-jobs.js";
 import { createLicenseApiClient } from "@twiniti/license-api";
+import { assertVerifiedPrimaryEmail } from "@twiniti/auth";
+import { createAndSendOrganizationAdminInvite } from "../organization-admin-invite.js";
 
 async function refreshSuperAdminLicenseStatuses(
   db: Db,
   env: AppEnv,
-  rows: Awaited<ReturnType<typeof getSuperAdminDashboard>>,
-  log: { warn: (context: unknown, message: string) => void }
+  rows: Awaited<ReturnType<typeof getSuperAdminDashboard>>
 ) {
   const client = createLicenseApiClient(env);
   if (!client.configured) return;
 
   await Promise.all(rows.map(async (row) => {
-    if (row.licenseProvisioningStatus !== "provisioned") return;
-    const billing = await getOrganizationBilling(db, row.id);
-    if (!billing || !["active", "trialing"].includes(billing.status)) return;
     const members = await listOrgMembers(db, row.id);
     const member = members.find((candidate) => candidate.active && ["owner", "admin"].includes(candidate.role ?? ""))
       ?? members.find((candidate) => candidate.active);
-    if (!member) return;
-
-    try {
-      const check = await client.checkUserLicense({
-        externalOrganizationId: row.id,
-        externalUserId: member.id,
-        email: member.email,
-        productCode: env.LICENSE_API_PRODUCT_CODE,
-        source: "twiniti-crm"
-      });
-      await updateOrganizationLicense(db, row.id, {
-        licenseDecision: check.decision,
-        licenseStatus: check.licenseStatus ?? null,
-        licenseId: check.licenseId ?? billing.licenseId ?? null,
-        licenseReasonCode: check.reasonCode,
-        licenseOrganizationId: check.organizationId,
-        lastLicenseCheckedAt: new Date()
-      });
-    } catch (error) {
-      log.warn({ error, organizationId: row.id }, "SuperAdmin license status refresh failed");
-    }
+    if (member) await enqueueLicenseVerification(db, row.id, member.id);
   }));
 }
 
-async function sendInviteEmail(
+function stripSubjectUnsafeChars(value: string) {
+  return value.replace(/[<>&"]/g, "");
+}
+
+export function buildInviteEmailContent(input: {
+  organizationName: string;
+  role: string;
+  inviteUrl: string;
+}) {
+  const organizationNameHtml = escapeHtml(input.organizationName);
+  const roleHtml = escapeHtml(input.role);
+  const organizationNameSubject = stripSubjectUnsafeChars(input.organizationName);
+  return {
+    subject: `You're invited to ${organizationNameSubject} on Twiniti Loop`,
+    html: `<p>You've been invited to join <strong>${organizationNameHtml}</strong> as a <strong>${roleHtml}</strong>.</p>
+<p><a href="${input.inviteUrl}">Accept invitation</a></p>
+<p>Or open this link: ${input.inviteUrl}</p>`,
+    text: `You've been invited to join ${input.organizationName} as a ${input.role}.\n\nAccept: ${input.inviteUrl}`
+  };
+}
+
+type InviteEmailOrganizationResendDomain = {
+  apiKeyCiphertext: string;
+  fromEmail: string;
+  fromName: string | null;
+};
+
+export type SendInviteEmailDeps = {
+  getDefaultOrganizationResendDomain?: (
+    db: Db,
+    organizationId: string
+  ) => Promise<InviteEmailOrganizationResendDomain | null>;
+  sendEmailDeps?: SendEmailDeps;
+};
+
+export async function sendInviteEmail(
   env: AppEnv,
   db: Db,
-  input: { to: string; organizationId: string; organizationName: string; role: string; token: string }
+  input: { to: string; organizationId: string; organizationName: string; role: string; token: string },
+  log?: { warn: (obj: unknown, msg?: string) => void },
+  deps?: SendInviteEmailDeps
 ) {
   const inviteUrl = `${env.WEB_ORIGIN.replace(/\/$/, "")}/accept-invite?token=${encodeURIComponent(input.token)}`;
-  if (!env.RESEND_CREDENTIAL_ENCRYPTION_KEY) throw new Error("Resend credential encryption is not configured");
-  const config = await getDefaultOrganizationResendDomain(db, input.organizationId);
-  if (!config) throw new Error("Organization Resend configuration is required before sending invitations");
-  await sendEmail({
-    apiKey: decryptResendSecret(config.apiKeyCiphertext, env.RESEND_CREDENTIAL_ENCRYPTION_KEY),
-    from: config.fromName ? `${config.fromName} <${config.fromEmail}>` : config.fromEmail,
-    to: input.to,
-    subject: `You're invited to ${input.organizationName} on Twiniti Loop`,
-    html: `<p>You've been invited to join <strong>${input.organizationName}</strong> as a <strong>${input.role}</strong>.</p>
-<p><a href="${inviteUrl}">Accept invitation</a></p>
-<p>Or open this link: ${inviteUrl}</p>`,
-    text: `You've been invited to join ${input.organizationName} as a ${input.role}.\n\nAccept: ${inviteUrl}`
+  const resolveDefaultDomain = deps?.getDefaultOrganizationResendDomain ?? getDefaultOrganizationResendDomain;
+  const config = await resolveDefaultDomain(db, input.organizationId);
+
+  let apiKey: string;
+  let from: string;
+  if (config) {
+    if (!env.RESEND_CREDENTIAL_ENCRYPTION_KEY) {
+      throw new Error("Resend credential encryption is not configured");
+    }
+    apiKey = decryptResendSecret(config.apiKeyCiphertext, env.RESEND_CREDENTIAL_ENCRYPTION_KEY);
+    from = config.fromName ? `${config.fromName} <${config.fromEmail}>` : config.fromEmail;
+  } else if (env.RESEND_API_KEY?.trim() && env.PLATFORM_EMAIL_FROM?.trim()) {
+    apiKey = env.RESEND_API_KEY;
+    from = env.PLATFORM_EMAIL_FROM;
+  } else {
+    log?.warn(
+      { organizationId: input.organizationId, to: input.to },
+      "Cannot send invitation email; no verified organization Resend domain and platform email sender is not configured"
+    );
+    throw new Error(
+      "Invitation email cannot be sent: no verified organization Resend domain and platform email sender is not configured"
+    );
+  }
+
+  const content = buildInviteEmailContent({
+    organizationName: input.organizationName,
+    role: input.role,
+    inviteUrl
   });
+  await sendEmail({
+    apiKey,
+    from,
+    to: input.to,
+    subject: content.subject,
+    html: content.html,
+    text: content.text
+  }, deps?.sendEmailDeps);
   return { inviteUrl, sent: true as const };
 }
 
@@ -232,7 +280,49 @@ function mapInvitation(row: {
   };
 }
 
-export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, env: AppEnv) {
+export function summarizeSuperAdminDashboardTotals(
+  rows: Array<{
+    workspaceKind?: string | null;
+    activeUserCount: number;
+    agentCount: number;
+    companyCount: number;
+    contactCount: number;
+    billingStatus: string | null;
+    trialEnd: Date | string | null;
+  }>,
+  nowMs = Date.now()
+) {
+  return rows.reduce(
+    (summary, row) => {
+      summary.organizations += 1;
+      if (row.workspaceKind === "personal") summary.personalWorkspaces += 1;
+      summary.users += row.activeUserCount;
+      summary.agents += row.agentCount;
+      summary.companies += row.companyCount;
+      summary.contacts += row.contactCount;
+      const billing = row.billingStatus ?? "pending";
+      if (billing === "trialing") summary.trialing += 1;
+      else if (billing === "active") summary.paid += 1;
+      else summary.attention += 1;
+      if (row.trialEnd && new Date(row.trialEnd).getTime() > nowMs) summary.trialsEnding += 1;
+      return summary;
+    },
+    {
+      organizations: 0,
+      personalWorkspaces: 0,
+      users: 0,
+      agents: 0,
+      companies: 0,
+      contacts: 0,
+      trialing: 0,
+      paid: 0,
+      attention: 0,
+      trialsEnding: 0
+    }
+  );
+}
+
+export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, env: AppEnv, pool: DbPool) {
   app.get("/api/v1/me", async (request) => {
     const actor = requireActor(request);
     return {
@@ -241,17 +331,21 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         id: actor.id,
         organizationId: actor.organizationId,
         organizationName: actor.organizationName ?? null,
+        workspaceKind: actor.workspaceKind ?? null,
         regionCode: actor.regionCode ?? null,
         countryCode: actor.countryCode ?? null,
         role: actor.role ?? null,
         email: actor.email ?? null,
         displayName: actor.displayName ?? null,
         needsSetup: Boolean(actor.needsSetup),
+        primaryEmailVerified: actor.primaryEmailVerified ?? null,
         isSuperAdmin: Boolean(actor.isSuperAdmin),
         billingStatus: actor.billingStatus ?? "pending",
+        licenseWarning: actor.licenseWarning ?? null,
         licenseDecision: actor.licenseDecision ?? null,
         licenseReasonCode: actor.licenseReasonCode ?? null,
-        licenseStatus: actor.licenseStatus ?? null
+        licenseStatus: actor.licenseStatus ?? null,
+        workspaces: actor.workspaces ?? []
       }
     };
   });
@@ -392,129 +486,168 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         return reply.code(403).send({ error: { code: "forbidden", message: "Users only" } });
       }
       const input = createOrganizationSchema.parse(request.body);
+      const workspaceKind = input.workspaceKind ?? "company";
+      const subject = actor.hexclaveSubject ?? actor.id;
 
-      if (!actor.needsSetup && !actor.isSuperAdmin) {
-        if (!actor.organizationId || actor.role !== "admin") {
-          return reply.code(409).send({
-            error: { code: "conflict", message: "You already belong to a company" }
+      // Cross-workspace create must not run inside the current org's twiniti_app
+      // transaction — inserts for a new organization_id fail RLS WITH CHECK.
+      return await withIsolatedServiceRls(pool, null, async (provisioningDb) => {
+        const memberships = actor.isSuperAdmin
+          ? []
+          : await listMembershipsForSubject(provisioningDb, subject);
+        const hasPersonal = memberships.some((row) => row.workspaceKind === "personal");
+        const hasCompany = memberships.some((row) => row.workspaceKind === "company");
+
+        if (workspaceKind === "personal" && input.inviteAdminEmail) {
+          return reply.code(400).send({
+            error: { code: "invalid_invite", message: "Personal workspaces do not support invitations" }
           });
         }
-      }
 
-      const joinAsAdmin = actor.isSuperAdmin
-        ? input.joinAsAdmin === true
-        : Boolean(actor.needsSetup);
+        if (!actor.isSuperAdmin) {
+          if (workspaceKind === "personal" && hasPersonal) {
+            return reply.code(409).send({
+              error: { code: "conflict", message: "You already have a personal workspace" }
+            });
+          }
+          if (workspaceKind === "company" && hasCompany && !actor.needsSetup) {
+            return reply.code(409).send({
+              error: { code: "conflict", message: "You already belong to a company" }
+            });
+          }
+        }
 
-      if (!joinAsAdmin && !actor.isSuperAdmin) {
-        return reply.code(403).send({ error: { code: "forbidden", message: "Super admin required" } });
-      }
+        const joinAsAdmin = actor.isSuperAdmin
+          ? input.joinAsAdmin === true
+          : Boolean(actor.needsSetup)
+            || (workspaceKind === "personal" && !hasPersonal)
+            || (workspaceKind === "company" && !hasCompany);
 
-      const subject = actor.hexclaveSubject ?? actor.id;
-      const created = await createOrganization(db, {
-        name: input.name,
-        countryCode: input.countryCode,
-        ...(joinAsAdmin
-          ? {
-              adminSubject: subject,
-              email: actor.email,
-              displayName: actor.displayName
+        if (!joinAsAdmin && !actor.isSuperAdmin) {
+          return reply.code(403).send({ error: { code: "forbidden", message: "Super admin required" } });
+        }
+
+        if (joinAsAdmin) {
+          assertVerifiedPrimaryEmail(actor);
+        }
+
+        const created = await createOrganization(provisioningDb, {
+          name: input.name,
+          countryCode: input.countryCode,
+          workspaceKind,
+          ...(joinAsAdmin
+            ? {
+                adminSubject: subject,
+                email: actor.email,
+                displayName: actor.displayName
+              }
+          : {})
+        });
+        if (!created.created && joinAsAdmin && created.organization.residencyRegion !== regionForCountry(input.countryCode)) {
+          return reply.code(409).send({
+            error: {
+              code: "region_locked",
+              message: "This account already has a residency region and it cannot be changed"
             }
-        : {})
-      });
-      if (!created.created && joinAsAdmin && created.organization.residencyRegion !== regionForCountry(input.countryCode)) {
-        return reply.code(409).send({
-          error: {
-            code: "region_locked",
-            message: "This account already has a residency region and it cannot be changed"
+          });
+        }
+        const billing = await ensureOrganizationBilling(provisioningDb, created.organization.id);
+
+        let invitation = null;
+        if (input.inviteAdminEmail && workspaceKind !== "personal") {
+          const delivered = await createAndSendOrganizationAdminInvite(
+            provisioningDb,
+            env,
+            {
+              organizationId: created.organization.id,
+              organizationName: created.organization.name,
+              email: input.inviteAdminEmail,
+              invitedByUserId: joinAsAdmin ? created.admin?.id ?? null : actor.organizationId ? actor.id : null,
+              rollbackOnSendFailure: created.created
+            },
+            sendInviteEmail,
+            request.log
+          );
+          invitation = { ...mapInvitation(delivered.invite), ...delivered.emailResult };
+        }
+
+        if (actor.organizationId === created.organization.id || joinAsAdmin) {
+          await enqueueLicenseProvisioning(provisioningDb, env, {
+            externalOrganizationId: created.organization.id,
+            organizationName: created.organization.name,
+            billingEmail: actor.email,
+            externalUserId: created.admin?.id ?? actor.id,
+            userSubject: created.admin?.hexclaveSubject ?? subject,
+            userEmail: created.admin?.email ?? actor.email,
+            userDisplayName: created.admin?.displayName ?? actor.displayName,
+            productCode: env.LICENSE_API_PRODUCT_CODE,
+            planCode: env.LICENSE_API_PLAN_CODE,
+            source: "twiniti-crm"
+          });
+        }
+
+        let checkoutUrl: string | null = null;
+        let checkoutSessionId: string | null = null;
+        if (joinAsAdmin) {
+          const orgMemberDiscount = workspaceKind === "personal"
+            && Boolean(subject)
+            && await subjectHasActiveCompanyMembership(provisioningDb, subject);
+          const checkout = await createOrganizationCheckoutSession(provisioningDb, env, {
+            organizationId: created.organization.id,
+            customerEmail: actor.email,
+            workspaceKind,
+            orgMemberDiscount
+          });
+          checkoutUrl = checkout?.url ?? null;
+          checkoutSessionId = checkout?.id ?? null;
+        }
+
+        await writeAudit(provisioningDb, {
+          organizationId: created.organization.id,
+          actorType: actor.type,
+          actorId: actor.id,
+          action: "organization.create",
+          entityType: "organization",
+          entityId: created.organization.id,
+          metadata: {
+            name: created.organization.name,
+            joinedAsAdmin: joinAsAdmin,
+            workspaceKind: created.organization.workspaceKind
           }
         });
-      }
-      const billing = await ensureOrganizationBilling(db, created.organization.id);
 
-      if (actor.organizationId === created.organization.id || joinAsAdmin) {
-        await enqueueLicenseProvisioning(db, env, {
-          externalOrganizationId: created.organization.id,
-          organizationName: created.organization.name,
-          billingEmail: actor.email,
-          externalUserId: created.admin?.id ?? actor.id,
-          userSubject: created.admin?.hexclaveSubject ?? subject,
-          userEmail: created.admin?.email ?? actor.email,
-          userDisplayName: created.admin?.displayName ?? actor.displayName,
-          productCode: env.LICENSE_API_PRODUCT_CODE,
-          planCode: env.LICENSE_API_PLAN_CODE,
-          source: "twiniti-crm"
-        });
-      }
-
-      let checkoutUrl: string | null = null;
-      let checkoutSessionId: string | null = null;
-      if (joinAsAdmin) {
-        const checkout = await createOrganizationCheckoutSession(db, env, {
-          organizationId: created.organization.id,
-          customerEmail: actor.email
-        });
-        checkoutUrl = checkout?.url ?? null;
-        checkoutSessionId = checkout?.id ?? null;
-      }
-
-      let invitation = null;
-      if (input.inviteAdminEmail) {
-        const invite = await createInvitation(db, {
-          organizationId: created.organization.id,
-          email: input.inviteAdminEmail,
-          role: "admin",
-          invitedByUserId: joinAsAdmin ? created.admin?.id ?? null : actor.organizationId ? actor.id : null
-        });
-        const emailResult = await sendInviteEmail(env, db, {
-          to: input.inviteAdminEmail,
-          organizationId: created.organization.id,
-          organizationName: created.organization.name,
-          role: "admin",
-          token: invite.token
-        });
-        invitation = { ...mapInvitation(invite), ...emailResult };
-      }
-
-      await writeAudit(db, {
-        organizationId: created.organization.id,
-        actorType: actor.type,
-        actorId: actor.id,
-        action: "organization.create",
-        entityType: "organization",
-        entityId: created.organization.id,
-        metadata: { name: created.organization.name, joinedAsAdmin: joinAsAdmin }
-      });
-
-      if (created.created && joinAsAdmin && actor.needsSetup) {
-        await notifySupportOfSignup(
-          env,
-          {
-            organizationId: created.organization.id,
-            organizationName: created.organization.name,
-            adminEmail: created.admin?.email ?? actor.email ?? null,
-            adminDisplayName: created.admin?.displayName ?? actor.displayName ?? null,
-            countryCode: input.countryCode,
-            regionCode: created.organization.residencyRegion
-          },
-          request.log
-        );
-      }
-
-      return {
-        data: {
-          id: created.organization.id,
-          name: created.organization.name,
-          regionCode: created.organization.residencyRegion,
-          countryCode: input.countryCode,
-          createdAt: created.organization.createdAt.toISOString(),
-          joinedAsAdmin: joinAsAdmin,
-          billingStatus: billing.status,
-          licenseProvisioningStatus: billing.licenseProvisioningStatus,
-          checkoutUrl,
-          checkoutSessionId,
-          invitation
+        if (created.created && joinAsAdmin && actor.needsSetup) {
+          await notifySupportOfSignup(
+            env,
+            {
+              organizationId: created.organization.id,
+              organizationName: created.organization.name,
+              adminEmail: created.admin?.email ?? actor.email ?? null,
+              adminDisplayName: created.admin?.displayName ?? actor.displayName ?? null,
+              countryCode: input.countryCode,
+              regionCode: created.organization.residencyRegion
+            },
+            request.log
+          );
         }
-      };
+
+        return {
+          data: {
+            id: created.organization.id,
+            name: created.organization.name,
+            workspaceKind: created.organization.workspaceKind,
+            regionCode: created.organization.residencyRegion,
+            countryCode: input.countryCode,
+            createdAt: created.organization.createdAt.toISOString(),
+            joinedAsAdmin: joinAsAdmin,
+            billingStatus: billing.status,
+            licenseProvisioningStatus: billing.licenseProvisioningStatus,
+            checkoutUrl,
+            checkoutSessionId,
+            invitation
+          }
+        };
+      });
     } catch (error) {
       return sendError(reply, error);
     }
@@ -529,6 +662,7 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         data: rows.map((row) => ({
           id: row.id,
           name: row.name,
+          workspaceKind: row.workspaceKind,
           createdAt: row.createdAt.toISOString(),
           memberCount: Number(row.memberCount ?? 0),
           regionCode: row.residencyRegion
@@ -548,28 +682,12 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       const regionalRows = await Promise.all(
         regionalDbs.map(({ region, db: regionalDb }) => withServiceRls(regionalDb, null, async (serviceDb) => {
           const rows = await getSuperAdminDashboard(serviceDb, region);
-          await refreshSuperAdminLicenseStatuses(serviceDb, env, rows, request.log);
+          await refreshSuperAdminLicenseStatuses(serviceDb, env, rows);
           return getSuperAdminDashboard(serviceDb, region);
         }))
       );
       const organizations = regionalRows.flat();
-      const now = Date.now();
-      const totals = organizations.reduce(
-        (summary, row) => {
-          summary.organizations += 1;
-          summary.users += row.activeUserCount;
-          summary.agents += row.agentCount;
-          summary.companies += row.companyCount;
-          summary.contacts += row.contactCount;
-          const billing = row.billingStatus ?? "pending";
-          if (billing === "trialing") summary.trialing += 1;
-          else if (billing === "active") summary.paid += 1;
-          else summary.attention += 1;
-          if (row.trialEnd && new Date(row.trialEnd).getTime() > now) summary.trialsEnding += 1;
-          return summary;
-        },
-        { organizations: 0, users: 0, agents: 0, companies: 0, contacts: 0, trialing: 0, paid: 0, attention: 0, trialsEnding: 0 }
-      );
+      const totals = summarizeSuperAdminDashboardTotals(organizations);
       return {
         data: {
           generatedAt: new Date().toISOString(),
@@ -637,13 +755,18 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         role: input.role,
         invitedByUserId: actor.organizationId ? actor.id : null
       });
-      const emailResult = await sendInviteEmail(env, db, {
-        to: input.email,
-        organizationId: id,
-        organizationName: org.name,
-        role: input.role,
-        token: invite.token
-      });
+      const emailResult = await sendInviteEmail(
+        env,
+        db,
+        {
+          to: input.email,
+          organizationId: id,
+          organizationName: org.name,
+          role: input.role,
+          token: invite.token
+        },
+        request.log
+      );
       await writeAudit(db, {
         organizationId: id,
         actorType: actor.type,
@@ -711,19 +834,29 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       if (!org) {
         return reply.code(404).send({ error: { code: "not_found", message: "Company not found" } });
       }
+      if (org.workspaceKind === "personal") {
+        return reply.code(403).send({
+          error: { code: "forbidden", message: "Personal workspaces do not support invitations" }
+        });
+      }
       const invite = await createInvitation(db, {
         organizationId,
         email: input.email,
         role: input.role,
         invitedByUserId: actor.id
       });
-      const emailResult = await sendInviteEmail(env, db, {
-        to: input.email,
-        organizationId,
-        organizationName: org.name,
-        role: input.role,
-        token: invite.token
-      });
+      const emailResult = await sendInviteEmail(
+        env,
+        db,
+        {
+          to: input.email,
+          organizationId,
+          organizationName: org.name,
+          role: input.role,
+          token: invite.token
+        },
+        request.log
+      );
       await audit(db, actor, "organization.invite", "organization_invitation", invite.id, {
         email: input.email,
         role: input.role
@@ -740,35 +873,35 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
       if (actor.type !== "user") {
         return reply.code(403).send({ error: { code: "forbidden", message: "Users only" } });
       }
-      if (!actor.needsSetup) {
-        return reply.code(409).send({
-          error: { code: "conflict", message: "You already belong to a company" }
-        });
-      }
+      assertVerifiedPrimaryEmail(actor);
       const input = acceptInvitationSchema.parse(request.body);
       const subject = actor.hexclaveSubject ?? actor.id;
-      const result = await acceptInvitation(db, {
-        token: input.token,
-        subject,
-        email: actor.email,
-        displayName: actor.displayName
-      });
-      await writeAudit(db, {
-        organizationId: result.organizationId,
-        actorType: actor.type,
-        actorId: result.user.id,
-        action: "organization.invite.accept",
-        entityType: "crm_user",
-        entityId: result.user.id
-      });
-      return {
-        data: {
+      // Invite rows live in the target org; tenant RLS for the current workspace
+      // cannot see them. Provision membership under an isolated service context.
+      return await withIsolatedServiceRls(pool, null, async (provisioningDb) => {
+        const result = await acceptInvitation(provisioningDb, {
+          token: input.token,
+          subject,
+          email: actor.email,
+          displayName: actor.displayName
+        });
+        await writeAudit(provisioningDb, {
           organizationId: result.organizationId,
-          organizationName: result.organizationName,
-          role: result.user.role,
-          userId: result.user.id
-        }
-      };
+          actorType: actor.type,
+          actorId: result.user.id,
+          action: "organization.invite.accept",
+          entityType: "crm_user",
+          entityId: result.user.id
+        });
+        return {
+          data: {
+            organizationId: result.organizationId,
+            organizationName: result.organizationName,
+            role: result.user.role,
+            userId: result.user.id
+          }
+        };
+      });
     } catch (error) {
       return sendError(reply, error);
     }
@@ -778,7 +911,9 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
     try {
       requireActor(request);
       const { token } = request.params as { token: string };
-      const found = await findInvitationByToken(db, token);
+      const found = await withIsolatedServiceRls(pool, null, (provisioningDb) =>
+        findInvitationByToken(provisioningDb, token)
+      );
       if (!found || found.invitation.acceptedAt) {
         return reply.code(404).send({ error: { code: "not_found", message: "Invitation not found" } });
       }

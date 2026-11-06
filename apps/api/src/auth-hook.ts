@@ -33,7 +33,10 @@ export function registerAuthHook(app: FastifyInstance, db: Db, env: AppEnv, pool
       return;
     }
     request.actor = actor;
-    const billingRoute = url === "/api/v1/me" || url.startsWith("/api/v1/billing");
+    const billingRoute = url === "/api/v1/me"
+      || url.startsWith("/api/v1/billing")
+      || url === "/api/v1/invitations/accept"
+      || /^\/api\/v1\/invitations\/[^/]+$/.test(url);
     if (
       actor.organizationId
       && !actor.isSuperAdmin
@@ -138,12 +141,34 @@ export async function audit(
   });
 }
 
+function errorCodeForHttpStatus(statusCode: number): string {
+  switch (statusCode) {
+    case 401:
+      return "unauthorized";
+    case 403:
+      return "forbidden";
+    case 404:
+      return "not_found";
+    case 409:
+      return "conflict";
+    case 410:
+      return "gone";
+    default:
+      return "bad_request";
+  }
+}
+
 export function sendError(reply: FastifyReply, error: unknown) {
   const statusCode = typeof error === "object" && error && "statusCode" in error
     ? Number((error as { statusCode: number }).statusCode)
     : 400;
+  const httpStatus = statusCode >= 400 ? statusCode : 400;
   const message = error instanceof Error ? error.message : "Request failed";
-  return reply.code(statusCode >= 400 ? statusCode : 400).send({
-    error: { code: statusCode === 403 ? "forbidden" : statusCode === 401 ? "unauthorized" : "bad_request", message }
+  const explicitCode = typeof error === "object" && error && "errorCode" in error
+    ? String((error as { errorCode: string }).errorCode)
+    : undefined;
+  const code = explicitCode ?? errorCodeForHttpStatus(httpStatus);
+  return reply.code(httpStatus).send({
+    error: { code, message }
   });
 }

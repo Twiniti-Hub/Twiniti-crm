@@ -1,3 +1,4 @@
+import { SessionExitLink } from "./components/SessionExit";
 import { useEffect } from "react";
 import { BrowserRouter, useLocation } from "react-router";
 import { AuthGate } from "./components/AuthGate";
@@ -18,7 +19,7 @@ export default function App({ authEnabled }: { authEnabled: boolean }) {
   return (
     <BrowserRouter>
       <AnalyticsRouteTracker />
-      {authEnabled ? <AuthGate /> : <CrmRoutes />}
+      {authEnabled ? <><SessionExitLink /><AuthGate /></> : <CrmRoutes />}
     </BrowserRouter>
   );
 }

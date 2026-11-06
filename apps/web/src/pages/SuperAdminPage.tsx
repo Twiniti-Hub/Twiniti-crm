@@ -9,9 +9,12 @@ import {
 import type { Me } from "../lib/me";
 import { CountrySelect } from "../components/CountrySelect";
 
+type WorkspaceKind = "company" | "personal";
+
 type Company = {
   id: string;
   name: string;
+  workspaceKind?: WorkspaceKind;
   regionCode?: "eu" | "uk" | "us";
   createdAt: string;
   memberCount: number;
@@ -36,6 +39,7 @@ type Invitation = {
 
 type DashboardOrganization = Omit<Company, "regionCode"> & {
   regionCode: "eu" | "uk" | "us";
+  workspaceKind: WorkspaceKind;
   billingStatus: string | null;
   subscriptionStatus: string | null;
   trialKind: string | null;
@@ -53,7 +57,18 @@ type DashboardOrganization = Omit<Company, "regionCode"> & {
 
 type Dashboard = {
   generatedAt: string;
-  totals: { organizations: number; users: number; agents: number; companies: number; contacts: number; trialing: number; paid: number; attention: number; trialsEnding: number };
+  totals: {
+    organizations: number;
+    personalWorkspaces: number;
+    users: number;
+    agents: number;
+    companies: number;
+    contacts: number;
+    trialing: number;
+    paid: number;
+    attention: number;
+    trialsEnding: number;
+  };
   organizations: DashboardOrganization[];
 };
 
@@ -69,6 +84,9 @@ export function SuperAdminPage() {
   const [companyName, setCompanyName] = useState("");
   const [countryCode, setCountryCode] = useState("");
   const [inviteAdminEmail, setInviteAdminEmail] = useState("");
+  const [personalName, setPersonalName] = useState("");
+  const [personalCountryCode, setPersonalCountryCode] = useState("");
+  const [personalOwnerEmail, setPersonalOwnerEmail] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
   const [error, setError] = useState<string | null>(null);
@@ -150,9 +168,10 @@ export function SuperAdminPage() {
     setError(null);
     setMessage(null);
     try {
-      const body: { name: string; countryCode: string; inviteAdminEmail?: string } = {
+      const body: { name: string; countryCode: string; workspaceKind: WorkspaceKind; inviteAdminEmail?: string } = {
         name: companyName.trim(),
-        countryCode
+        countryCode,
+        workspaceKind: "company"
       };
       if (inviteAdminEmail.trim()) body.inviteAdminEmail = inviteAdminEmail.trim();
       const res = await api("/api/v1/organizations", {
@@ -170,10 +189,51 @@ export function SuperAdminPage() {
             : `Company created. Share invite link: ${invite.inviteUrl ?? "(check server logs)"}`
           : "Company created."
       );
-      await loadCompanies();
+      await Promise.all([loadCompanies(), loadDashboard()]);
       if (res.data?.id) setSelectedId(res.data.id as string);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create company");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onCreatePersonalWorkspace(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const body: {
+        name: string;
+        countryCode: string;
+        workspaceKind: WorkspaceKind;
+        inviteAdminEmail?: string;
+      } = {
+        name: personalName.trim(),
+        countryCode: personalCountryCode,
+        workspaceKind: "personal"
+      };
+      if (personalOwnerEmail.trim()) body.inviteAdminEmail = personalOwnerEmail.trim();
+      const res = await api("/api/v1/organizations", {
+        method: "POST",
+        body: JSON.stringify(body)
+      });
+      setPersonalName("");
+      setPersonalCountryCode("");
+      setPersonalOwnerEmail("");
+      const invite = res.data?.invitation as Invitation | null | undefined;
+      setMessage(
+        invite
+          ? invite.sent
+            ? `Personal workspace created and invite sent to ${invite.email}.`
+            : `Personal workspace created. Share invite link: ${invite.inviteUrl ?? "(check server logs)"}`
+          : "Personal workspace created."
+      );
+      await Promise.all([loadCompanies(), loadDashboard()]);
+      if (res.data?.id) setSelectedId(res.data.id as string);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create personal workspace");
     } finally {
       setBusy(false);
     }
@@ -243,6 +303,7 @@ export function SuperAdminPage() {
           <div className="metric-grid" style={{ marginTop: 16 }}>
             {[
               ["Organizations", dashboard.totals.organizations],
+              ["Personal workspaces", dashboard.totals.personalWorkspaces],
               ["Active users", dashboard.totals.users],
               ["Agents", dashboard.totals.agents],
               ["Companies", dashboard.totals.companies],
@@ -258,9 +319,10 @@ export function SuperAdminPage() {
               <label>Show <select value={dashboardFilter} onChange={(event) => setDashboardFilter(event.target.value)}><option value="all">All organizations</option><option value="trialing">Trial organizations</option><option value="paid">Paid organizations</option><option value="attention">Needs attention</option></select></label>
             </div>
             <table>
-              <thead><tr><th>Organization</th><th>Region</th><th>Users</th><th>Agents</th><th>Companies</th><th>Contacts</th><th>Billing</th><th>Trial / conversion</th><th>License</th></tr></thead>
+              <thead><tr><th>Organization</th><th>Kind</th><th>Region</th><th>Users</th><th>Agents</th><th>Companies</th><th>Contacts</th><th>Billing</th><th>Trial / conversion</th><th>License</th></tr></thead>
               <tbody>{dashboardRows.map((row) => <tr key={`${row.regionCode}-${row.id}`}>
                 <td><b>{row.name}</b><small style={{ display: "block" }}>{new Date(row.createdAt).toLocaleDateString()}</small></td>
+                <td>{row.workspaceKind === "personal" ? "Personal" : "Company"}</td>
                 <td>{row.regionCode.toUpperCase()}</td><td>{row.activeUserCount}</td><td>{row.agentCount}</td><td>{row.companyCount}</td><td>{row.contactCount}</td>
                 <td>{row.billingStatus ?? "pending"}</td>
                 <td>{row.billingStatus === "trialing" ? `${row.trialKind ?? "unknown"}${row.trialEnd ? ` · ends ${new Date(row.trialEnd).toLocaleDateString()}` : ""}` : row.trialConvertedAt ? `Converted ${new Date(row.trialConvertedAt).toLocaleDateString()}` : "—"}</td>
@@ -288,47 +350,9 @@ export function SuperAdminPage() {
               <option value="">Choose a workspace…</option>
               {companies.map((company) => (
                 <option key={company.id} value={company.id}>
-                  {company.name} ({company.regionCode?.toUpperCase() ?? "regional"})
-                </option>
-              ))}
-            </select>
-          </label>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="primary" type="button" disabled={!activeWorkspaceId} onClick={onOpenWorkspace}>
-              Open workspace
-            </button>
-            {me.organizationId ? (
-              <button className="secondary" type="button" onClick={onReturnToAdminConsole}>
-                Return to admin console
-              </button>
-            ) : null}
-          </div>
-        </div>
-        {me.organizationId ? (
-          <p className="muted" style={{ marginTop: 10 }}>
-            Currently operating in <b>{me.organizationName ?? "selected workspace"}</b>.
-          </p>
-        ) : null}
-      </section>
-
-      <section className="panel">
-        <p className="eyebrow">Workspace access</p>
-        <h3>Open a workspace</h3>
-        <p className="muted">
-          Choose the workspace this browser should use for CRM operations. Access is limited to
-          workspaces in this regional server.
-        </p>
-        <div className="form-row" style={{ alignItems: "end", marginTop: 12 }}>
-          <label>
-            Active workspace
-            <select
-              value={activeWorkspaceId ?? ""}
-              onChange={(event) => setActiveWorkspaceId(event.target.value || null)}
-            >
-              <option value="">Choose a workspace…</option>
-              {companies.map((company) => (
-                <option key={company.id} value={company.id}>
-                  {company.name} ({company.regionCode?.toUpperCase() ?? "regional"})
+                  {company.name}
+                  {company.workspaceKind === "personal" ? " · Personal" : ""}
+                  {" "}({company.regionCode?.toUpperCase() ?? "regional"})
                 </option>
               ))}
             </select>
@@ -385,6 +409,44 @@ export function SuperAdminPage() {
         </form>
       </section>
 
+      <section className="panel">
+        <p className="eyebrow">Create</p>
+        <h3>New personal workspace</h3>
+        <p className="muted">
+          Creates a separate personal CRM workspace (not a company org). Country still selects the
+          residency region for this cell.
+        </p>
+        <form className="stack-form" style={{ boxShadow: "none", border: 0, padding: 0, marginTop: 12 }} onSubmit={onCreatePersonalWorkspace}>
+          <div className="form-row">
+            <label>
+              Workspace name
+              <input
+                value={personalName}
+                onChange={(e) => setPersonalName(e.target.value)}
+                required
+                placeholder="Personal — Jane Doe"
+              />
+            </label>
+            <label>
+              Country
+              <CountrySelect value={personalCountryCode} onChange={setPersonalCountryCode} />
+            </label>
+            <label>
+              Owner email (optional)
+              <input
+                type="email"
+                value={personalOwnerEmail}
+                onChange={(e) => setPersonalOwnerEmail(e.target.value)}
+                placeholder="person@example.com"
+              />
+            </label>
+          </div>
+          <button className="primary" type="submit" disabled={busy}>
+            {busy ? "Creating…" : "Create personal workspace"}
+          </button>
+        </form>
+      </section>
+
       <div className="split" style={{ marginTop: 15 }}>
         <section className="panel">
           <p className="eyebrow">Companies</p>
@@ -394,6 +456,7 @@ export function SuperAdminPage() {
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Kind</th>
                   <th>Members</th>
                   <th>Created</th>
                 </tr>
@@ -406,6 +469,7 @@ export function SuperAdminPage() {
                     onClick={() => setSelectedId(company.id)}
                   >
                     <td>{company.name}</td>
+                    <td>{company.workspaceKind === "personal" ? "Personal" : "Company"}</td>
                     <td>{company.memberCount}</td>
                     <td>{new Date(company.createdAt).toLocaleDateString()}</td>
                   </tr>
