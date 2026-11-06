@@ -45,6 +45,14 @@ export function checkoutTerms(
   };
 }
 
+
+/** Normalize ISO-3166 alpha-2 for Stripe Customer.address.country. */
+export function checkoutBillingCountry(countryCode?: string | null): string | null {
+  if (typeof countryCode !== "string") return null;
+  const country = countryCode.trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(country) ? country : null;
+}
+
 export function stripeObjectId(value: unknown): string | null {
   if (typeof value === "string") return value;
   if (value && typeof value === "object" && "id" in value && typeof value.id === "string") return value.id;
@@ -114,6 +122,7 @@ export async function createOrganizationCheckoutSession(
     customerEmail?: string | null;
     workspaceKind?: "company" | "personal";
     orgMemberDiscount?: boolean;
+    countryCode?: string | null;
   }
 ) {
   const stripe = configuredStripe(env);
@@ -158,12 +167,34 @@ export async function createOrganizationCheckoutSession(
   }
 
   const isPersonal = input.workspaceKind === "personal";
+  const billingCountry = checkoutBillingCountry(input.countryCode);
+  let customerId = billing.stripeCustomerId ?? null;
+  if (billingCountry) {
+    if (customerId) {
+      await stripe.customers.update(customerId, { address: { country: billingCountry } });
+    } else {
+      const customer = await stripe.customers.create({
+        email: input.customerEmail ?? undefined,
+        address: { country: billingCountry },
+        metadata: {
+          organizationId: input.organizationId,
+          regionCode: env.REGION_CODE,
+          workspaceKind: input.workspaceKind ?? "company"
+        }
+      });
+      customerId = customer.id;
+      await updateOrganizationBilling(db, input.organizationId, { stripeCustomerId: customerId });
+    }
+  }
+
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     payment_method_collection: terms.payment_method_collection,
+    billing_address_collection: "auto",
     line_items: [{ price: priceId, quantity: 1 }],
-    customer: billing.stripeCustomerId ?? undefined,
-    customer_email: billing.stripeCustomerId ? undefined : input.customerEmail ?? undefined,
+    customer: customerId ?? undefined,
+    customer_email: customerId ? undefined : input.customerEmail ?? undefined,
+    ...(customerId ? { customer_update: { address: "auto" as const, name: "auto" as const } } : {}),
     client_reference_id: input.organizationId,
     allow_promotion_codes: !isPersonal,
     metadata: {
@@ -408,7 +439,8 @@ export async function registerBillingRoutes(app: FastifyInstance, db: Db, env: A
         organizationId,
         customerEmail: actor.email,
         workspaceKind,
-        orgMemberDiscount
+        orgMemberDiscount,
+        countryCode: actor.countryCode
       });
       if (!session) return { data: { status: (await getOrganizationBilling(db, organizationId))?.status ?? "pending", checkoutUrl: null } };
       await audit(db, actor, "billing.checkout_session.create", "organization", organizationId, { sessionId: session.id });

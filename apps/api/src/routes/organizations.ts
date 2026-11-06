@@ -596,7 +596,8 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
             organizationId: created.organization.id,
             customerEmail: actor.email,
             workspaceKind,
-            orgMemberDiscount
+            orgMemberDiscount,
+            countryCode: input.countryCode
           });
           checkoutUrl = checkout?.url ?? null;
           checkoutSessionId = checkout?.id ?? null;

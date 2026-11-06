@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { checkoutTerms, invoiceSubscriptionId, subscriptionCurrentPeriodEnd } from "../routes/billing.js";
+import { checkoutBillingCountry, checkoutTerms, invoiceSubscriptionId, subscriptionCurrentPeriodEnd } from "../routes/billing.js";
 
 test("subscriptionCurrentPeriodEnd prefers Basil item-level period end", () => {
   const end = subscriptionCurrentPeriodEnd({
@@ -51,4 +51,13 @@ test("missing Personal price never falls back to Organization pricing", () => {
 });
 test("recorded trial prevents a second trial even without a subscription id", () => {
   assert.equal(checkoutTerms(prices, "company", { trialStart: new Date() }).trialDays, 0);
+});
+
+test("checkoutBillingCountry normalizes ISO alpha-2 and rejects junk", () => {
+  assert.equal(checkoutBillingCountry("gb"), "GB");
+  assert.equal(checkoutBillingCountry(" US "), "US");
+  assert.equal(checkoutBillingCountry(""), null);
+  assert.equal(checkoutBillingCountry("USA"), null);
+  assert.equal(checkoutBillingCountry(null), null);
+  assert.equal(checkoutBillingCountry(undefined), null);
 });

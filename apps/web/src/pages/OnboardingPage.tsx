@@ -16,6 +16,7 @@ export function OnboardingPage() {
   const [displayName, setDisplayName] = useState(draft?.displayName ?? "");
   const [companyName, setCompanyName] = useState(draft?.companyName ?? "");
   const [countryCode, setCountryCode] = useState(draft?.countryCode ?? "");
+  const countryFromSignup = Boolean(draft?.countryCode);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -100,10 +101,14 @@ export function OnboardingPage() {
               </span>
             </label>
           </fieldset>
-          <label>
-            Country
-            <CountrySelect value={countryCode} onChange={setCountryCode} />
-          </label>
+          {countryFromSignup ? (
+            <p className="muted">Data residency country: <strong>{countryCode}</strong> (from signup)</p>
+          ) : (
+            <label>
+              Country
+              <CountrySelect value={countryCode} onChange={setCountryCode} />
+            </label>
+          )}
           {workspaceChoice === "personal" ? (
             <label>
               Display name
