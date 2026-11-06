@@ -54,7 +54,7 @@ jobs:
       # `--` as Node args and would run the whole testDir (including signup).
       - run: pnpm exec playwright test tests/e2e/crm.spec.ts
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-smoke
           path: |
@@ -88,7 +88,7 @@ jobs:
       - run: pnpm e2e:install
       - run: pnpm exec playwright test tests/e2e/signup.spec.ts
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-signup
           path: |
