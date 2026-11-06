@@ -1,0 +1,89 @@
+{
+  "revision": "0.10.55.9",
+  "logoUrl": "https://loop.twiniti.ai/branding/loop-logo-light.png",
+  "sourceCommit": "c696b868eb400022ed881364dd7367a6f992c993",
+  "templates": [
+    {
+      "event": "email_verification",
+      "displayName": "Email Verification",
+      "file": "email-verification.tsx",
+      "subject": "Verify your email for Loop",
+      "variables": {
+        "emailVerificationLink": "string"
+      }
+    },
+    {
+      "event": "password_reset",
+      "displayName": "Password Reset",
+      "file": "password-reset.tsx",
+      "subject": "Reset your Loop password",
+      "variables": {
+        "passwordResetLink": "string"
+      }
+    },
+    {
+      "event": "magic_link",
+      "displayName": "Magic Link/OTP",
+      "file": "magic-link-otp.tsx",
+      "subject": "Your Loop sign-in link and code",
+      "variables": {
+        "magicLink": "string",
+        "otp": "string"
+      }
+    },
+    {
+      "event": "team_invitation",
+      "displayName": "Team Invitation",
+      "file": "team-invitation.tsx",
+      "subject": "You are invited to a team on Loop",
+      "variables": {
+        "teamDisplayName": "string",
+        "teamInvitationLink": "string"
+      }
+    },
+    {
+      "event": "sign_in_invitation",
+      "displayName": "Sign In Invitation",
+      "file": "sign-in-invitation.tsx",
+      "subject": "Your invitation to Loop",
+      "variables": {
+        "signInInvitationLink": "string",
+        "teamDisplayName": "string"
+      }
+    },
+    {
+      "event": "payment_receipt",
+      "displayName": "Payment Receipt",
+      "file": "payment-receipt.tsx",
+      "subject": "Your Loop payment receipt",
+      "variables": {
+        "productName": "string",
+        "quantity": "number",
+        "amount": "string",
+        "receiptLink": "string?"
+      }
+    },
+    {
+      "event": "payment_failed",
+      "displayName": "Payment Failed",
+      "file": "payment-failed.tsx",
+      "subject": "Action needed: your Loop payment",
+      "variables": {
+        "productName": "string",
+        "amount": "string",
+        "invoiceUrl": "string?",
+        "failureReason": "string?"
+      }
+    },
+    {
+      "event": "trial_will_end",
+      "displayName": "Trial Ending Soon",
+      "file": "trial-ending-soon.tsx",
+      "subject": "Your Loop trial is ending soon",
+      "variables": {
+        "productName": "string",
+        "trialEndDate": "string"
+      }
+    }
+  ]
+}

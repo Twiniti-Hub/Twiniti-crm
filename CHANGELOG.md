@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Revision 0.10.55.9 (TWI-1061): add eight production Hexclave email templates, companion theme, exact event-variable manifest and setup/user guidance. Every email uses the existing public Loop logo at top center. Trial copy supports cardless signup. Assets only; no live provider changes, dependencies or database migration. Package version remains 0.10.55.
+
 - Revision 0.10.55.8 (TWI-1045, TWI-1051, #159): move human license checks into regional worker jobs, recover provisioning before subscription sync, retain per-membership decisions with bounded 24-hour outage access, and show account/settings verification warnings. Preserve upstream error codes and explicit denials. Additive migration 0024 adds nullable `crm_users.license_verification`; package version remains 0.10.55 pending release. Deployment and live smoke verification remain required.
 
 - Revision 0.10.55.7 (TWI-1044): record the authorized Loop Dev US WEB_ORIGIN override to keep checkout returns on the signup host. Document pending TWI-1041 webhook subscriptions and the conditional TWI-1048 Product ID rollout. Documentation only; no DB or package version changes.
