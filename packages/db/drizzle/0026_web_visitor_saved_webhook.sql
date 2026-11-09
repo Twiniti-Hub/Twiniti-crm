@@ -1,0 +1,1 @@
+ALTER TABLE "web_visitor_integrations" ADD COLUMN "webhook_token_ciphertext" text;

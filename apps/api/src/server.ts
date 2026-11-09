@@ -90,7 +90,7 @@ await registerRunCredentialRoutes(app, db);
 await registerMarketingRoutes(app, db, env);
 registerWebsiteContactRoutes(app, env);
 registerResendWebhookRoutes(app, db, env);
-await registerWebVisitorRoutes(app, db);
+await registerWebVisitorRoutes(app, db, env.WV_CREDENTIAL_ENCRYPTION_KEY || env.RESEND_CREDENTIAL_ENCRYPTION_KEY);
 await registerMcpRoutes(app, db, env, pool);
 
 app.get("/docs", async (_, reply) => reply.redirect("/documentation"));

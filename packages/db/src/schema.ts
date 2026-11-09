@@ -536,6 +536,7 @@ export const webVisitorIntegrations = pgTable("web_visitor_integrations", {
   enabled: boolean("enabled").notNull().default(false),
   apiKeyCiphertext: text("api_key_ciphertext"),
   webhookTokenHash: varchar("webhook_token_hash", { length: 128 }).notNull(),
+  webhookTokenCiphertext: text("webhook_token_ciphertext"),
   settings: jsonb("settings").notNull().default({}),
   lastWebhookAt: timestamp("last_webhook_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

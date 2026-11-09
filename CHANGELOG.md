@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Revision 0.10.55.14 (TWI-1079): simplify WV App setup to saved webhook, read-only website key, automatic code and repeatable validation. Org Admin provisions the website key in organization settings. Encrypted webhook retrieval survives reload and rotation; legacy hash-only URLs require explicit rotation. Additive migration 0026; apply before API deployment. Package version remains 0.10.55.
+
 - Revision 0.10.55.13 (TWI-1069): keep installation instructions and re-testing visible regardless of saved configuration; load WV App independently of email/invitations. Repair hostname transport and bodyless responses, recognize the generated installation snippet, redact webhook credentials from application logs, bound per-IP throttling, and reconcile prior contact/company summaries during atomic reassignment. Serialize ingestion and review per organization. No migration; package version remains 0.10.55.
 
 - Revision 0.10.55.12 (TWI-1068): add an organization-admin WV App installation side card with copy-ready loader code, publishing guidance, and a server-side website validation test. Validation is SSRF-safe, bounded, redirect-aware, HTML-only, and checks the saved organization's exact loader URL without executing scripts or creating visitor activity. Update code, AI-agent, and user documentation; no database migration or package-version change.

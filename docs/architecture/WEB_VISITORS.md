@@ -1,6 +1,6 @@
 # WV App Web Visitors architecture
 
-Revision: 0.10.55.13
+Revision: 0.10.55.14
 Linear: TWI-1067, TWI-1068
 Follow-up: TWI-1069
 
@@ -16,7 +16,27 @@ Visitor processing and reassignment share an organization-scoped transaction adv
 
 ## Scope
 
-WV App Web Visitors is configured per Loop organization. An administrator saves the public website-loader key, enables ingestion, and receives a webhook token once. Loop stores only the SHA-256 token hash. The browser loader continues to use the supplier-required runtime global, but all Loop product, database, API, worker, and audit naming uses `web_visitors` / **WV App Web Visitors**.
+TWI-1079 setup has four persistent sections: saved webhook URL, read-only website
+key, generated code and website validation. Only the Org Admin provisions or
+replaces the website key in organization settings. Webhook rotation does not
+change that key or the generated website code.
+
+Migration 0026 adds nullable webhook_token_ciphertext. New/rotated tokens use
+AES-256-GCM with a random IV and retain SHA-256 lookup hashes. GET/PUT/rotation
+return the current token only to authorized admins with Cache-Control: no-store.
+Historical hashes cannot be reversed: show an explicit rotation action, preserving
+the current token until the admin chooses to replace it.
+
+Apply 0026 to all target regions before API rollout. Configure a stable base64
+32-byte WV_CREDENTIAL_ENCRYPTION_KEY, or use the already configured
+RESEND_CREDENTIAL_ENCRYPTION_KEY fallback. Changing the selected encryption key
+requires re-encryption; do not switch it after storing credentials without a plan.
+Rollback to the previous runtime retains the additive column, but any rotation
+by that runtime leaves stale ciphertext: reconcile by explicit rotation on the
+new runtime before redisplaying credentials. Coordinate sender updates. No live
+tokens are rotated by this migration.
+
+WV App Web Visitors is configured per Loop organization. The Org Admin provisions the public website-loader key and enables ingestion. Loop stores a SHA-256 webhook lookup hash and encrypted token for admin retrieval. The browser loader continues to use the supplier-required runtime global, but all Loop product, database, API, worker, and audit naming uses `web_visitors` / **WV App Web Visitors**.
 
 ## Data flow
 

@@ -7,9 +7,56 @@ import { createServer } from "node:http";
 import { once } from "node:events";
 import Fastify from "fastify";
 import { createWebVisitorLimiter, safeRequestSerializers } from "../web-visitor-security.js";
+import { registerWebVisitorRoutes } from "../routes/web-visitors.js";
+import { webVisitorIntegrations, hashCredential, type Db } from "@twiniti/db";
+import { randomBytes } from "node:crypto";
 
 const key = "R6G5YH5RVG65";
 const publicLookup = async () => [{ address: "93.184.216.34", family: 4 }];
+
+test("saved webhook survives reload/settings save and rotation preserves website code", async () => {
+  let stored: Record<string, unknown> | undefined;
+  const db = {
+    select: () => ({ from: () => ({ where: () => ({ limit: async () => stored ? [stored] : [] }) }) }),
+    insert: (table: unknown) => ({ values: (values: Record<string, unknown>) => {
+      if (table === webVisitorIntegrations) stored = { id: "integration", ...values };
+      return { returning: async () => [stored] };
+    } }),
+    update: () => ({ set: (values: Record<string, unknown>) => ({ where: () => ({ returning: async () => { stored = { ...stored, ...values }; return [stored]; } }) }) })
+  } as unknown as Db;
+  const app = Fastify();
+  let role = "admin";
+  app.addHook("onRequest", async (request) => {
+    request.actor = { type: "user", id: "admin", role, organizationId: "org" } as NonNullable<typeof request.actor>;
+  });
+  await registerWebVisitorRoutes(app, db, randomBytes(32).toString("base64"));
+  const path = "/api/v1/organization/integrations/web-visitors";
+  try {
+    const saved = await app.inject({ method: "PUT", url: path, payload: { enabled: true, publicKey: key } });
+    assert.equal(saved.statusCode, 200);
+    const initial = saved.json().data;
+    assert.ok(initial.webhookToken.startsWith("wv_"));
+    assert.notEqual(stored!.webhookTokenCiphertext, initial.webhookToken);
+    assert.equal(stored!.webhookTokenHash, hashCredential(initial.webhookToken));
+    const loaded = await app.inject({ method: "GET", url: path });
+    assert.equal(loaded.headers["cache-control"], "no-store");
+    assert.equal(loaded.json().data.webhookToken, initial.webhookToken);
+    const updated = await app.inject({ method: "PUT", url: path, payload: { enabled: false } });
+    assert.equal(updated.json().data.webhookToken, initial.webhookToken);
+    const rotated = await app.inject({ method: "POST", url: `${path}/rotate-webhook-token`, payload: {} });
+    assert.equal(rotated.statusCode, 200);
+    assert.notEqual(rotated.json().data.webhookToken, initial.webhookToken);
+    assert.equal(rotated.json().data.loaderSnippet, initial.loaderSnippet);
+    assert.equal((await app.inject({ method: "GET", url: path })).json().data.webhookToken, rotated.json().data.webhookToken);
+    delete stored!.webhookTokenCiphertext;
+    const legacy = (await app.inject({ method: "GET", url: path })).json().data;
+    assert.equal(legacy.webhookNeedsRotation, true);
+    assert.equal(legacy.webhookToken, null);
+    role = "member";
+    assert.equal((await app.inject({ method: "GET", url: path })).statusCode, 403);
+    assert.equal((await app.inject({ method: "POST", url: `${path}/rotate-webhook-token`, payload: {} })).statusCode, 403);
+  } finally { await app.close(); }
+});
 
 test("accepts the actual customer snippet and rejects wrong keys and comments", async () => {
   const snippet = buildWebVisitorLoaderSnippet({ publicKey: key });
