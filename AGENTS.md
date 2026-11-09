@@ -1,6 +1,6 @@
 # Agent instructions (Twiniti CRM)
 
-## WV App Web Visitors (0.10.55.11)
+## WV App Web Visitors (0.10.55.12)
 
 TWI-1067 adds organization-admin WV App configuration, token-authenticated
 webhook ingestion, deterministic visitor identity resolution, and contact/company
@@ -10,6 +10,11 @@ match a contact from name/title similarity, create a contact without a real emai
 or scrape LinkedIn. `customer_events` is authoritative and summary counters are
 updated only after a unique event insert. Apply additive migration 0025 before
 deploying API/worker/web. See `docs/architecture/WEB_VISITORS.md`.
+TWI-1068 adds an admin-only installation side card and public-site validation.
+Keep validation SSRF-safe: HTTP(S) only, no URL credentials, public DNS/IPs on
+every redirect hop, bounded redirects/time/body, HTML only, and no cookies or
+authorization forwarding. The check confirms the organization-specific loader
+URL is present in published HTML; it does not execute scripts or emit a visit.
 
 ## Production email templates (0.10.55.10)
 

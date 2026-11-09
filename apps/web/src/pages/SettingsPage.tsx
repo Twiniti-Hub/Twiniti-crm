@@ -26,6 +26,7 @@ type Invitation = {
 type TrackingAddress = { address: string; domain: string; resendDomainId?: string };
 type ResendDomain = { id: string; domain: string; fromEmail: string; fromName: string | null; verificationStatus: string; isDefault: boolean; active: boolean; webhookSecretConfigured?: boolean };
 type WebVisitorIntegration = { configured: boolean; enabled: boolean; publicKey: string | null; loaderSnippet: string | null; settings: { createContacts: boolean; createCompanies: boolean }; lastWebhookAt: string | null; webhookToken?: string | null };
+type InstallationValidation = { status: "installed" | "missing" | "blocked" | "unreachable" | "timeout" | "too_large" | "non_html"; hostname: string; message: string };
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
@@ -61,6 +62,11 @@ export function SettingsPage() {
   const [webVisitorCreateContacts, setWebVisitorCreateContacts] = useState(false);
   const [webVisitorCreateCompanies, setWebVisitorCreateCompanies] = useState(true);
   const [webVisitorToken, setWebVisitorToken] = useState<string | null>(null);
+  const [installationOpen, setInstallationOpen] = useState(false);
+  const [installationUrl, setInstallationUrl] = useState("");
+  const [installationResult, setInstallationResult] = useState<InstallationValidation | null>(null);
+  const [installationBusy, setInstallationBusy] = useState(false);
+  const [loaderCopied, setLoaderCopied] = useState(false);
 
   const isAdmin = me?.role === "admin" || me?.isSuperAdmin === true;
   const isPersonalWorkspace = me?.workspaceKind === "personal";
@@ -112,6 +118,22 @@ export function SettingsPage() {
     setBusy(true); setError(null); setMessage(null);
     try { const res = await api("/api/v1/organization/integrations/web-visitors/rotate-webhook-token", { method: "POST", body: "{}" }); setWebVisitorToken(String(res.data.webhookToken)); setMessage("Webhook token rotated. Update the sender before the old URL is used again."); }
     catch (err) { setError(err instanceof Error ? err.message : "Could not rotate webhook token"); } finally { setBusy(false); }
+  }
+
+  async function copyWebVisitorLoader() {
+    if (!webVisitors?.loaderSnippet) return;
+    try { await navigator.clipboard.writeText(webVisitors.loaderSnippet); setLoaderCopied(true); window.setTimeout(() => setLoaderCopied(false), 2_000); }
+    catch { setError("Could not copy the installation code. Select and copy it manually."); }
+  }
+
+  async function validateInstallation(event: FormEvent) {
+    event.preventDefault(); setInstallationBusy(true); setInstallationResult(null);
+    try {
+      const res = await api("/api/v1/organization/integrations/web-visitors/validate-installation", { method: "POST", body: JSON.stringify({ url: installationUrl }) });
+      setInstallationResult(res.data as InstallationValidation);
+    } catch (err) {
+      setInstallationResult({ status: "unreachable", hostname: "", message: err instanceof Error ? err.message : "Could not validate the website." });
+    } finally { setInstallationBusy(false); }
   }
 
   async function addResendDomain(event: FormEvent) {
@@ -215,6 +237,13 @@ export function SettingsPage() {
     refresh().catch((err) => setError(err instanceof Error ? err.message : "Failed to load settings"));
   }, []);
 
+  useEffect(() => {
+    if (!installationOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setInstallationOpen(false); };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [installationOpen]);
+
   async function onInvite(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -286,7 +315,7 @@ export function SettingsPage() {
             <label><input type="checkbox" checked={webVisitorCreateContacts} onChange={(event) => setWebVisitorCreateContacts(event.target.checked)} /> Create contacts only when a valid business email is supplied</label>
             <div className="form-row"><button className="primary" type="submit" disabled={busy}>{busy ? "Saving…" : "Save WV App settings"}</button>{webVisitors?.configured ? <button className="secondary" type="button" disabled={busy} onClick={() => void rotateWebVisitorToken()}>Rotate webhook token</button> : null}</div>
           </form>
-          {webVisitors?.loaderSnippet ? <><h4>Website loader</h4><code style={{ display: "block", overflowWrap: "anywhere" }}>{webVisitors.loaderSnippet}</code></> : null}
+          {webVisitors?.loaderSnippet ? <div className="form-row" style={{ marginTop: 12 }}><button className="secondary" type="button" onClick={() => { setInstallationResult(null); setInstallationOpen(true); }}>Install on your website</button></div> : <p className="muted">Save a valid public key to generate your website installation code.</p>}
           {webVisitorToken ? <><h4>One-time webhook URL</h4><code style={{ display: "block", overflowWrap: "anywhere" }}>{`${API_BASE || window.location.origin}/api/v1/webhooks/web-visitors/${webVisitorToken}`}</code><p className="muted">Copy this now. Loop stores only its hash and cannot display it again.</p></> : null}
           <p className="muted">Last webhook: {webVisitors?.lastWebhookAt ? new Date(webVisitors.lastWebhookAt).toLocaleString() : "Never"}</p>
         </section>
@@ -586,6 +615,29 @@ export function SettingsPage() {
             : "Set `VITE_HEXCLAVE_PROJECT_ID` to enable Hexclave sign-in. Until then the API can use bootstrap auth with `AUTH_DISABLED=true`."}
         </p>
       </section>
+
+      {installationOpen && webVisitors?.loaderSnippet ? (
+        <div className="side-card-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setInstallationOpen(false); }}>
+          <aside className="side-card" role="dialog" aria-modal="true" aria-labelledby="web-visitor-install-title">
+            <div className="side-card-header">
+              <div><p className="eyebrow">WV App</p><h2 id="web-visitor-install-title">Install Web Visitors</h2></div>
+              <button className="secondary" type="button" aria-label="Close installation instructions" onClick={() => setInstallationOpen(false)}>Close</button>
+            </div>
+            <div className="side-card-body">
+              <p>Add this code to the global template for every public page you want to track. Place it after your consent controls and before the closing <code>&lt;/body&gt;</code> tag, or in your site's global head if that is how scripts are managed.</p>
+              <div className="install-code-heading"><h3>Installation code</h3><button className="secondary" type="button" onClick={() => void copyWebVisitorLoader()}>{loaderCopied ? "Copied" : "Copy code"}</button></div>
+              <pre className="install-code"><code>{webVisitors.loaderSnippet}</code></pre>
+              <ol className="install-steps"><li>Paste the code into your website template.</li><li>Publish the website and clear any site or CDN cache.</li><li>Enter a public page URL below and run the validation test.</li></ol>
+              <form className="stack-form install-validation" onSubmit={validateInstallation}>
+                <label>Public website URL<input type="url" value={installationUrl} onChange={(event) => { setInstallationUrl(event.target.value); setInstallationResult(null); }} placeholder="https://www.example.com/" required /></label>
+                <button className="primary" type="submit" disabled={installationBusy}>{installationBusy ? "Checking…" : "Validate installation"}</button>
+              </form>
+              {installationResult ? <div className={`installation-result ${installationResult.status === "installed" ? "success" : "warning"}`} role="status"><strong>{installationResult.status === "installed" ? "Installation verified" : "Installation not verified"}</strong><p>{installationResult.message}</p></div> : null}
+              <p className="muted">Validation checks only the published HTML for this organization's loader key. It does not execute page scripts or submit a test visitor.</p>
+            </div>
+          </aside>
+        </div>
+      ) : null}
     </>
   );
 }

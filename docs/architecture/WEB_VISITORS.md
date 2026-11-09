@@ -1,7 +1,7 @@
 # WV App Web Visitors architecture
 
-Revision: 0.10.55.11
-Linear: TWI-1067
+Revision: 0.10.55.12
+Linear: TWI-1067, TWI-1068
 
 ## Scope
 
@@ -28,6 +28,12 @@ The API dedupe key combines integration and normalized visit payload identity. T
 
 A visit never increments both contact and company. Contact-company reporting may derive company-level engagement through the association without duplicating the underlying event.
 
+## Website installation validation
+
+Organization admins open **Settings → WV App → Web Visitors → Install on your website** to copy the exact loader generated from the saved public key. `POST /api/v1/organization/integrations/web-visitors/validate-installation` fetches a supplied public page and confirms that its published HTML contains the exact organization loader URL. The check does not execute JavaScript and never creates a visitor event.
+
+The validator accepts only HTTP(S) URLs without credentials. It resolves DNS before each request, rejects the request if any answer is loopback, private, link-local, reserved, multicast, or otherwise non-public, and repeats those checks for every redirect. Redirect count, response time, and response body are bounded; only HTML/XHTML is read. No browser cookies, customer credentials, or authorization headers are forwarded. Audit metadata contains only the hostname and result status, never a URL query or fragment.
+
 ## Schema and rollout
 
 Migration `0025_web_visitors.sql` is additive and backward compatible with the previously deployed application. It adds:
@@ -48,3 +54,4 @@ Apply the migration to Development US, EU, and UK before deploying the worker, A
 - Payload size and fields are bounded by strict contracts.
 - Identity decisions retain method, evidence, confidence band, resolver version, and review actor.
 - Agent credentials do not receive WV App configuration or ambiguity-review access in this revision.
+- Installation validation is also organization-admin user-only and is not an agent tool.

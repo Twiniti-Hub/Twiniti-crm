@@ -214,6 +214,18 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .board-view-toolbar .toolbar-actions { margin-top: 12px; }
 .app-dialog { border: 1px solid #e4ece8; border-radius: 17px; padding: 0; max-width: min(920px, 94vw); width: 100%; background: #f5f8f6; color: #192a38; }
 .app-dialog::backdrop { background: rgba(16, 43, 49, .45); }
+.side-card-backdrop { position: fixed; inset: 0; z-index: 1000; display: flex; justify-content: flex-end; background: rgba(16, 43, 49, .45); }
+.side-card { width: min(560px, 100vw); height: 100%; overflow-y: auto; background: #f5f8f6; color: #192a38; border-left: 1px solid #dce8e3; box-shadow: -12px 0 30px rgba(15, 42, 48, .16); }
+.side-card-header { position: sticky; top: 0; z-index: 1; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 20px 22px; background: inherit; border-bottom: 1px solid #dce8e3; }
+.side-card-header h2 { margin: 4px 0 0; font-size: 1.25rem; }
+.side-card-body { display: grid; gap: 16px; padding: 22px; }
+.side-card-body p, .side-card-body h3 { margin: 0; }
+.install-code-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.install-code { margin: 0; padding: 14px; border-radius: 10px; background: #102b31; color: #dcece7; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; }
+.install-steps { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
+.install-validation { margin: 0; box-shadow: none; }
+.installation-result { display: grid; gap: 5px; padding: 13px 14px; border: 1px solid #e1c978; border-radius: 10px; background: #fff9df; }
+.installation-result.success { border-color: #9acdbd; background: #eef9f4; }
 .dialog-form { margin: 0; box-shadow: none; }
 .campaign-preview-html { padding: 12px; border: 1px solid #e4ece8; border-radius: 10px; background: #fff; overflow: auto; }
 .form-property-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
@@ -241,10 +253,15 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 }
 @media (prefers-color-scheme: dark) {
   .app-dialog { background: #102b31; color: #dcece7; border-color: #21464b; }
+  .side-card { background: #102b31; color: #dcece7; border-color: #21464b; }
+  .side-card-header { border-color: #21464b; }
+  .installation-result { background: #473f1d; border-color: #8c792f; }
+  .installation-result.success { background: #173e34; border-color: #357963; }
   .kanban-lane, .kanban-card { background: #14353b; border-color: #21464b; color: #dcece7; }
   .kanban-lane.is-over, .kanban-card.is-dragging { background: #1a4349; }
   .kanban-card-body small, .kanban-hint, .kanban-empty { color: #8ba9a5; }
 }
+@media (max-width: 600px) { .side-card { width: 100vw; } .side-card-header, .side-card-body { padding: 16px; } }
 
 .note-composer { display: grid; gap: 10px; margin-bottom: 16px; }
 .note-composer-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

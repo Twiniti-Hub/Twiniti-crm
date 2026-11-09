@@ -30,7 +30,10 @@ Use **Settings → WV App → Web Visitors** to connect the website visitor feed
 2. Choose whether Loop may create companies for valid unmatched domains and contacts when WV App supplies a valid business email. Loop never creates a contact from a professional-profile URL alone.
 3. Enable ingestion and copy the one-time webhook URL immediately. Loop stores only the token hash, so the URL cannot be shown again.
 4. Configure WV App to deliver visitor payloads to that regional Loop webhook URL.
-5. Copy the generated website loader into the website's global page template.
+5. Select **Install on your website** to open the installation side card, then copy the generated loader into the website's global page template. Place it after your consent controls and before `</body>`, or in the global head when your site platform manages scripts there.
+6. Publish the site and clear any site or CDN cache. Enter a public page URL in the side card and select **Validate installation**.
+
+**Installation verified** means the published HTML contains this organization's exact loader URL. The test does not execute JavaScript or create a test visitor. A missing result usually means the site was not published, a cache still serves the old page, the code was installed on a different template, or a tag manager injects it only at runtime. The validator accepts public HTTP(S) pages only; local, private-network, credentialed, non-HTML, oversized, and slow pages are rejected safely.
 
 Rotate the webhook token if the URL is exposed. Rotation revokes the previous URL immediately. Existing visit events and identity decisions are retained for audit and reconciliation.
 
