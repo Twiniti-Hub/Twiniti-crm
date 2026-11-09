@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import {
   reviewWebVisitorResolutionSchema,
   updateWebVisitorIntegrationSchema,
@@ -24,22 +24,14 @@ import {
 } from "@twiniti/db";
 import { requireActor, requireOrgId, requireUserRole, sendError } from "../auth-hook.js";
 import { validateWebVisitorInstallation } from "../web-visitor-installation.js";
+import { createWebVisitorLimiter } from "../web-visitor-security.js";
 
 function mintWebhookToken() {
   const token = `wv_${randomBytes(32).toString("base64url")}`;
   return { token, hash: hashCredential(token) };
 }
 
-const webhookRateWindows = new Map<string, { startedAt: number; count: number }>();
-function allowWebhookRequest(key: string, now = Date.now()) {
-  const current = webhookRateWindows.get(key);
-  if (!current || now - current.startedAt >= 60_000) {
-    webhookRateWindows.set(key, { startedAt: now, count: 1 });
-    return true;
-  }
-  current.count += 1;
-  return current.count <= 60;
-}
+const allowWebhookRequest = createWebVisitorLimiter();
 
 function publicIntegration(row: typeof webVisitorIntegrations.$inferSelect | undefined) {
   const settings = webVisitorSettingsSchema.parse(row?.settings ?? {});
@@ -153,7 +145,20 @@ export async function registerWebVisitorRoutes(app: FastifyInstance, db: Db) {
       const { id } = request.params as { id: string };
       const input = reviewWebVisitorResolutionSchema.parse(request.body);
       if (input.action === "attach" && !input.contactId) return reply.code(422).send({ error: { code: "contact_required", message: "contactId is required to attach" } });
-      const row = await reviewWebVisitorResolution(db, { organizationId, mappingId: id, action: input.action, contactId: input.contactId, reviewedBy: actor.id });
+      const reviewInput = { organizationId, mappingId: id, action: input.action, contactId: input.contactId, reviewedBy: actor.id };
+      let row;
+      if (request.tenantConnection) {
+        await db.execute(sql`SAVEPOINT web_visitor_review`);
+        try {
+          row = await reviewWebVisitorResolution(db, reviewInput);
+          await db.execute(sql`RELEASE SAVEPOINT web_visitor_review`);
+        } catch (error) {
+          await db.execute(sql`ROLLBACK TO SAVEPOINT web_visitor_review`);
+          throw error;
+        }
+      } else {
+        row = await db.transaction((tx) => reviewWebVisitorResolution(tx as unknown as Db, reviewInput));
+      }
       if (!row) return reply.code(404).send({ error: { code: "not_found", message: "Resolution not found" } });
       await writeAudit(db, { organizationId, actorType: "user", actorId: actor.id, action: `web_visitors.resolution_${input.action}`, entityType: "web_visitor_identity_mapping", entityId: row.id, metadata: { contactId: input.contactId ?? null, reason: input.reason } });
       return { data: row };
@@ -165,7 +170,7 @@ export async function registerWebVisitorRoutes(app: FastifyInstance, db: Db) {
       const { token } = request.params as { token: string };
       if (!token || token.length > 200) return reply.code(404).send({ error: { code: "not_found", message: "Not found" } });
       const tokenHash = hashCredential(token);
-      if (!allowWebhookRequest(`${request.ip}:${tokenHash}`)) return reply.code(429).send({ error: { code: "rate_limited", message: "Too many requests" } });
+      if (!allowWebhookRequest(request.ip)) return reply.code(429).send({ error: { code: "rate_limited", message: "Too many requests" } });
       return withServiceRls(db, null, async (tx) => {
         const [integration] = await tx.select().from(webVisitorIntegrations).where(and(eq(webVisitorIntegrations.webhookTokenHash, tokenHash), eq(webVisitorIntegrations.enabled, true))).limit(1);
         if (!integration) return reply.code(404).send({ error: { code: "not_found", message: "Not found" } });

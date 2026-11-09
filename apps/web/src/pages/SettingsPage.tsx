@@ -76,6 +76,18 @@ export function SettingsPage() {
     const nextMe = meRes.data as Me;
     setMe(nextMe);
     if (!nextMe.organizationId) return;
+    // Load WV App independently: a failure in invitations/email must not hide installation.
+    if (nextMe.role === "admin" || nextMe.isSuperAdmin) {
+      try {
+        const result = await api("/api/v1/organization/integrations/web-visitors");
+        const integration = result.data as WebVisitorIntegration;
+        setWebVisitors(integration);
+        setWebVisitorPublicKey(integration.publicKey ?? "");
+        setWebVisitorEnabled(integration.enabled);
+        setWebVisitorCreateContacts(integration.settings.createContacts);
+        setWebVisitorCreateCompanies(integration.settings.createCompanies);
+      } catch (err) { setError(err instanceof Error ? err.message : "Could not load Web Visitors settings"); }
+    }
     try {
       const trackingRes = await api("/api/v1/email/tracking-address");
       setTrackingAddress(trackingRes.data as TrackingAddress);
@@ -95,13 +107,6 @@ export function SettingsPage() {
       }
       const resendRes = await api("/api/v1/organization/integrations/resend/domains");
       setResendDomains(resendRes.data as ResendDomain[]);
-      const webVisitorRes = await api("/api/v1/organization/integrations/web-visitors");
-      const integration = webVisitorRes.data as WebVisitorIntegration;
-      setWebVisitors(integration);
-      setWebVisitorPublicKey(integration.publicKey ?? "");
-      setWebVisitorEnabled(integration.enabled);
-      setWebVisitorCreateContacts(integration.settings.createContacts);
-      setWebVisitorCreateCompanies(integration.settings.createCompanies);
     }
   }
 
@@ -315,7 +320,7 @@ export function SettingsPage() {
             <label><input type="checkbox" checked={webVisitorCreateContacts} onChange={(event) => setWebVisitorCreateContacts(event.target.checked)} /> Create contacts only when a valid business email is supplied</label>
             <div className="form-row"><button className="primary" type="submit" disabled={busy}>{busy ? "Saving…" : "Save WV App settings"}</button>{webVisitors?.configured ? <button className="secondary" type="button" disabled={busy} onClick={() => void rotateWebVisitorToken()}>Rotate webhook token</button> : null}</div>
           </form>
-          {webVisitors?.loaderSnippet ? <div className="form-row" style={{ marginTop: 12 }}><button className="secondary" type="button" onClick={() => { setInstallationResult(null); setInstallationOpen(true); }}>Install on your website</button></div> : <p className="muted">Save a valid public key to generate your website installation code.</p>}
+          <div className="form-row" style={{ marginTop: 12 }}><button className="secondary" type="button" onClick={() => { setInstallationResult(null); setInstallationOpen(true); }}>Install on your website</button></div>
           {webVisitorToken ? <><h4>One-time webhook URL</h4><code style={{ display: "block", overflowWrap: "anywhere" }}>{`${API_BASE || window.location.origin}/api/v1/webhooks/web-visitors/${webVisitorToken}`}</code><p className="muted">Copy this now. Loop stores only its hash and cannot display it again.</p></> : null}
           <p className="muted">Last webhook: {webVisitors?.lastWebhookAt ? new Date(webVisitors.lastWebhookAt).toLocaleString() : "Never"}</p>
         </section>
@@ -616,7 +621,7 @@ export function SettingsPage() {
         </p>
       </section>
 
-      {installationOpen && webVisitors?.loaderSnippet ? (
+      {installationOpen && isAdmin ? (
         <div className="side-card-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setInstallationOpen(false); }}>
           <aside className="side-card" role="dialog" aria-modal="true" aria-labelledby="web-visitor-install-title">
             <div className="side-card-header">
@@ -625,8 +630,15 @@ export function SettingsPage() {
             </div>
             <div className="side-card-body">
               <p>Add this code to the global template for every public page you want to track. Place it after your consent controls and before the closing <code>&lt;/body&gt;</code> tag, or in your site's global head if that is how scripts are managed.</p>
+              {!webVisitors?.loaderSnippet ? <form className="stack-form" onSubmit={saveWebVisitors}>
+                <p>Save your organization's public key to generate the installation code.</p>
+                <label>WV App public key<input value={webVisitorPublicKey} onChange={(event) => setWebVisitorPublicKey(event.target.value)} required pattern="[A-Za-z0-9_-]{6,100}" /></label>
+                <button className="primary" type="submit" disabled={busy}>Save public key</button>
+                <button className="secondary" type="button" onClick={() => void refresh().catch((err) => setError(err instanceof Error ? err.message : "Could not reload settings"))}>Reload saved settings</button>
+                {error ? <p role="alert">{error}</p> : null}
+              </form> : null}
               <div className="install-code-heading"><h3>Installation code</h3><button className="secondary" type="button" onClick={() => void copyWebVisitorLoader()}>{loaderCopied ? "Copied" : "Copy code"}</button></div>
-              <pre className="install-code"><code>{webVisitors.loaderSnippet}</code></pre>
+              <pre className="install-code"><code>{webVisitors?.loaderSnippet ?? "Your installation code will appear here after saving the public key."}</code></pre>
               <ol className="install-steps"><li>Paste the code into your website template.</li><li>Publish the website and clear any site or CDN cache.</li><li>Enter a public page URL below and run the validation test.</li></ol>
               <form className="stack-form install-validation" onSubmit={validateInstallation}>
                 <label>Public website URL<input type="url" value={installationUrl} onChange={(event) => { setInstallationUrl(event.target.value); setInstallationResult(null); }} placeholder="https://www.example.com/" required /></label>

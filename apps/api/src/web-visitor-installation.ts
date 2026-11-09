@@ -3,6 +3,7 @@ import { lookup as dnsLookup } from "node:dns/promises";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { Readable } from "node:stream";
+import { buildWebVisitorLoaderSnippet } from "@twiniti/db";
 
 export type InstallationValidationStatus = "installed" | "missing" | "blocked" | "unreachable" | "timeout" | "too_large" | "non_html";
 export type InstallationValidationResult = { status: InstallationValidationStatus; hostname: string; message: string };
@@ -46,7 +47,7 @@ async function assertPublicUrl(url: URL, lookup: Lookup) {
   return addresses;
 }
 
-function requestPinned(url: URL, addresses: Array<{ address: string; family: number }>, signal: AbortSignal): Promise<Response> {
+export function requestPinned(url: URL, addresses: Array<{ address: string; family: number }>, signal: AbortSignal): Promise<Response> {
   const target = addresses[0]!;
   const request = url.protocol === "https:" ? httpsRequest : httpRequest;
   return new Promise((resolve, reject) => {
@@ -56,14 +57,22 @@ function requestPinned(url: URL, addresses: Array<{ address: string; family: num
       // Pin the socket to the address already classified above. This closes the
       // DNS-rebinding gap between validation and connection while retaining the
       // original hostname for Host and TLS SNI.
-      lookup: ((_hostname: string, _options: unknown, callback: (error: NodeJS.ErrnoException | null, address: string, family: number) => void) => callback(null, target.address, target.family)) as never
+      lookup: (_hostname, options, callback) => {
+        if (options.all) callback(null, [target]);
+        else callback(null, target.address, target.family);
+      }
     }, (response) => {
+      try {
       const headers = new Headers();
       for (const [name, value] of Object.entries(response.headers)) {
         if (Array.isArray(value)) value.forEach((item) => headers.append(name, item));
         else if (value !== undefined) headers.set(name, String(value));
       }
-      resolve(new Response(Readable.toWeb(response) as ReadableStream, { status: response.statusCode ?? 500, statusText: response.statusMessage, headers }));
+      const status = response.statusCode ?? 500;
+      const bodyless = [204, 205, 304].includes(status);
+      if (bodyless) response.destroy();
+      resolve(new Response(bodyless ? null : Readable.toWeb(response) as ReadableStream, { status, statusText: response.statusMessage, headers }));
+      } catch (error) { response.destroy(); reject(error); }
     });
     req.on("error", reject);
     req.end();
@@ -104,18 +113,24 @@ export async function validateWebVisitorInstallation(input: {
         ? await input.fetch(current.toString(), { method: "GET", redirect: "manual", signal: controller.signal, headers: { Accept: "text/html,application/xhtml+xml", "User-Agent": "Twiniti-WV-App-Validator/1.0" } })
         : await requestPinned(current, addresses, controller.signal);
       if (response.status >= 300 && response.status < 400 && response.headers.get("location")) {
+        await response.body?.cancel();
         if (hop === MAX_REDIRECTS) return { status: "unreachable", hostname: initialHostname, message: "The website redirected too many times." };
         current = new URL(response.headers.get("location")!, current);
         continue;
       }
-      if (!response.ok) return { status: "unreachable", hostname: initialHostname, message: "The website could not be checked. Confirm the URL is public and try again." };
+      if (!response.ok) { await response.body?.cancel(); return { status: "unreachable", hostname: initialHostname, message: "The website could not be checked. Confirm the URL is public and try again." }; }
       const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
       if (!contentType.includes("text/html") && !contentType.includes("application/xhtml+xml")) {
+        await response.body?.cancel();
         return { status: "non_html", hostname: initialHostname, message: "The URL did not return an HTML page." };
       }
       const html = await readBoundedText(response);
       const loaderUrl = `https://ddwl4m2hdecbv.cloudfront.net/b/${input.publicKey}/${input.publicKey}.js.gz`;
-      return html.includes(loaderUrl)
+      const scripts = html.replace(/<!--[\s\S]*?-->/g, "").match(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi) ?? [];
+      const canonical = buildWebVisitorLoaderSnippet({ publicKey: input.publicKey }).replace(/\s/g, "");
+      const installed = scripts.some((script) => script.replace(/\s/g, "") === canonical
+        || new RegExp(`\\bsrc=["']${loaderUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`).test(script));
+      return installed
         ? { status: "installed", hostname: initialHostname, message: "WV App is installed on this page." }
         : { status: "missing", hostname: initialHostname, message: "WV App was not found in the page HTML. Publish the code, clear any site cache, and test again." };
     }

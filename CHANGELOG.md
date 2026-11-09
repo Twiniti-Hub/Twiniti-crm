@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Revision 0.10.55.13 (TWI-1069): keep installation instructions and re-testing visible regardless of saved configuration; load WV App independently of email/invitations. Repair hostname transport and bodyless responses, recognize the generated installation snippet, redact webhook credentials from application logs, bound per-IP throttling, and reconcile prior contact/company summaries during atomic reassignment. Serialize ingestion and review per organization. No migration; package version remains 0.10.55.
+
 - Revision 0.10.55.12 (TWI-1068): add an organization-admin WV App installation side card with copy-ready loader code, publishing guidance, and a server-side website validation test. Validation is SSRF-safe, bounded, redirect-aware, HTML-only, and checks the saved organization's exact loader URL without executing scripts or creating visitor activity. Update code, AI-agent, and user documentation; no database migration or package-version change.
 
 - Revision 0.10.55.11 (TWI-1067): add organization-level WV App Web Visitors configuration, one-time webhook tokens, deduplicated queued ingestion, deterministic business-email/professional-profile/company-domain resolution, ambiguity review, and immutable contact/company visit histories with atomic first/last/count summaries. Additive migration 0025 adds integration/mapping tables and visit summary fields. LinkedIn scraping is explicitly prohibited. Update code, AI-agent, and user documentation; package version remains 0.10.55 pending release.

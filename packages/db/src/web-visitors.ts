@@ -255,6 +255,9 @@ export async function processWebVisitorProfile(db: Db, input: {
   profile: WebVisitorProfile;
   settings: WebVisitorSettings;
 }) {
+  // Callers hold the service/request transaction. Serialize summary changes with
+  // admin reassignment so an ingestion cannot leave a rebuilt count stale.
+  await db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`web-visitors:${input.organizationId}`}, 0))`);
   const resolution = await resolveWebVisitorIdentity(db, input);
   const fingerprint = buildWebVisitorIdentityFingerprint(input.profile);
   const now = new Date();
@@ -362,6 +365,7 @@ export async function reviewWebVisitorResolution(db: Db, input: {
   contactId?: string | null;
   reviewedBy: string;
 }) {
+  await db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`web-visitors:${input.organizationId}`}, 0))`);
   const [mapping] = await db.select().from(webVisitorIdentityMappings).where(and(
     eq(webVisitorIdentityMappings.organizationId, input.organizationId),
     eq(webVisitorIdentityMappings.id, input.mappingId)
@@ -387,12 +391,25 @@ export async function reviewWebVisitorResolution(db: Db, input: {
     updatedAt: now
   }).where(eq(webVisitorIdentityMappings.id, mapping.id)).returning();
   if (input.action === "attach" && input.contactId) {
+    const previous = await db.select({ contactId: customerEvents.contactId, companyId: customerEvents.companyId }).from(customerEvents).where(and(
+      eq(customerEvents.organizationId, input.organizationId),
+      eq(customerEvents.eventType, "web_visitor.visit"),
+      sql`${customerEvents.payload}->>'integrationId' = ${mapping.integrationId}`,
+      sql`${customerEvents.payload}->>'identityFingerprint' = ${mapping.identityFingerprint}`
+    ));
     await db.update(customerEvents).set({ contactId: input.contactId, companyId: null }).where(and(
       eq(customerEvents.organizationId, input.organizationId),
       eq(customerEvents.eventType, "web_visitor.visit"),
+      sql`${customerEvents.payload}->>'integrationId' = ${mapping.integrationId}`,
       sql`${customerEvents.payload}->>'identityFingerprint' = ${mapping.identityFingerprint}`
     ));
     await rebuildWebVisitorSummary(db, { organizationId: input.organizationId, contactId: input.contactId, companyId: mapping.companyId });
+    for (const contactId of new Set(previous.map((event) => event.contactId).filter(Boolean))) {
+      if (contactId !== input.contactId) await rebuildWebVisitorSummary(db, { organizationId: input.organizationId, contactId });
+    }
+    for (const companyId of new Set(previous.map((event) => event.companyId).filter(Boolean))) {
+      if (companyId !== mapping.companyId) await rebuildWebVisitorSummary(db, { organizationId: input.organizationId, companyId });
+    }
   }
   return updated;
 }

@@ -2,6 +2,12 @@
 
 ## WV App Web Visitors (0.10.55.12)
 
+Revision 0.10.55.13 / TWI-1069: preserve typed DNS lookup callbacks and socket
+pinning; test the actual transport and generated loader. Redact webhook paths
+in request, error and message log serializers. The limiter is bounded per IP
+and per API instance. Ingestion and review require transactions and share an
+organization advisory lock; reassignment must rebuild every prior owner summary.
+
 TWI-1067 adds organization-admin WV App configuration, token-authenticated
 webhook ingestion, deterministic visitor identity resolution, and contact/company
 visit histories. Preserve exactly-one-record attribution: resolved people update

@@ -1,7 +1,18 @@
 # WV App Web Visitors architecture
 
-Revision: 0.10.55.12
+Revision: 0.10.55.13
 Linear: TWI-1067, TWI-1068
+Follow-up: TWI-1069
+
+## Repair invariants
+
+Installation checks recognize the generated concatenated loader as well as a direct script source for the saved key. Comments are excluded. The pinned HTTP transport honors Node's single-address and address-array lookup contracts and constructs null bodies for 204/205/304 responses; discarded responses are cancelled.
+
+Application request, error and message serializers redact webhook path credentials. Infrastructure access logs are outside these serializers: operators must inspect Render/proxy retention and access controls and coordinate token rotation with sender updates if earlier logs exposed a live token. Never copy tokens into issues. Rotation is not automatic in this revision.
+
+Webhook throttling is per IP per API instance, with 60 requests per minute and at most 10,000 active IP entries. Expired entries are reclaimed on requests; new keys are rejected at capacity. Multiple replicas have independent quotas.
+
+Visitor processing and reassignment share an organization-scoped transaction advisory lock. Review uses a savepoint within the request transaction (or a standalone transaction without request context), selects events by organization, integration and identity, and rebuilds all affected contact/company summaries. Call database helpers only within transactions so locks last through event and summary updates.
 
 ## Scope
 
