@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "fastify": "^5.12.5",
-    "fastify-raw-body": "^5.0.0",
+    "fastify-raw-body": "^6.0.3",
     "stripe": "^22.4.0",
     "zod": "^3.25.67"
   },
