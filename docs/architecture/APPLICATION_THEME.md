@@ -17,7 +17,9 @@ ink #1A1C1C, accent #FF9902. Accent is reserved for primary actions and
 focus indicators, with dark text on orange. Status and destructive feedback
 retain semantic colors. Radius is 8px for controls and 16px for frames.
 Inter is the UI font; Hanken Grotesk is used for headings and labels.
-Fonts load from Google Fonts with system fallbacks and `display=swap`.
+Fonts load from Google Fonts with system fallbacks and `display=swap`. The
+stylesheet link is injected only while `.shell` or `.auth-page` is mounted and
+is removed on the public React landing route.
 
 The app stays light under an OS dark preference, including drawers and
 dialogs. Preserve keyboard focus outlines and disabled states. Existing

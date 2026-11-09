@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Revision 0.10.55.16 (TWI-1080): scope the Precision Stark Google Font request to mounted application and authentication surfaces so the React landing route remains unchanged. No migration; package version remains 0.10.55.
+
 - Revision 0.10.55.15 (TWI-1080, TWI-1070/1073/1074): apply Precision Stark light tokens, typography, navigation, actions, authentication forms and WV installation styling to the application only. Preserve both landing implementations and public pricing. No additional migration; package version remains 0.10.55.
 
 - Revision 0.10.55.14 (TWI-1079): simplify WV App setup to saved webhook, read-only website key, automatic code and repeatable validation. Org Admin provisions the website key in organization settings. Encrypted webhook retrieval survives reload and rotation; legacy hash-only URLs require explicit rotation. Additive migration 0026; apply before API deployment. Package version remains 0.10.55.

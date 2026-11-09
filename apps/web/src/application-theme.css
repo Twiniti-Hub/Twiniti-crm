@@ -1,5 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap");
-
 /* Precision Stark, application only (TWI-1080). The React landing route and
    standalone marketing app deliberately retain their existing presentation.
    Scope through the document so dialogs rendered into a portal inherit tokens. */
