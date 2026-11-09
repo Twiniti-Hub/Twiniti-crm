@@ -25,6 +25,7 @@ type Invitation = {
 
 type TrackingAddress = { address: string; domain: string; resendDomainId?: string };
 type ResendDomain = { id: string; domain: string; fromEmail: string; fromName: string | null; verificationStatus: string; isDefault: boolean; active: boolean; webhookSecretConfigured?: boolean };
+type WebVisitorIntegration = { configured: boolean; enabled: boolean; publicKey: string | null; loaderSnippet: string | null; settings: { createContacts: boolean; createCompanies: boolean }; lastWebhookAt: string | null; webhookToken?: string | null };
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
@@ -54,6 +55,12 @@ export function SettingsPage() {
   const [editApiKey, setEditApiKey] = useState("");
   const [editWebhookSecret, setEditWebhookSecret] = useState("");
   const [pendingDeleteResendId, setPendingDeleteResendId] = useState<string | null>(null);
+  const [webVisitors, setWebVisitors] = useState<WebVisitorIntegration | null>(null);
+  const [webVisitorPublicKey, setWebVisitorPublicKey] = useState("");
+  const [webVisitorEnabled, setWebVisitorEnabled] = useState(false);
+  const [webVisitorCreateContacts, setWebVisitorCreateContacts] = useState(false);
+  const [webVisitorCreateCompanies, setWebVisitorCreateCompanies] = useState(true);
+  const [webVisitorToken, setWebVisitorToken] = useState<string | null>(null);
 
   const isAdmin = me?.role === "admin" || me?.isSuperAdmin === true;
   const isPersonalWorkspace = me?.workspaceKind === "personal";
@@ -82,7 +89,29 @@ export function SettingsPage() {
       }
       const resendRes = await api("/api/v1/organization/integrations/resend/domains");
       setResendDomains(resendRes.data as ResendDomain[]);
+      const webVisitorRes = await api("/api/v1/organization/integrations/web-visitors");
+      const integration = webVisitorRes.data as WebVisitorIntegration;
+      setWebVisitors(integration);
+      setWebVisitorPublicKey(integration.publicKey ?? "");
+      setWebVisitorEnabled(integration.enabled);
+      setWebVisitorCreateContacts(integration.settings.createContacts);
+      setWebVisitorCreateCompanies(integration.settings.createCompanies);
     }
+  }
+
+  async function saveWebVisitors(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError(null); setMessage(null);
+    try {
+      const res = await api("/api/v1/organization/integrations/web-visitors", { method: "PUT", body: JSON.stringify({ enabled: webVisitorEnabled, publicKey: webVisitorPublicKey || undefined, settings: { createContacts: webVisitorCreateContacts, createCompanies: webVisitorCreateCompanies } }) });
+      const integration = res.data as WebVisitorIntegration;
+      setWebVisitors(integration); setWebVisitorToken(integration.webhookToken ?? null); setMessage("WV App Web Visitors settings saved.");
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not save WV App settings"); } finally { setBusy(false); }
+  }
+
+  async function rotateWebVisitorToken() {
+    setBusy(true); setError(null); setMessage(null);
+    try { const res = await api("/api/v1/organization/integrations/web-visitors/rotate-webhook-token", { method: "POST", body: "{}" }); setWebVisitorToken(String(res.data.webhookToken)); setMessage("Webhook token rotated. Update the sender before the old URL is used again."); }
+    catch (err) { setError(err instanceof Error ? err.message : "Could not rotate webhook token"); } finally { setBusy(false); }
   }
 
   async function addResendDomain(event: FormEvent) {
@@ -245,6 +274,23 @@ export function SettingsPage() {
           {isPersonalWorkspace ? " · Visible only to you" : ""}
         </p>
       </section>
+
+      {isAdmin ? (
+        <section className="panel" style={{ marginTop: 15 }}>
+          <p className="eyebrow">WV App</p><h3>Web Visitors</h3>
+          <p className="muted">Identify website visitors and record each unique visit on the matched contact, or on the company when no contact is safely resolved. LinkedIn identifiers are matched only when WV App supplies them; Loop does not scrape LinkedIn.</p>
+          <form className="stack-form" style={{ boxShadow: "none", border: 0, padding: 0 }} onSubmit={saveWebVisitors}>
+            <label>WV App public key<input value={webVisitorPublicKey} onChange={(event) => setWebVisitorPublicKey(event.target.value)} placeholder="R6G5YH5RVG65" /></label>
+            <label><input type="checkbox" checked={webVisitorEnabled} onChange={(event) => setWebVisitorEnabled(event.target.checked)} /> Enable Web Visitors ingestion</label>
+            <label><input type="checkbox" checked={webVisitorCreateCompanies} onChange={(event) => setWebVisitorCreateCompanies(event.target.checked)} /> Create companies for valid unmatched domains</label>
+            <label><input type="checkbox" checked={webVisitorCreateContacts} onChange={(event) => setWebVisitorCreateContacts(event.target.checked)} /> Create contacts only when a valid business email is supplied</label>
+            <div className="form-row"><button className="primary" type="submit" disabled={busy}>{busy ? "Saving…" : "Save WV App settings"}</button>{webVisitors?.configured ? <button className="secondary" type="button" disabled={busy} onClick={() => void rotateWebVisitorToken()}>Rotate webhook token</button> : null}</div>
+          </form>
+          {webVisitors?.loaderSnippet ? <><h4>Website loader</h4><code style={{ display: "block", overflowWrap: "anywhere" }}>{webVisitors.loaderSnippet}</code></> : null}
+          {webVisitorToken ? <><h4>One-time webhook URL</h4><code style={{ display: "block", overflowWrap: "anywhere" }}>{`${API_BASE || window.location.origin}/api/v1/webhooks/web-visitors/${webVisitorToken}`}</code><p className="muted">Copy this now. Loop stores only its hash and cannot display it again.</p></> : null}
+          <p className="muted">Last webhook: {webVisitors?.lastWebhookAt ? new Date(webVisitors.lastWebhookAt).toLocaleString() : "Never"}</p>
+        </section>
+      ) : null}
 
       <section className="panel" style={{ marginTop: 15 }}>
         <div className="panel-heading">

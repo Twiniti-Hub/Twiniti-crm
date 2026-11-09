@@ -19,6 +19,7 @@ export function registerAuthHook(app: FastifyInstance, db: Db, env: AppEnv, pool
       || url === "/docs"
       || url.startsWith("/documentation")
       || url === "/api/v1/webhooks/resend"
+      || url.startsWith("/api/v1/webhooks/web-visitors/")
       || url === "/api/v1/webhooks/stripe"
       || url.startsWith("/api/v1/public/")
       || url === "/mcp"

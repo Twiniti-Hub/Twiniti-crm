@@ -35,7 +35,7 @@ import {
   updateContact,
   type Db
 } from "@twiniti/db";
-import { and as andOp, eq as eqOp, isNull } from "drizzle-orm";
+import { and as andOp, desc, eq as eqOp, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { audit, requireActor, requireOrgId, requireUserRole, sendError } from "../auth-hook.js";
 
@@ -48,6 +48,9 @@ function mapContact(row: {
   lifecycleStage: string | null;
   properties: unknown;
   version: number;
+  webVisitorVisitCount?: number;
+  webVisitorFirstVisitedAt?: Date | null;
+  webVisitorLastVisitedAt?: Date | null;
 }) {
   return {
     id: row.id,
@@ -57,7 +60,12 @@ function mapContact(row: {
     lastName: row.lastName,
     lifecycleStage: row.lifecycleStage,
     properties: (row.properties ?? {}) as Record<string, unknown>,
-    version: row.version
+    version: row.version,
+    webVisitors: {
+      visitCount: row.webVisitorVisitCount ?? 0,
+      firstVisitedAt: row.webVisitorFirstVisitedAt?.toISOString() ?? null,
+      lastVisitedAt: row.webVisitorLastVisitedAt?.toISOString() ?? null
+    }
   };
 }
 
@@ -70,6 +78,9 @@ function mapCompany(row: {
   properties: unknown;
   version: number;
   updatedAt?: Date;
+  webVisitorVisitCount?: number;
+  webVisitorFirstVisitedAt?: Date | null;
+  webVisitorLastVisitedAt?: Date | null;
 }) {
   return {
     id: row.id,
@@ -79,7 +90,12 @@ function mapCompany(row: {
     lifecycleStage: row.lifecycleStage ?? null,
     properties: (row.properties ?? {}) as Record<string, unknown>,
     version: row.version,
-    updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : undefined
+    updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : undefined,
+    webVisitors: {
+      visitCount: row.webVisitorVisitCount ?? 0,
+      firstVisitedAt: row.webVisitorFirstVisitedAt?.toISOString() ?? null,
+      lastVisitedAt: row.webVisitorLastVisitedAt?.toISOString() ?? null
+    }
   };
 }
 
@@ -362,6 +378,23 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
           contacts: associated.map((row) => mapContact(row.contact))
         }
       };
+    } catch (error) {
+      return sendError(reply, error);
+    }
+  });
+
+  app.get("/api/v1/companies/:id/web-visits", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      if (actor.type === "agent") assertScope(actor, "companies:read");
+      const organizationId = requireOrgId(actor);
+      const { id } = request.params as { id: string };
+      const rows = await db.select().from(customerEvents).where(andOp(
+        eqOp(customerEvents.organizationId, organizationId),
+        eqOp(customerEvents.companyId, id),
+        eqOp(customerEvents.eventType, "web_visitor.visit")
+      )).orderBy(desc(customerEvents.occurredAt)).limit(50);
+      return { data: rows };
     } catch (error) {
       return sendError(reply, error);
     }

@@ -1,5 +1,16 @@
 # Agent instructions (Twiniti CRM)
 
+## WV App Web Visitors (0.10.55.11)
+
+TWI-1067 adds organization-admin WV App configuration, token-authenticated
+webhook ingestion, deterministic visitor identity resolution, and contact/company
+visit histories. Preserve exactly-one-record attribution: resolved people update
+the contact; otherwise an independently resolved company may be updated. Never
+match a contact from name/title similarity, create a contact without a real email,
+or scrape LinkedIn. `customer_events` is authoritative and summary counters are
+updated only after a unique event insert. Apply additive migration 0025 before
+deploying API/worker/web. See `docs/architecture/WEB_VISITORS.md`.
+
 ## Production email templates (0.10.55.10)
 
 TWI-1061: `emails/hexclave/production` contains eight native Hexclave TSX templates

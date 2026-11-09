@@ -176,6 +176,13 @@
       "when": 1793880000000,
       "tag": "0024_user_license_verification",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794229900052,
+      "tag": "0025_web_visitors",
+      "breakpoints": true
     }
   ]
 }

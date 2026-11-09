@@ -1966,16 +1966,29 @@ export async function touchAgent(db: Db, id: string) {
 
 export async function storeWebhookEvent(
   db: Db,
-  input: { organizationId?: string | null; provider: string; eventType?: string; payload: unknown; signatureValid: boolean }
+  input: { organizationId?: string | null; provider: string; eventType?: string; payload: unknown; signatureValid: boolean; dedupeKey?: string | null }
 ) {
   const [row] = await db.insert(webhookEvents).values({
     organizationId: input.organizationId ?? null,
     provider: input.provider,
     eventType: input.eventType ?? null,
+    dedupeKey: input.dedupeKey ?? null,
     payload: input.payload as Record<string, unknown>,
     signatureValid: input.signatureValid
-  }).returning();
-  return row;
+  }).onConflictDoNothing().returning();
+  if (row) return row;
+  if (input.dedupeKey) {
+    const organizationFilter = input.organizationId
+      ? eq(webhookEvents.organizationId, input.organizationId)
+      : isNull(webhookEvents.organizationId);
+    const [existing] = await db.select().from(webhookEvents).where(and(
+      organizationFilter,
+      eq(webhookEvents.provider, input.provider),
+      eq(webhookEvents.dedupeKey, input.dedupeKey)
+    )).limit(1);
+    if (existing) return existing;
+  }
+  throw new Error("Unable to persist webhook event");
 }
 
 export async function listCampaigns(db: Db, organizationId: string) {

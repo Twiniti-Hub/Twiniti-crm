@@ -144,6 +144,9 @@ export const contacts = pgTable("contacts", {
   lastName: varchar("last_name", { length: 100 }),
   lifecycleStage: varchar("lifecycle_stage", { length: 80 }),
   properties: jsonb("properties").notNull().default({}),
+  webVisitorVisitCount: integer("web_visitor_visit_count").notNull().default(0),
+  webVisitorFirstVisitedAt: timestamp("web_visitor_first_visited_at", { withTimezone: true }),
+  webVisitorLastVisitedAt: timestamp("web_visitor_last_visited_at", { withTimezone: true }),
   version: integer("version").notNull().default(1),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   mergedIntoContactId: uuid("merged_into_contact_id"),
@@ -192,6 +195,9 @@ export const companies = pgTable("companies", {
   industry: varchar("industry", { length: 120 }),
   lifecycleStage: varchar("lifecycle_stage", { length: 80 }),
   properties: jsonb("properties").notNull().default({}),
+  webVisitorVisitCount: integer("web_visitor_visit_count").notNull().default(0),
+  webVisitorFirstVisitedAt: timestamp("web_visitor_first_visited_at", { withTimezone: true }),
+  webVisitorLastVisitedAt: timestamp("web_visitor_last_visited_at", { withTimezone: true }),
   version: integer("version").notNull().default(1),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -514,11 +520,57 @@ export const webhookEvents = pgTable("webhook_events", {
   organizationId: uuid("organization_id").references(() => organizations.id),
   provider: varchar("provider", { length: 50 }).notNull(),
   eventType: varchar("event_type", { length: 120 }),
+  dedupeKey: varchar("dedupe_key", { length: 255 }),
   payload: jsonb("payload").notNull(),
   signatureValid: boolean("signature_valid").notNull().default(false),
   processedAt: timestamp("processed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
-});
+}, (table) => ({
+  providerDedupeIndex: uniqueIndex("webhook_events_provider_dedupe_idx")
+    .on(table.organizationId, table.provider, table.dedupeKey)
+}));
+
+export const webVisitorIntegrations = pgTable("web_visitor_integrations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  enabled: boolean("enabled").notNull().default(false),
+  apiKeyCiphertext: text("api_key_ciphertext"),
+  webhookTokenHash: varchar("webhook_token_hash", { length: 128 }).notNull(),
+  settings: jsonb("settings").notNull().default({}),
+  lastWebhookAt: timestamp("last_webhook_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  organizationIndex: uniqueIndex("web_visitor_integrations_org_idx").on(table.organizationId),
+  tokenIndex: uniqueIndex("web_visitor_integrations_token_idx").on(table.webhookTokenHash)
+}));
+
+export const webVisitorIdentityMappings = pgTable("web_visitor_identity_mappings", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  integrationId: uuid("integration_id").notNull().references(() => webVisitorIntegrations.id),
+  identityFingerprint: varchar("identity_fingerprint", { length: 128 }).notNull(),
+  providerVisitorId: varchar("provider_visitor_id", { length: 255 }),
+  contactId: uuid("contact_id").references(() => contacts.id),
+  companyId: uuid("company_id").references(() => companies.id),
+  resolutionState: varchar("resolution_state", { length: 32 }).notNull().default("unresolved"),
+  confidence: varchar("confidence", { length: 16 }),
+  matchMethod: varchar("match_method", { length: 64 }),
+  candidateContactIds: jsonb("candidate_contact_ids").notNull().default([]),
+  evidence: jsonb("evidence").notNull().default([]),
+  resolverVersion: varchar("resolver_version", { length: 40 }).notNull().default("wv-identity-v1"),
+  firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).defaultNow().notNull(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  reviewedBy: varchar("reviewed_by", { length: 255 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  fingerprintIndex: uniqueIndex("web_visitor_identity_mappings_fingerprint_idx")
+    .on(table.organizationId, table.integrationId, table.identityFingerprint),
+  reviewIndex: index("web_visitor_identity_mappings_review_idx")
+    .on(table.organizationId, table.resolutionState, table.updatedAt)
+}));
 
 export const agentIdentities = pgTable("agent_identities", {
   id: uuid("id").defaultRandom().primaryKey(),

@@ -21,3 +21,17 @@ Company admins connect verified Resend domains under **Email delivery**:
 5. Confirm the table no longer warns that the webhook secret is missing, then send a test BCC.
 
 Full operator checklist: [`docs/operations/RESEND_EMAIL_SETUP.md`](../operations/RESEND_EMAIL_SETUP.md).
+
+## WV App Web Visitors (company admins)
+
+Use **Settings → WV App → Web Visitors** to connect the website visitor feed for the current organization:
+
+1. Enter the WV App public key used by the website loader and save it.
+2. Choose whether Loop may create companies for valid unmatched domains and contacts when WV App supplies a valid business email. Loop never creates a contact from a professional-profile URL alone.
+3. Enable ingestion and copy the one-time webhook URL immediately. Loop stores only the token hash, so the URL cannot be shown again.
+4. Configure WV App to deliver visitor payloads to that regional Loop webhook URL.
+5. Copy the generated website loader into the website's global page template.
+
+Rotate the webhook token if the URL is exposed. Rotation revokes the previous URL immediately. Existing visit events and identity decisions are retained for audit and reconciliation.
+
+Loop can use a WV App-supplied LinkedIn person URL as an exact professional-profile identifier. It does not scrape LinkedIn, use LinkedIn cookies, or infer a person from name, title, or employer similarity. Conflicting email and professional-profile matches are held for admin review rather than attached automatically.
