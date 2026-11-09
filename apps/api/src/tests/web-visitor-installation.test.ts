@@ -1,9 +1,62 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { validateWebVisitorInstallation } from "../web-visitor-installation.js";
+import { requestPinned } from "../web-visitor-installation.js";
+import { buildWebVisitorLoaderSnippet } from "@twiniti/db";
+import { createServer } from "node:http";
+import { once } from "node:events";
+import Fastify from "fastify";
+import { createWebVisitorLimiter, safeRequestSerializers } from "../web-visitor-security.js";
 
 const key = "R6G5YH5RVG65";
 const publicLookup = async () => [{ address: "93.184.216.34", family: 4 }];
+
+test("accepts the actual customer snippet and rejects wrong keys and comments", async () => {
+  const snippet = buildWebVisitorLoaderSnippet({ publicKey: key });
+  for (const [html, expected] of [[snippet, "installed"], [snippet.replace(key, "WRONGKEY"), "missing"], [`<!--${snippet}-->`, "missing"]]) {
+    const result = await validateWebVisitorInstallation({ websiteUrl: "https://example.com", publicKey: key, lookup: publicLookup, fetch: async () => new Response(html, { headers: { "content-type": "text/html" } }) });
+    assert.equal(result.status, expected);
+  }
+});
+
+test("real pinned HTTP transport handles hostname lookup and bodyless responses", async () => {
+  const server = createServer((req, res) => { res.statusCode = Number(req.url?.slice(1)) || 200; res.end(res.statusCode === 200 ? "ok" : undefined); });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    for (const status of [200, 204, 205, 304]) {
+      const response = await requestPinned(new URL(`http://fixture.invalid:${address.port}/${status}`), [{ address: "127.0.0.1", family: 4 }], AbortSignal.timeout(2000));
+      assert.equal(response.status, status);
+      assert.equal(await response.text(), status === 200 ? "ok" : "");
+    }
+  } finally { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
+});
+
+test("webhook limits expire and cannot grow beyond capacity", () => {
+  const allow = createWebVisitorLimiter(2, 2, 100);
+  assert.equal(allow("a", 0), true);
+  assert.equal(allow("a", 1), true);
+  assert.equal(allow("a", 2), false);
+  assert.equal(allow("b", 3), true);
+  assert.equal(allow("c", 4), false);
+  assert.equal(allow("c", 101), true);
+  assert.equal(allow("a", 104), true);
+});
+
+test("Fastify request and error logs do not expose webhook tokens", async () => {
+  const logs: string[] = [];
+  const app = Fastify({ logger: { serializers: safeRequestSerializers, stream: { write: (line: string) => logs.push(line) } } });
+  app.post("/api/v1/webhooks/web-visitors/:token", async (request) => { throw new Error(`Failed ${request.url}`); });
+  try {
+    await app.inject({ method: "POST", url: "/api/v1/webhooks/web-visitors/wv_SECRET" });
+    await app.inject({ method: "POST", url: "/api/v1/webhooks/web-visitors/wv_SECRET", headers: { "content-type": "application/json" }, payload: "{" });
+    assert.ok(logs.length > 0);
+    assert.equal(logs.join("").includes("wv_SECRET"), false);
+    assert.ok(logs.join("").includes("[REDACTED]"));
+  } finally { await app.close(); }
+});
 
 test("reports installed only when the organization loader URL is in HTML", async () => {
   const fetch = async () => new Response(`<script src="https://ddwl4m2hdecbv.cloudfront.net/b/${key}/${key}.js.gz"></script>`, { headers: { "content-type": "text/html" } });

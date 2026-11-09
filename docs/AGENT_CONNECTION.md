@@ -64,6 +64,8 @@ Board and saved-view endpoints introduced for Contacts/Companies Kanban are **us
 
 WV App Web Visitors configuration, installation validation, webhook-token rotation, and ambiguous identity review are also **organization-admin user-only** in revision 0.10.55.12. Agents may read contact timelines using existing scopes, where accepted website visits appear as `web_visitor.visit`; they must not validate customer websites, resolve identities, or rewrite visitor identities.
 
+Revision 0.10.55.13 (TWI-1069): installation instructions remain visible to administrators independently of configuration. Installation validation remains user-only. Never log webhook URLs containing credentials.
+
 The credential is organization-bound. An agent does not choose an organization
 with a header or query parameter, and it cannot cross the organization or
 regional boundary of its credential. Revoke it from the Agents page if it is

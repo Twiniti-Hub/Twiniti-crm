@@ -26,6 +26,8 @@ Full operator checklist: [`docs/operations/RESEND_EMAIL_SETUP.md`](../operations
 
 Use **Settings → WV App → Web Visitors** to connect the website visitor feed for the current organization:
 
+**Install on your website** is always available to organization administrators. Open it at any time to read the instructions, copy the saved installation code, or re-test the website. If no key is available, save it or reload saved settings directly in the card. Email and invitation setup do not control access to the installation card.
+
 1. Enter the WV App public key used by the website loader and save it.
 2. Choose whether Loop may create companies for valid unmatched domains and contacts when WV App supplies a valid business email. Loop never creates a contact from a professional-profile URL alone.
 3. Enable ingestion and copy the one-time webhook URL immediately. Loop stores only the token hash, so the URL cannot be shown again.
@@ -36,5 +38,7 @@ Use **Settings → WV App → Web Visitors** to connect the website visitor feed
 **Installation verified** means the published HTML contains this organization's exact loader URL. The test does not execute JavaScript or create a test visitor. A missing result usually means the site was not published, a cache still serves the old page, the code was installed on a different template, or a tag manager injects it only at runtime. The validator accepts public HTTP(S) pages only; local, private-network, credentialed, non-HTML, oversized, and slow pages are rejected safely.
 
 Rotate the webhook token if the URL is exposed. Rotation revokes the previous URL immediately. Existing visit events and identity decisions are retained for audit and reconciliation.
+
+Revision 0.10.55.13: installation validation supports the code copied from this card. If a request is rate limited, wait a minute before retrying. If an administrator reassigns a visitor, both the previous and new record's visit summaries are recalculated. Operators reviewing older logs should coordinate any necessary webhook-token rotation with the sender to avoid interrupted delivery.
 
 Loop can use a WV App-supplied LinkedIn person URL as an exact professional-profile identifier. It does not scrape LinkedIn, use LinkedIn cookies, or infer a person from name, title, or employer similarity. Conflicting email and professional-profile matches are held for admin review rather than attached automatically.
