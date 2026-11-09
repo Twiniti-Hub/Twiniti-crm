@@ -13,7 +13,7 @@
     "test": "tsx --test src/index.test.ts"
   },
   "dependencies": {
-    "resend": "^4.5.1",
+    "resend": "^6.37.0",
     "zod": "^3.25.67"
   },
   "devDependencies": {
