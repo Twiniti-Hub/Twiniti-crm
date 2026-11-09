@@ -1,0 +1,97 @@
+/* Precision Stark, application only (TWI-1080). The React landing route and
+   standalone marketing app deliberately retain their existing presentation.
+   Scope through the document so dialogs rendered into a portal inherit tokens. */
+:root:has(.shell, .auth-page) {
+  --loop-paper: #fff;
+  --loop-tint: #f9f9f9;
+  --loop-elevated: #f2f2f2;
+  --loop-border: #e5e5e5;
+  --loop-ink: #1a1c1c;
+  --loop-muted: #595c5c;
+  --loop-accent: #ff9902;
+  --loop-radius: 8px;
+  --loop-frame-radius: 16px;
+  --loop-shadow: 0 1px 2px #1a1c1c08, 0 8px 24px #1a1c1c08;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: var(--loop-ink);
+  background: var(--loop-paper);
+  color-scheme: light;
+}
+
+/* Every rule is gated, including generic controls shared with the landing. */
+html:has(.shell, .auth-page) {
+  body, .shell, .auth-page, .content { background: var(--loop-paper); color: var(--loop-ink); }
+  h1, h2, h3, label, .eyebrow, .brand, .navigation-section > p {
+    font-family: "Hanken Grotesk", Inter, sans-serif;
+    color: var(--loop-ink);
+  }
+  h1, h2, h3 { font-weight: 600; letter-spacing: -.035em; }
+  .eyebrow { font-size: 11px; color: var(--loop-muted); }
+  .muted, .hero-copy, .page-intro, .metric-label, .panel small,
+  .metrics small, .scope-label, .workspace-choice legend,
+  .kanban-card-body small, .kanban-hint, .kanban-empty { color: var(--loop-muted); }
+  .accent, .quiet { color: var(--loop-ink); }
+  a:not([class]) { color: var(--loop-ink); text-underline-offset: 3px; }
+  button, input, textarea, select { font-family: inherit; }
+  input, textarea, select, .scope-picker summary {
+    background: var(--loop-paper); color: var(--loop-ink);
+    border-color: var(--loop-border); border-radius: var(--loop-radius);
+  }
+  input[readonly], textarea[readonly] { background: var(--loop-tint); color: var(--loop-muted); }
+  input:focus, textarea:focus, select:focus { border-color: var(--loop-ink); outline: 2px solid var(--loop-accent); outline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--loop-accent); outline-offset: 3px; }
+  input[type="checkbox"], input[type="radio"] { accent-color: var(--loop-ink); }
+  .primary { background: var(--loop-accent); color: var(--loop-ink); border-radius: var(--loop-radius); }
+  .primary:hover:not(:disabled) { box-shadow: inset 0 0 0 2px var(--loop-ink); }
+  .secondary, .sign-out {
+    background: var(--loop-paper); color: var(--loop-ink);
+    border: 1px solid var(--loop-border); border-radius: var(--loop-radius);
+  }
+  .secondary:hover:not(:disabled), .sign-out:hover { background: var(--loop-elevated); color: var(--loop-ink); }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+  .sidebar { background: var(--loop-tint); color: var(--loop-ink); border-right: 1px solid var(--loop-border); }
+  .brand, .account-name { color: var(--loop-ink); }
+  .brand-loop-logo-light, .sidebar .brand-loop-logo-light { display: block; }
+  .brand-loop-logo-dark, .sidebar .brand-loop-logo-dark { display: none; }
+  .workspace-context, .workspace-switcher select, .navigation-disclosure {
+    background: var(--loop-paper); color: var(--loop-ink); border-color: var(--loop-border);
+    border-radius: var(--loop-radius);
+  }
+  .workspace-context:hover { background: var(--loop-elevated); }
+  .workspace-context strong, .navigation-disclosure summary { color: var(--loop-ink); }
+  .workspace-context span, .workspace-switcher-label, .sidebar-footer,
+  .navigation-section > p, .navigation-disclosure summary::after { color: var(--loop-muted); }
+  .navigation-section-admin { border-color: var(--loop-border); }
+  .sidebar nav a { color: var(--loop-muted); border-radius: var(--loop-radius); }
+  .sidebar nav a:hover, .sidebar nav a.active { background: var(--loop-elevated); color: var(--loop-ink); }
+  .sidebar nav a.active { box-shadow: inset 3px 0 var(--loop-ink); font-weight: 600; }
+  .panel, .metrics article, .stack-form, .table-wrap, .app-dialog {
+    background: var(--loop-paper); color: var(--loop-ink); border-color: var(--loop-border);
+    border-radius: var(--loop-frame-radius); box-shadow: var(--loop-shadow);
+  }
+  .auth-form-wrap { max-width: 520px; padding-top: 32px; }
+  .auth-form-wrap .stack-form { padding: clamp(20px, 4vw, 32px); gap: 20px; }
+  .auth-form-wrap h1 { font-size: 32px; }
+  .auth-form-wrap p { line-height: 1.6; }
+  .workspace-choice { border-color: var(--loop-border); border-radius: var(--loop-radius); }
+  .hero-card { background: linear-gradient(135deg, var(--loop-paper), var(--loop-elevated)); border: 1px solid var(--loop-border); border-radius: var(--loop-frame-radius); box-shadow: var(--loop-shadow); }
+  .hero-orbit { display: none; }
+  .avatar, .tool-icon, .property-badge { background: var(--loop-elevated); color: var(--loop-ink); }
+  .tool-list > div, .inset-panel, .property-input-card, .property-list-item,
+  .scope-options, .kanban-lane, .kanban-card {
+    background: var(--loop-tint); color: var(--loop-ink); border-color: var(--loop-border);
+  }
+  .property-list-item.active { border-color: var(--loop-ink); background: var(--loop-elevated); box-shadow: none; }
+  .property-input-title, .scope-option b, .help-steps strong { color: var(--loop-ink); }
+  .property-code, .scope-option small { color: var(--loop-muted); }
+  .scope-option:hover, .kanban-lane.is-over, .kanban-card.is-dragging { background: var(--loop-elevated); }
+  th { background: var(--loop-tint); color: var(--loop-muted); }
+  th, td { border-color: var(--loop-border); }
+  .side-card { background: var(--loop-paper); color: var(--loop-ink); border-color: var(--loop-border); box-shadow: -8px 0 32px #1a1c1c14; }
+  .side-card-header { border-color: var(--loop-border); }
+  .side-card-backdrop, .app-dialog::backdrop { background: #1a1c1c66; }
+  .wv-setup-step { background: var(--loop-tint); border-color: var(--loop-border); border-radius: var(--loop-radius); padding: 16px; }
+  .install-code, .code-block { background: var(--loop-elevated); color: var(--loop-ink); border: 1px solid var(--loop-border); border-radius: var(--loop-radius); }
+  .installation-result { background: #fff8e8; color: #624800; border-color: #e6ca86; }
+  .installation-result.success { background: #eef8f0; color: #215532; border-color: #b2d4bd; }
+}

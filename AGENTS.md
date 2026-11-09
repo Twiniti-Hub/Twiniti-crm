@@ -1,5 +1,15 @@
 # Agent instructions (Twiniti CRM)
 
+## Application design (0.10.55.16)
+
+TWI-1080 (application scope only): `apps/web/src/application-theme.css` owns
+Precision Stark tokens and overrides, gated by `.shell` or `.auth-page` presence.
+Keep both landing implementations unchanged. Preserve the light theme under
+dark OS preference, accessible focus rings, semantic feedback colors, and
+mobile navigation. See `docs/architecture/APPLICATION_THEME.md`.
+Load the Google font stylesheet only while an application or authentication
+surface is mounted; the public React landing route must not request it.
+
 ## WV App saved setup (0.10.55.14)
 
 TWI-1079: Org Admin provisions the website key; installation shows it read-only.
