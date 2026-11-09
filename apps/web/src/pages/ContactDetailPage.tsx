@@ -22,6 +22,7 @@ type Contact = {
   lifecycleStage: string | null;
   properties: Record<string, unknown>;
   version: number;
+  webVisitors?: { visitCount: number; firstVisitedAt: string | null; lastVisitedAt: string | null };
 };
 
 type TimelineEvent = {
@@ -178,6 +179,7 @@ function groupHistory(rows: PropertyHistory[]): ChangeSet[] {
 }
 
 function timelineActivityLabel(event: TimelineEvent): string {
+  if (event.eventType === "web_visitor.visit") return "Website visit";
   if (event.eventType === "note.created") return "Note";
   if (isImportedMarketingEvent(event)) return "Imported marketing";
   if (event.eventType.startsWith("email.")) {
@@ -213,6 +215,9 @@ function emailBodies(event: TimelineEvent): { text: string | null; html: string 
 }
 
 function timelineDetails(event: TimelineEvent): string {
+  if (event.eventType === "web_visitor.visit") {
+    return typeof event.payload.capturedUrl === "string" ? event.payload.capturedUrl : "Website visit";
+  }
   if (event.eventType === "note.created") {
     return typeof event.payload.body === "string" ? event.payload.body : "";
   }
@@ -220,6 +225,13 @@ function timelineDetails(event: TimelineEvent): string {
   const fromEmail = typeof event.payload.fromEmail === "string" ? event.payload.fromEmail : null;
   if (subject) return subject;
   return fromEmail ?? event.source;
+}
+
+function timelineOccurredAt(event: TimelineEvent): string {
+  const date = new Date(event.occurredAt);
+  return event.eventType === "web_visitor.visit" && event.payload.timePrecision === "date"
+    ? date.toLocaleDateString()
+    : date.toLocaleString();
 }
 
 export function ContactDetailPage() {
@@ -415,6 +427,14 @@ export function ContactDetailPage() {
       {error ? <div className="banner error">{error}</div> : null}
       {contact ? (
         <>
+          <section className="panel" style={{ marginBottom: 16 }}>
+            <p className="eyebrow">Web Visitors</p>
+            <h3>Website visits: {contact.webVisitors?.visitCount ?? 0}</h3>
+            <p className="muted">
+              First visit: {contact.webVisitors?.firstVisitedAt ? new Date(contact.webVisitors.firstVisitedAt).toLocaleString() : "—"}
+              {" · "}Last visit: {contact.webVisitors?.lastVisitedAt ? new Date(contact.webVisitors.lastVisitedAt).toLocaleString() : "—"}
+            </p>
+          </section>
           <form className="stack-form" onSubmit={onSave}>
             <div className="panel-heading">
               <div>
@@ -549,7 +569,7 @@ export function ContactDetailPage() {
                         <span className={`activity-badge${isEmail ? " activity-badge-email" : ""}${isNote ? " activity-badge-note" : ""}${isImported ? " activity-badge-imported" : ""}`}>
                           {timelineActivityLabel(event)}
                         </span>
-                        <time className="muted">{new Date(event.occurredAt).toLocaleString()}</time>
+                        <time className="muted">{timelineOccurredAt(event)}</time>
                       </div>
                       {isImported ? (
                         <>

@@ -28,6 +28,7 @@
     {"file":"0021_run_credentials.sql","status":"journaled","sha256":"428b5c37c11feb4173a9232cca41c50180034d5aee5ca4afe479bdabbe16901f"},
     {"file":"0022_organization_workspace_kind.sql","status":"journaled","sha256":"5d300908b255ce0775d74255cfba8bc54884b3c308a894111dfd824bae156d67"},
     {"file":"0023_crm_users_multi_membership.sql","status":"journaled","sha256":"e3a1f958c2a353d2a17043809bda892d16bbef77c8ba064731405da7d50fba03"},
-    {"file":"0024_user_license_verification.sql","status":"journaled","sha256":"39a22243e4267b44f6322017ee1aa3927c981c7f5f3863b2a9f4a03c6a5ed954"}
+    {"file":"0024_user_license_verification.sql","status":"journaled","sha256":"39a22243e4267b44f6322017ee1aa3927c981c7f5f3863b2a9f4a03c6a5ed954"},
+    {"file":"0025_web_visitors.sql","status":"journaled","sha256":"ee7d982c40079f93982a368184f5a6e41c3902eac0f9ab483d5274620749af06"}
   ]
 }

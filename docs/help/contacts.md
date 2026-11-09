@@ -21,3 +21,8 @@ Deleting a property is destructive to the current contact values. Review the imp
 ## Archive records
 
 Archive a contact when it should no longer be active but its history must remain available. Archived records are excluded from normal active work without erasing their history.
+## Website visits
+
+When WV App Web Visitors is enabled, a safely resolved person has a **Web Visitors** summary on the contact profile. It shows the unique visit count and first/last visit dates. Each accepted visit appears on the contact timeline with the captured page, referral information when supplied, and the provider's date/time precision.
+
+Loop attributes one visit to one primary CRM record. A contact-level visit is not also counted on the company. Duplicate webhook deliveries do not increase the count.

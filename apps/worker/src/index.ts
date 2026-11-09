@@ -9,7 +9,7 @@ import {
   resolveWorkerPollingConfig,
   resolveWorkerRuntimeEnvironment
 } from "./pollingConfig.js";
-import type { RegionCode } from "@twiniti/contracts";
+import { webVisitorIncomingPayloadSchema, webVisitorSettingsSchema, type RegionCode } from "@twiniti/contracts";
 import {
   createLicenseApiClient,
   type AgentProvisionInput,
@@ -64,6 +64,8 @@ import {
   upsertExternalRecordId,
   upsertPropertyDefinitionFromHubspot,
   webhookEvents,
+  webVisitorIntegrations,
+  processWebVisitorProfile,
   workflowEnrollments,
   workflowRuns,
   workflows,
@@ -763,6 +765,29 @@ async function processResendWebhook(payload: { webhookEventId: string; organizat
   }).where(eq(webhookEvents.id, event.id));
 }
 
+async function processWebVisitorWebhook(payload: { webhookEventId: string; organizationId: string; integrationId: string }) {
+  const [event] = await db.select().from(webhookEvents).where(and(
+    eq(webhookEvents.id, payload.webhookEventId),
+    eq(webhookEvents.organizationId, payload.organizationId),
+    eq(webhookEvents.provider, "web_visitors")
+  )).limit(1);
+  if (!event || event.processedAt) return;
+  const [integration] = await db.select().from(webVisitorIntegrations).where(and(
+    eq(webVisitorIntegrations.id, payload.integrationId),
+    eq(webVisitorIntegrations.organizationId, payload.organizationId)
+  )).limit(1);
+  if (!integration) throw new Error("WV App integration not found");
+  const profile = webVisitorIncomingPayloadSchema.parse(event.payload);
+  const settings = webVisitorSettingsSchema.parse(integration.settings ?? {});
+  await processWebVisitorProfile(db, {
+    organizationId: payload.organizationId,
+    integrationId: integration.id,
+    profile,
+    settings
+  });
+  await db.update(webhookEvents).set({ processedAt: new Date() }).where(eq(webhookEvents.id, event.id));
+}
+
 async function processReceivedEmail(
   body: Record<string, unknown>,
   data: Record<string, unknown>,
@@ -1134,6 +1159,10 @@ async function handleJob(kind: string, payload: Record<string, unknown>, organiz
       return;
     case "webhook.resend.process":
       await processResendWebhook(payload as { webhookEventId: string; organizationId?: string | null; receivingDomain?: string });
+      return;
+    case "webhook.web_visitors.process":
+      if (!organizationId || organizationId !== payload.organizationId) throw new Error("WV App webhook workspace mismatch");
+      await processWebVisitorWebhook(payload as { webhookEventId: string; organizationId: string; integrationId: string });
       return;
     case "workflow.trigger.form_submit":
     case "workflow.run_step":

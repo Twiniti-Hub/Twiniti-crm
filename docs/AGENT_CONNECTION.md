@@ -62,6 +62,8 @@ next request with that credential.
 
 Board and saved-view endpoints introduced for Contacts/Companies Kanban are **user-only** in this release. Agent credentials do not receive board-view scopes; continue using contact create/update/read for record changes.
 
+WV App Web Visitors configuration, webhook-token rotation, and ambiguous identity review are also **organization-admin user-only** in revision 0.10.55.11. Agents may read contact timelines using existing scopes, where accepted website visits appear as `web_visitor.visit`; they must not attempt to resolve or rewrite visitor identities.
+
 The credential is organization-bound. An agent does not choose an organization
 with a header or query parameter, and it cannot cross the organization or
 regional boundary of its credential. Revoke it from the Agents page if it is
