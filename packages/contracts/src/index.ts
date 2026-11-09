@@ -986,6 +986,11 @@ export const updateWebVisitorIntegrationSchema = z.object({
   publicKey: z.string().trim().regex(/^[A-Za-z0-9_-]{6,100}$/).optional(),
   settings: webVisitorSettingsSchema.omit({ publicKey: true }).optional()
 }).strict();
+export const validateWebVisitorInstallationSchema = z.object({
+  url: z.string().trim().url().max(2048).refine((value) => {
+    try { return ["http:", "https:"].includes(new URL(value).protocol); } catch { return false; }
+  }, "Website URL must use HTTP or HTTPS")
+}).strict();
 export const reviewWebVisitorResolutionSchema = z.object({
   action: z.enum(["attach", "reject"]),
   contactId: z.string().uuid().nullable().optional(),
@@ -1054,3 +1059,4 @@ export type HubspotContactsImportBody = z.infer<typeof hubspotContactsImportBody
 export type AgentToolName = z.infer<typeof agentToolNameSchema>;
 export type WebVisitorProfile = z.infer<typeof webVisitorIncomingPayloadSchema>;
 export type WebVisitorSettings = z.infer<typeof webVisitorSettingsSchema>;
+export type ValidateWebVisitorInstallation = z.infer<typeof validateWebVisitorInstallationSchema>;

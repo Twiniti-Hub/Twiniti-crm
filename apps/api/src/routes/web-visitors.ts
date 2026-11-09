@@ -4,6 +4,7 @@ import { and, desc, eq } from "drizzle-orm";
 import {
   reviewWebVisitorResolutionSchema,
   updateWebVisitorIntegrationSchema,
+  validateWebVisitorInstallationSchema,
   webVisitorIncomingPayloadSchema,
   webVisitorSettingsSchema
 } from "@twiniti/contracts";
@@ -22,6 +23,7 @@ import {
   type Db
 } from "@twiniti/db";
 import { requireActor, requireOrgId, requireUserRole, sendError } from "../auth-hook.js";
+import { validateWebVisitorInstallation } from "../web-visitor-installation.js";
 
 function mintWebhookToken() {
   const token = `wv_${randomBytes(32).toString("base64url")}`;
@@ -103,6 +105,22 @@ export async function registerWebVisitorRoutes(app: FastifyInstance, db: Db) {
       if (!row) return reply.code(404).send({ error: { code: "not_found", message: "WV App is not configured" } });
       await writeAudit(db, { organizationId, actorType: "user", actorId: actor.id, action: "web_visitors.webhook_token_rotated", entityType: "web_visitor_integration", entityId: row.id });
       return { data: { webhookToken: minted.token } };
+    } catch (error) { return sendError(reply, error); }
+  });
+
+  app.post("/api/v1/organization/integrations/web-visitors/validate-installation", async (request, reply) => {
+    try {
+      const actor = requireActor(request);
+      requireUserRole(actor, "admin");
+      const organizationId = requireOrgId(actor);
+      const input = validateWebVisitorInstallationSchema.parse(request.body);
+      const [integration] = await db.select().from(webVisitorIntegrations).where(eq(webVisitorIntegrations.organizationId, organizationId)).limit(1);
+      const publicKey = typeof (integration?.settings as Record<string, unknown> | null)?.publicKey === "string"
+        ? String((integration!.settings as Record<string, unknown>).publicKey) : null;
+      if (!integration || !publicKey) return reply.code(409).send({ error: { code: "not_configured", message: "Save the WV App public key before validating installation." } });
+      const result = await validateWebVisitorInstallation({ websiteUrl: input.url, publicKey });
+      await writeAudit(db, { organizationId, actorType: "user", actorId: actor.id, action: "web_visitors.installation_validated", entityType: "web_visitor_integration", entityId: integration.id, metadata: { hostname: result.hostname, status: result.status } });
+      return { data: result };
     } catch (error) { return sendError(reply, error); }
   });
 
