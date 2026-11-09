@@ -1,5 +1,10 @@
 # Settings and team access
 
+Revision 0.10.55.15: the application uses a light interface with orange primary
+buttons and visible keyboard focus. Settings and installation instructions use
+the same appearance even when your device prefers dark mode. Navigation and
+permissions are unchanged.
+
 Open **Settings** to view the current workspace (company or personal), your role, and members.
 
 Company admins can invite a member by email and choose **Member** or **Company Admin**. Admins can also change an existing member's role. Give admin access only to people who need to manage team access, billing, or workspace configuration.

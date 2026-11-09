@@ -7,6 +7,7 @@ import App from "./App";
 import { authConfigured, hexclaveApp } from "./hexclave/client";
 import "./styles.css";
 import "./analytics-consent.css";
+import "./application-theme.css";
 import {
   getAnalyticsConsent,
   initializeGoogleAnalytics,
