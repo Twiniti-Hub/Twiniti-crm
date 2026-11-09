@@ -223,6 +223,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .install-code-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .install-code { margin: 0; padding: 14px; border-radius: 10px; background: #102b31; color: #dcece7; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; }
 .install-steps { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
+.wv-setup-step { display: grid; gap: 12px; padding: 16px; border: 1px solid #9bb8ad; border-radius: 12px; }
+.wv-setup-step label { display: grid; gap: 6px; }
+.wv-setup-step input[readonly] { width: 100%; box-sizing: border-box; }
 .install-validation { margin: 0; box-shadow: none; }
 .installation-result { display: grid; gap: 5px; padding: 13px 14px; border: 1px solid #e1c978; border-radius: 10px; background: #fff9df; }
 .installation-result.success { border-color: #9acdbd; background: #eef9f4; }

@@ -67,6 +67,9 @@ export function SettingsPage() {
   const [installationResult, setInstallationResult] = useState<InstallationValidation | null>(null);
   const [installationBusy, setInstallationBusy] = useState(false);
   const [loaderCopied, setLoaderCopied] = useState(false);
+  const [webhookCopied, setWebhookCopied] = useState(false);
+  const [replaceWebsiteKey, setReplaceWebsiteKey] = useState(false);
+  const [confirmWebhookRotation, setConfirmWebhookRotation] = useState(false);
 
   const isAdmin = me?.role === "admin" || me?.isSuperAdmin === true;
   const isPersonalWorkspace = me?.workspaceKind === "personal";
@@ -82,6 +85,7 @@ export function SettingsPage() {
         const result = await api("/api/v1/organization/integrations/web-visitors");
         const integration = result.data as WebVisitorIntegration;
         setWebVisitors(integration);
+        setWebVisitorToken(integration.webhookToken ?? null);
         setWebVisitorPublicKey(integration.publicKey ?? "");
         setWebVisitorEnabled(integration.enabled);
         setWebVisitorCreateContacts(integration.settings.createContacts);
@@ -115,13 +119,13 @@ export function SettingsPage() {
     try {
       const res = await api("/api/v1/organization/integrations/web-visitors", { method: "PUT", body: JSON.stringify({ enabled: webVisitorEnabled, publicKey: webVisitorPublicKey || undefined, settings: { createContacts: webVisitorCreateContacts, createCompanies: webVisitorCreateCompanies } }) });
       const integration = res.data as WebVisitorIntegration;
-      setWebVisitors(integration); setWebVisitorToken(integration.webhookToken ?? null); setMessage("WV App Web Visitors settings saved.");
+      setWebVisitors(integration); setWebVisitorPublicKey(integration.publicKey ?? ""); setWebVisitorToken(integration.webhookToken ?? null); setReplaceWebsiteKey(false); setLoaderCopied(false); setInstallationResult(null); setMessage("WV App settings and webhook saved.");
     } catch (err) { setError(err instanceof Error ? err.message : "Could not save WV App settings"); } finally { setBusy(false); }
   }
 
   async function rotateWebVisitorToken() {
     setBusy(true); setError(null); setMessage(null);
-    try { const res = await api("/api/v1/organization/integrations/web-visitors/rotate-webhook-token", { method: "POST", body: "{}" }); setWebVisitorToken(String(res.data.webhookToken)); setMessage("Webhook token rotated. Update the sender before the old URL is used again."); }
+    try { const res = await api("/api/v1/organization/integrations/web-visitors/rotate-webhook-token", { method: "POST", body: "{}" }); setWebVisitors(res.data as WebVisitorIntegration); setWebVisitorToken(String(res.data.webhookToken)); setConfirmWebhookRotation(false); setWebhookCopied(false); setMessage("New webhook saved. Update the sender with this URL. Your website code has not changed."); }
     catch (err) { setError(err instanceof Error ? err.message : "Could not rotate webhook token"); } finally { setBusy(false); }
   }
 
@@ -314,14 +318,14 @@ export function SettingsPage() {
           <p className="eyebrow">WV App</p><h3>Web Visitors</h3>
           <p className="muted">Identify website visitors and record each unique visit on the matched contact, or on the company when no contact is safely resolved. LinkedIn identifiers are matched only when WV App supplies them; Loop does not scrape LinkedIn.</p>
           <form className="stack-form" style={{ boxShadow: "none", border: 0, padding: 0 }} onSubmit={saveWebVisitors}>
-            <label>WV App public key<input value={webVisitorPublicKey} onChange={(event) => setWebVisitorPublicKey(event.target.value)} placeholder="R6G5YH5RVG65" /></label>
+            <label>Website key provisioned by your Org Admin<input value={webVisitorPublicKey} readOnly={Boolean(webVisitors?.publicKey) && !replaceWebsiteKey} onChange={(event) => setWebVisitorPublicKey(event.target.value)} pattern="[A-Za-z0-9_-]{6,100}" placeholder="Enter your organization's website key" /></label>
+            {webVisitors?.publicKey && !replaceWebsiteKey ? <button className="secondary" type="button" onClick={() => setReplaceWebsiteKey(true)}>Replace website key</button> : null}
             <label><input type="checkbox" checked={webVisitorEnabled} onChange={(event) => setWebVisitorEnabled(event.target.checked)} /> Enable Web Visitors ingestion</label>
             <label><input type="checkbox" checked={webVisitorCreateCompanies} onChange={(event) => setWebVisitorCreateCompanies(event.target.checked)} /> Create companies for valid unmatched domains</label>
             <label><input type="checkbox" checked={webVisitorCreateContacts} onChange={(event) => setWebVisitorCreateContacts(event.target.checked)} /> Create contacts only when a valid business email is supplied</label>
-            <div className="form-row"><button className="primary" type="submit" disabled={busy}>{busy ? "Saving…" : "Save WV App settings"}</button>{webVisitors?.configured ? <button className="secondary" type="button" disabled={busy} onClick={() => void rotateWebVisitorToken()}>Rotate webhook token</button> : null}</div>
+            <div className="form-row"><button className="primary" type="submit" disabled={busy}>{busy ? "Saving…" : "Save organization settings"}</button></div>
           </form>
           <div className="form-row" style={{ marginTop: 12 }}><button className="secondary" type="button" onClick={() => { setInstallationResult(null); setInstallationOpen(true); }}>Install on your website</button></div>
-          {webVisitorToken ? <><h4>One-time webhook URL</h4><code style={{ display: "block", overflowWrap: "anywhere" }}>{`${API_BASE || window.location.origin}/api/v1/webhooks/web-visitors/${webVisitorToken}`}</code><p className="muted">Copy this now. Loop stores only its hash and cannot display it again.</p></> : null}
           <p className="muted">Last webhook: {webVisitors?.lastWebhookAt ? new Date(webVisitors.lastWebhookAt).toLocaleString() : "Never"}</p>
         </section>
       ) : null}
@@ -629,23 +633,38 @@ export function SettingsPage() {
               <button className="secondary" type="button" aria-label="Close installation instructions" onClick={() => setInstallationOpen(false)}>Close</button>
             </div>
             <div className="side-card-body">
+              {error ? <p className="banner error" role="alert">{error}</p> : null}
+              {message ? <p className="banner info" role="status">{message}</p> : null}
+              <section className="wv-setup-step">
+                <h3>1. Generate webhook</h3>
+                <p>Your webhook is saved for this organization. You can return and copy it at any time.</p>
+                {webVisitorToken ? <>
+                  <label>Saved webhook URL<input readOnly value={`${API_BASE || window.location.origin}/api/v1/webhooks/web-visitors/${webVisitorToken}`} /></label>
+                  <button className="secondary" type="button" onClick={() => void navigator.clipboard.writeText(`${API_BASE || window.location.origin}/api/v1/webhooks/web-visitors/${webVisitorToken}`).then(() => setWebhookCopied(true)).catch(() => setError("Could not copy. Select the webhook URL and copy it manually."))}>{webhookCopied ? "Copied" : "Copy webhook URL"}</button>
+                </> : !webVisitors?.configured ? <form onSubmit={saveWebVisitors}><button className="primary" disabled={busy}>Generate and save webhook</button></form> : <p>Your earlier webhook was stored as a one-way hash. Rotate it once to save a URL you can retrieve here.</p>}
+                {webVisitors?.configured ? <button className="secondary" type="button" disabled={busy} onClick={() => setConfirmWebhookRotation(true)}>Rotate webhook</button> : null}
+                {confirmWebhookRotation ? <div role="alert"><p>Rotation replaces the current webhook immediately. Update your sender with the new URL. Your website key and code stay the same.</p><button className="primary" type="button" disabled={busy} onClick={() => void rotateWebVisitorToken()}>Rotate and save</button><button className="secondary" type="button" onClick={() => setConfirmWebhookRotation(false)}>Cancel</button></div> : null}
+              </section>
+              <section className="wv-setup-step">
+              <h3>2. Install on website</h3>
+              <label>Saved website key<input readOnly value={webVisitors?.publicKey ?? ""} placeholder="Provisioned by your Org Admin in organization settings" /></label>
               <p>Add this code to the global template for every public page you want to track. Place it after your consent controls and before the closing <code>&lt;/body&gt;</code> tag, or in your site's global head if that is how scripts are managed.</p>
-              {!webVisitors?.loaderSnippet ? <form className="stack-form" onSubmit={saveWebVisitors}>
-                <p>Save your organization's public key to generate the installation code.</p>
-                <label>WV App public key<input value={webVisitorPublicKey} onChange={(event) => setWebVisitorPublicKey(event.target.value)} required pattern="[A-Za-z0-9_-]{6,100}" /></label>
-                <button className="primary" type="submit" disabled={busy}>Save public key</button>
-                <button className="secondary" type="button" onClick={() => void refresh().catch((err) => setError(err instanceof Error ? err.message : "Could not reload settings"))}>Reload saved settings</button>
-                {error ? <p role="alert">{error}</p> : null}
-              </form> : null}
-              <div className="install-code-heading"><h3>Installation code</h3><button className="secondary" type="button" onClick={() => void copyWebVisitorLoader()}>{loaderCopied ? "Copied" : "Copy code"}</button></div>
+              {!webVisitors?.publicKey ? <button className="secondary" type="button" onClick={() => setInstallationOpen(false)}>Set up key in organization settings</button> : null}
+              </section>
+              <section className="wv-setup-step">
+              <div className="install-code-heading"><h3>3. Your generated code</h3><button className="secondary" type="button" disabled={!webVisitors?.loaderSnippet} onClick={() => void copyWebVisitorLoader()}>{loaderCopied ? "Copied" : "Copy code"}</button></div>
               <pre className="install-code"><code>{webVisitors?.loaderSnippet ?? "Your installation code will appear here after saving the public key."}</code></pre>
               <ol className="install-steps"><li>Paste the code into your website template.</li><li>Publish the website and clear any site or CDN cache.</li><li>Enter a public page URL below and run the validation test.</li></ol>
+              </section>
+              <section className="wv-setup-step">
+              <h3>4. Validate website</h3>
               <form className="stack-form install-validation" onSubmit={validateInstallation}>
                 <label>Public website URL<input type="url" value={installationUrl} onChange={(event) => { setInstallationUrl(event.target.value); setInstallationResult(null); }} placeholder="https://www.example.com/" required /></label>
                 <button className="primary" type="submit" disabled={installationBusy}>{installationBusy ? "Checking…" : "Validate installation"}</button>
               </form>
               {installationResult ? <div className={`installation-result ${installationResult.status === "installed" ? "success" : "warning"}`} role="status"><strong>{installationResult.status === "installed" ? "Installation verified" : "Installation not verified"}</strong><p>{installationResult.message}</p></div> : null}
               <p className="muted">Validation checks only the published HTML for this organization's loader key. It does not execute page scripts or submit a test visitor.</p>
+              </section>
             </div>
           </aside>
         </div>

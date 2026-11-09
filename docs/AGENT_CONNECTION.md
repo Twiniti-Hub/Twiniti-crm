@@ -66,6 +66,8 @@ WV App Web Visitors configuration, installation validation, webhook-token rotati
 
 Revision 0.10.55.13 (TWI-1069): installation instructions remain visible to administrators independently of configuration. Installation validation remains user-only. Never log webhook URLs containing credentials.
 
+Revision 0.10.55.14 (TWI-1079): saved webhook retrieval and rotation are admin-user-only. Installation uses the Org Admin-provisioned website key read-only. Never expose webhook tokens in generated website code, logs, or agent responses.
+
 The credential is organization-bound. An agent does not choose an organization
 with a header or query parameter, and it cannot cross the organization or
 regional boundary of its credential. Revoke it from the Agents page if it is

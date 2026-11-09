@@ -26,18 +26,20 @@ Full operator checklist: [`docs/operations/RESEND_EMAIL_SETUP.md`](../operations
 
 Use **Settings → WV App → Web Visitors** to connect the website visitor feed for the current organization:
 
-**Install on your website** is always available to organization administrators. Open it at any time to read the instructions, copy the saved installation code, or re-test the website. If no key is available, save it or reload saved settings directly in the card. Email and invitation setup do not control access to the installation card.
+**Install on your website** is always available to organization administrators. Email and invitation setup do not control access to it. The Org Admin provisions the website key in organization settings; the installation card displays that saved key read-only.
 
-1. Enter the WV App public key used by the website loader and save it.
-2. Choose whether Loop may create companies for valid unmatched domains and contacts when WV App supplies a valid business email. Loop never creates a contact from a professional-profile URL alone.
-3. Enable ingestion and copy the one-time webhook URL immediately. Loop stores only the token hash, so the URL cannot be shown again.
-4. Configure WV App to deliver visitor payloads to that regional Loop webhook URL.
-5. Select **Install on your website** to open the installation side card, then copy the generated loader into the website's global page template. Place it after your consent controls and before `</body>`, or in the global head when your site platform manages scripts there.
-6. Publish the site and clear any site or CDN cache. Enter a public page URL in the side card and select **Validate installation**.
+Provision the organization's website key once under organization settings, enable ingestion, and save. Record creation preferences remain in those settings. To replace a website key later, use the separate **Replace website key** action.
+
+Open the installation card for this four-step flow:
+
+1. **Generate webhook**: generate and save the URL, or copy the saved URL. It remains available after reload. Configure your sender to deliver visitor payloads to it.
+2. **Install on website**: the saved website key is populated automatically and cannot be edited here.
+3. **Your generated code**: copy the ready-to-use code into the global page template after consent controls, before `</body>` or in your site's script-managed head. No key or secret needs to be inserted manually.
+4. **Validate website**: publish, clear site caches, enter a public page URL, and validate. Return to re-test at any time.
 
 **Installation verified** means the published HTML contains this organization's exact loader URL. The test does not execute JavaScript or create a test visitor. A missing result usually means the site was not published, a cache still serves the old page, the code was installed on a different template, or a tag manager injects it only at runtime. The validator accepts public HTTP(S) pages only; local, private-network, credentialed, non-HTML, oversized, and slow pages are rejected safely.
 
-Rotate the webhook token if the URL is exposed. Rotation revokes the previous URL immediately. Existing visit events and identity decisions are retained for audit and reconciliation.
+Rotate the webhook if its URL is exposed. Confirming rotation saves and displays the replacement immediately; update your sender with that URL. The website key and installation code stay unchanged. Earlier hash-only webhooks need one explicit rotation before Loop can redisplay them; they remain valid until you choose to rotate. Existing visits are retained.
 
 Revision 0.10.55.13: installation validation supports the code copied from this card. If a request is rate limited, wait a minute before retrying. If an administrator reassigns a visitor, both the previous and new record's visit summaries are recalculated. Operators reviewing older logs should coordinate any necessary webhook-token rotation with the sender to avoid interrupted delivery.
 

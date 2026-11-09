@@ -1,5 +1,15 @@
 # Agent instructions (Twiniti CRM)
 
+## WV App saved setup (0.10.55.14)
+
+TWI-1079: Org Admin provisions the website key; installation shows it read-only.
+Never substitute a webhook token for a website key. Apply additive migration
+0026 before the API. Webhook tokens have dedicated AES-GCM ciphertext storage
+and hash lookup; admin responses are no-store. WV_CREDENTIAL_ENCRYPTION_KEY
+falls back to RESEND_CREDENTIAL_ENCRYPTION_KEY; keep the selected key stable.
+Rotation updates stored/displayed webhook credentials without changing website
+code. Never silently rotate legacy hash-only credentials.
+
 ## WV App Web Visitors (0.10.55.12)
 
 Revision 0.10.55.13 / TWI-1069: preserve typed DNS lookup callbacks and socket
