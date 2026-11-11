@@ -1,12 +1,13 @@
+import "./fonts.css";
 import "./styles.css";
 import "./intro-video.css";
-import "./logo-overrides.css";
 import "./analytics-consent.css";
 import {
   injectLoopIntroVideoJsonLd,
   mountLoopIntroVideoPlayers,
   renderLoopIntroVideoMarkup,
 } from "./intro-video";
+import { renderProductVisual } from "./product-visual";
 import {
   getAnalyticsConsent,
   initializeGoogleAnalytics,
@@ -15,94 +16,156 @@ import {
   trackPageView
 } from "@twiniti/analytics";
 
-const environmentLabel = import.meta.env.VITE_ENVIRONMENT_LABEL || "Preview";
+// Trial sub-line shown under both "Start free" buttons. George is deciding the
+// final wording (pending), so change it here only.
+export const TRIAL_SUBLINE = "Try it free for 7 days.";
+
 const googleAnalyticsId =
   import.meta.env.VITE_GOOGLE_ANALYTICS_ID?.trim() || import.meta.env.Google_Analytics?.trim() || "";
 const microsoftClarityId = import.meta.env.VITE_MICROSOFT_CLARITY_ID?.trim() || "xyd0gcl234";
 const analyticsConfigured = Boolean(googleAnalyticsId || microsoftClarityId);
-const darkLogoPath = "/branding/loop-logo-dark.png";
-const lightLogoPath = "/branding/loop-logo-light.png";
 
-function appLink(label: string, path: string, className: string) {
-  return `<a class="${className}" href="${path}">${label}</a>`;
+const SIGN_UP_URL = "https://loop.twiniti.ai/sign-up";
+const SIGN_IN_PATH = "/sign-in";
+const logoPath = "/branding/loop-logo-light.png";
+
+// Legal's approved wording; keep byte for byte.
+const WEB_VISITORS_PRIVACY_LINE =
+  "Load the Web Visitors code only after your site's consent controls allow it. Loop doesn't provide a consent banner. You're responsible for your privacy notice and for any consent, notice, or opt-out the law requires where you operate.";
+
+function startFree(): string {
+  return `
+    <div class="cta-block">
+      <a class="button button-primary" href="${SIGN_UP_URL}">Start free <span aria-hidden="true">→</span></a>
+      <p class="trial-line">${TRIAL_SUBLINE}</p>
+    </div>`;
 }
+
+const features = [
+  ["One record per customer.", "People, companies, custom fields, activity and segments stay connected, so whoever picks up the thread starts with context."],
+  ["Email that logs itself.", "Once you connect your email domain in Settings, BCC your Loop address on an email and Loop adds it to the contact's timeline."],
+  ["Campaigns with a second check.", "In an Organization workspace, build a segment, write the campaign, and send it once another admin approves it."],
+  ["Your data, in your region.", "Choose your country when you sign up, and Loop places your workspace in its US, UK or EU region."],
+  ["Works with AI agents.", "Agents can help with contacts and campaign drafts. A campaign still sends only after an admin approves it."]
+];
+
+const steps = [
+  ["Create your workspace.", "Choose a personal workspace for yourself or an Organization workspace for your team, then pick your country."],
+  ["Bring your contacts.", "Upload a CSV file, or sync Google or iCloud contacts into a personal workspace. Sync only reads; Loop never changes contacts at the source."],
+  ["Follow up.", "Build segments, log email by BCC, run approved campaigns in an Organization workspace, and see matched site visits on the right contact."]
+];
+
+const questions: Array<[string, string[]]> = [
+  ["What does Loop cost?", ["Personal is $9/mo and Organization is $29/mo after the 7-day trial."]],
+  ["Can I bring my existing contacts?", ["Yes. Upload a CSV file. Loop maps the columns it recognizes, and every other column becomes a custom field. In a personal workspace you can also sync Google or iCloud contacts."]],
+  ["What's the difference between a personal workspace and an Organization workspace?", ["A personal workspace is just for you and doesn't take invites. An Organization workspace has members and invites, plus campaigns. You can have both and switch between them."]],
+  ["Who approves a campaign?", ["In an Organization workspace, one person requests approval and a different admin approves it before it sends. Personal workspaces don't include campaigns."]],
+  ["What do I need for the Web Visitors module?", [
+    "You need an account with a visitor-identification service and its website key. Save the key in Loop's Settings, paste the installation code Loop gives you into your site, and publish. Loop then checks that the code is on your published page.",
+    WEB_VISITORS_PRIVACY_LINE
+  ]],
+  ["Where is my data stored?", ["You choose your country when you sign up. UK workspaces go to Loop's UK region, EU countries to its EU region, and every other country to its US region. Your workspace's data is kept in that region."]]
+];
 
 document.querySelector<HTMLDivElement>("#root")!.innerHTML = `
   <div class="site-shell">
-    <nav class="nav container" aria-label="Primary navigation">
-      <a class="brand" href="#top" aria-label="Twiniti Loop home">
-        <img class="brand-logo" src="${darkLogoPath}" alt="" aria-hidden="true" />
-      </a>
-      <div class="nav-links">
-        <a href="#product">Product</a>
-        <a href="#why-loop">Why Loop</a>
-        <span class="environment-badge">${environmentLabel}</span>
-        ${appLink('Sign in <span aria-hidden="true">↗</span>', "/sign-in", "nav-signin")}
-      </div>
-    </nav>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <nav class="nav container" aria-label="Primary">
+        <a class="brand" href="#top" aria-label="Twiniti Loop home">
+          <img class="brand-logo" src="${logoPath}" alt="" width="56" height="56" />
+          
+        </a>
+        <div class="nav-links">
+          <a href="#product">Product</a>
+          <a href="#questions">Questions</a>
+          <a class="nav-signin" href="${SIGN_IN_PATH}">Sign in</a>
+        </div>
+      </nav>
+    </header>
 
-    <main id="top">
-      <p class="launch-banner container" role="status">New in Loop: personal workspaces, and the Web Visitors module, which shows who visits your site.</p>
-      <section class="hero container">
+    <main id="main">
+      <div id="top" class="banner"><p class="container"><span class="banner-dot" aria-hidden="true"></span>New in Loop: personal workspaces and the Web Visitors module.</p></div>
+
+      <section class="hero container" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <p class="eyebrow"><span class="eyebrow-dot"></span> The marketing CRM for the whole loop</p>
-          <h1>Keep every customer conversation <em>moving.</em></h1>
-          <p class="hero-lede">Twiniti Loop gives growing teams one clear place for contacts, companies, campaigns, and the workflows that turn relationships into momentum.</p>
-          <div class="hero-actions">
-            ${appLink('Start your workspace <span aria-hidden="true">→</span>', "/sign-up", "button button-primary")}
-            ${appLink("I already use Loop", "/sign-in", "button button-ghost")}
+          <p class="eyebrow">The CRM for small businesses</p>
+          <h1 id="hero-title">Your contacts, campaigns and site visitors in one CRM.</h1>
+          <p class="hero-lede">Customers spread across your inbox, phone and spreadsheets? Loop puts them in one place, so you follow up before leads go cold.</p>
+          ${startFree()}
+        </div>
+        <div class="hero-visual">${renderProductVisual()}</div>
+      </section>
+
+      <section id="product" class="section section-alt" aria-labelledby="product-title">
+        <div class="container">
+          <h2 id="product-title" class="section-title">What's in Loop</h2>
+          <div class="stat card">
+            <p class="stat-claim"><strong>23% of companies never responded to an online sales lead.</strong> <span class="stat-tag">(HBR, 2011)</span></p>
+            <p>Loop keeps every lead and its history in one place, so the follow-up is easier to see.</p>
+            <p class="source"><small>Source: Harvard Business Review, "The Short Life of Online Sales Leads" (2011), a study of 2,241 US companies. <a href="https://hbr.org/2011/03/the-short-life-of-online-sales-leads" rel="noopener noreferrer">https://hbr.org/2011/03/the-short-life-of-online-sales-leads</a></small></p>
           </div>
-          <p class="hero-note"><span aria-hidden="true">✦</span> Choose your country at signup. Your workspace is placed in the right data region and stays there.</p>
+          <ul class="feature-grid">
+            ${features.map(([title, body]) => `<li class="card feature"><h3>${title}</h3><p>${body}</p></li>`).join("")}
+          </ul>
+          <div class="video-block">${renderLoopIntroVideoMarkup()}</div>
         </div>
-        <div class="hero-media">
-        ${renderLoopIntroVideoMarkup()}
-        <div class="hero-art" aria-label="A visual preview of the Twiniti Loop workspace">
-          <div class="orb orb-one"></div>
-          <div class="orb orb-two"></div>
-          <div class="dashboard-card">
-            <div class="dashboard-top"><span class="window-dots"><i></i><i></i><i></i></span><span>Workspace overview</span><span class="live-pill">Live</span></div>
-            <div class="dashboard-heading"><div><small>Good morning, team</small><h2>Your loop is moving</h2></div><span class="sparkle">✦</span></div>
-            <div class="metric-grid"><div><span>Active contacts</span><strong>12,480</strong><b class="positive">+18.4%</b></div><div><span>Open campaigns</span><strong>08</strong><b class="positive">+03 this week</b></div></div>
-            <div class="chart"><span class="chart-label">Engagement flow</span><svg viewBox="0 0 360 100" role="img" aria-label="Upward engagement chart"><defs><linearGradient id="fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#89e7d3" stop-opacity=".34"/><stop offset="1" stop-color="#89e7d3" stop-opacity="0"/></linearGradient></defs><path d="M0 82 C28 80 36 59 64 65 S94 76 120 54 S151 57 178 45 S208 55 236 31 S268 35 294 21 S327 25 360 8 V100 H0Z" fill="url(#fill)"/><path d="M0 82 C28 80 36 59 64 65 S94 76 120 54 S151 57 178 45 S208 55 236 31 S268 35 294 21 S327 25 360 8" fill="none" stroke="#89e7d3" stroke-linecap="round" stroke-width="3"/></svg></div>
-            <div class="activity-row"><span class="avatar avatar-coral">MC</span><span><strong>Campaign approved</strong><small>Product launch · just now</small></span><span class="activity-check">✓</span></div>
-            <div class="activity-row"><span class="avatar avatar-blue">JP</span><span><strong>New company added</strong><small>Northstar Studio · 12 min ago</small></span><span class="activity-check">✓</span></div>
+      </section>
+
+      <section class="section" aria-labelledby="how-title">
+        <div class="container">
+          <h2 id="how-title" class="section-title">How it works</h2>
+          <ol class="steps">
+            ${steps.map(([title, body], index) => `<li class="card step"><span class="step-num" aria-hidden="true">${index + 1}</span><h3>${title}</h3><p>${body}</p></li>`).join("")}
+          </ol>
+        </div>
+      </section>
+
+      <section class="section section-alt" aria-labelledby="new-title">
+        <div class="container">
+          <h2 id="new-title" class="section-title">New in Loop</h2>
+          <div class="new-grid">
+            <article class="card card-lg new-item">
+              <p class="chip">Personal workspaces</p>
+              <h3>A CRM that's only yours.</h3>
+              <p>A personal workspace is a CRM for one, separate from any Organization workspace. Sync your Google or iCloud contacts and keep them current without touching the originals.</p>
+            </article>
+            <article class="card card-lg new-item">
+              <p class="chip">The Web Visitors module</p>
+              <h3>Match site visits to your contacts.</h3>
+              <p>Quick setup: connect your visitor-identification account, then add Loop's code to your website. When a visit can be matched to a person or company, Loop records it on that record, so you know who to follow up with.</p>
+              <p class="privacy-note">${WEB_VISITORS_PRIVACY_LINE}</p>
+            </article>
           </div>
         </div>
+      </section>
+
+      <section id="questions" class="section" aria-labelledby="questions-title">
+        <div class="container narrow">
+          <h2 id="questions-title" class="section-title">Questions</h2>
+          <div class="faq">
+            ${questions.map(([q, answers]) => `<div class="faq-item"><h3>${q}</h3>${answers.map((a) => `<p>${a}</p>`).join("")}</div>`).join("")}
+          </div>
         </div>
       </section>
 
-      <section class="proof-strip"><div class="container proof-inner"><span>Everything your team needs to keep you in the loop</span><span class="proof-line"></span><span class="proof-item">Contacts</span><span class="proof-item">Companies</span><span class="proof-item">Campaigns</span><span class="proof-item">Workflows</span></div></section>
-
-      <section class="launch-features container" aria-label="New in Loop">
-        <div class="launch-features-grid">
-          <article class="launch-feature">
-            <h2>A workspace of your own.</h2>
-            <p>Loop now gives you a personal workspace: your own space for contacts, notes and follow-ups, kept apart from the team's shared pipeline.</p>
-            ${appLink("Open your workspace", "/sign-in", "button button-primary")}
-          </article>
-          <article class="launch-feature">
-            <h2>See who visits your site.</h2>
-            <p>The Web Visitors module shows who is visiting your website and logs them to your Loop CRM, so a visit becomes a contact you can follow up with.</p>
-            ${appLink("Turn on Web Visitors", "/sign-in", "button button-primary")}
-          </article>
+      <section class="section closing" aria-labelledby="closing-title">
+        <div class="container">
+          <div class="closing-panel card-lg">
+            <h2 id="closing-title">Answer the next lead while it's still warm.</h2>
+            <p>Open a workspace, bring your contacts, and follow up from one place.</p>
+            ${startFree()}
+          </div>
         </div>
       </section>
-
-      <section id="product" class="feature-section container">
-        <div class="section-intro"><p class="eyebrow">One connected workspace</p><h2>Less tab-switching.<br /><em>More forward motion.</em></h2><p>Loop brings the daily work of customer-led growth into a calm, shared system your team can actually keep up with.</p></div>
-        <div class="feature-grid">
-          <article class="feature-card feature-wide"><div class="feature-icon icon-teal">◎</div><div><h3>One clear customer view</h3><p>Keep people, companies, properties, activity, and segments connected so every teammate starts with context.</p></div><div class="mini-list"><span><b class="mini-avatar">AL</b> Alex Morgan <small>Customer · Active</small></span><span><b class="mini-avatar purple">NS</b> Northstar Studio <small>Company · 24 contacts</small></span></div></article>
-          <article class="feature-card"><div class="feature-icon icon-coral">↗</div><h3>Campaigns with guardrails</h3><p>Plan, review, approve, and send with the right people in the loop before a message reaches the world.</p><div class="approval"><span class="approval-dot"></span><span>Ready for approval</span><b>03</b></div></article>
-          <article class="feature-card"><div class="feature-icon icon-blue">⌘</div><h3>Ready for your stack</h3><p>Use agent-friendly tools and dependable APIs to connect the work you already do with the people you already know.</p><div class="code-line"><span>loop</span><span>/contacts</span><span class="code-arrow">→</span></div></article>
-        </div>
-      </section>
-
-      <section id="why-loop" class="why-section"><div class="container why-inner"><div><img class="section-logo" src="${lightLogoPath}" alt="" aria-hidden="true" /><p class="eyebrow">Built for trust</p><h2>Your customer data should work <em>with</em> your team.</h2></div><div class="why-points"><div><strong>01</strong><p><b>Clarity by default</b><br />A focused workspace that makes the next useful action easier to see.</p></div><div><strong>02</strong><p><b>Human approval where it matters</b><br />Automate the busywork while keeping important outbound decisions accountable.</p></div><div><strong>03</strong><p><b>Regional by design</b><br />Country-based workspace placement keeps your data boundary explicit from day one.</p></div></div></div></section>
-
-      <section class="closing-cta container"><div class="cta-panel"><div><p class="eyebrow">Start your next loop</p><h2>Give your team a clearer way forward.</h2><p>Set up your workspace, invite your team, and make the next customer conversation count.</p></div>${appLink('Create your workspace <span aria-hidden="true">→</span>', "/sign-up", "button button-light")}</div></section>
     </main>
 
-    <footer class="footer container"><a class="brand" href="#top" aria-label="Twiniti Loop home"><img class="brand-logo" src="${darkLogoPath}" alt="" aria-hidden="true" /></a><div class="footer-meta">${appLink("Sign in", "/sign-in", "footer-link")} ${appLink("Sign up", "/sign-up", "footer-link")}<span>© 2026 Twiniti Loop</span><a class="maker-map-badge" href="https://www.makermap.lol/broadbent_mg"><img src="https://www.makermap.lol/badge/broadbent_mg.svg" alt="Connect with me on Maker Map" width="262" height="54" /></a></div></footer>
+    <footer class="footer">
+      <div class="container footer-inner">
+        <a class="brand" href="#top" aria-label="Twiniti Loop home"><img class="brand-logo" src="${logoPath}" alt="" width="44" height="44" /></a>
+        <p>© 2026 Twiniti Loop</p>
+      </div>
+    </footer>
   </div>
 `;
 
