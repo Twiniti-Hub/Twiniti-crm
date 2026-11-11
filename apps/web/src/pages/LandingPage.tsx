@@ -33,6 +33,10 @@ export function LandingPage() {
         </div>
       </header>
 
+      <p className="landing-banner" role="status">
+        New in Loop: personal workspaces, and the Web Visitors module, which shows who visits your site.
+      </p>
+
       <section className="landing-hero">
         <div className="landing-hero-grid">
           <div className="landing-hero-copy">
@@ -70,6 +74,29 @@ export function LandingPage() {
               }}
             />
           </div>
+        </div>
+      </section>
+
+      <section className="landing-features" aria-label="New in Loop">
+        <div className="landing-features-grid">
+          <article className="landing-feature">
+            <h2>A workspace of your own.</h2>
+            <p>
+              Loop now gives you a personal workspace: your own space for contacts, notes and follow-ups, kept apart from the team's shared pipeline.
+            </p>
+            <Link className="primary" to="/sign-in">
+              Open your workspace
+            </Link>
+          </article>
+          <article className="landing-feature">
+            <h2>See who visits your site.</h2>
+            <p>
+              The Web Visitors module shows who is visiting your website and logs them to your Loop CRM, so a visit becomes a contact you can follow up with.
+            </p>
+            <Link className="primary" to="/sign-in">
+              Turn on Web Visitors
+            </Link>
+          </article>
         </div>
       </section>
     </div>
