@@ -42,6 +42,7 @@ document.querySelector<HTMLDivElement>("#root")!.innerHTML = `
     </nav>
 
     <main id="top">
+      <p class="launch-banner container" role="status">New in Loop: personal workspaces, and the Web Visitors module, which shows who visits your site.</p>
       <section class="hero container">
         <div class="hero-copy">
           <p class="eyebrow"><span class="eyebrow-dot"></span> The marketing CRM for the whole loop</p>
@@ -71,6 +72,21 @@ document.querySelector<HTMLDivElement>("#root")!.innerHTML = `
       </section>
 
       <section class="proof-strip"><div class="container proof-inner"><span>Everything your team needs to keep you in the loop</span><span class="proof-line"></span><span class="proof-item">Contacts</span><span class="proof-item">Companies</span><span class="proof-item">Campaigns</span><span class="proof-item">Workflows</span></div></section>
+
+      <section class="launch-features container" aria-label="New in Loop">
+        <div class="launch-features-grid">
+          <article class="launch-feature">
+            <h2>A workspace of your own.</h2>
+            <p>Loop now gives you a personal workspace: your own space for contacts, notes and follow-ups, kept apart from the team's shared pipeline.</p>
+            ${appLink("Open your workspace", "/sign-in", "button button-primary")}
+          </article>
+          <article class="launch-feature">
+            <h2>See who visits your site.</h2>
+            <p>The Web Visitors module shows who is visiting your website and logs them to your Loop CRM, so a visit becomes a contact you can follow up with.</p>
+            ${appLink("Turn on Web Visitors", "/sign-in", "button button-primary")}
+          </article>
+        </div>
+      </section>
 
       <section id="product" class="feature-section container">
         <div class="section-intro"><p class="eyebrow">One connected workspace</p><h2>Less tab-switching.<br /><em>More forward motion.</em></h2><p>Loop brings the daily work of customer-led growth into a calm, shared system your team can actually keep up with.</p></div>
