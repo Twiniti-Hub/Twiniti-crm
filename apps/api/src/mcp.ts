@@ -176,7 +176,7 @@ export function createMcpServer(db: Db, actor: AuthActor) {
       case "create_contact": {
         const input = createContactSchema.parse(args);
         const organizationId = assertOrganization(actor);
-        const existing = await findContactByEmail(db, organizationId, input.email);
+        const existing = input.email ? await findContactByEmail(db, organizationId, input.email) : null;
         result = existing
           ? {
               status: "conflict",
@@ -194,7 +194,7 @@ export function createMcpServer(db: Db, actor: AuthActor) {
       case "upsert_contact": {
         const input = upsertContactSchema.parse(args);
         const organizationId = assertOrganization(actor);
-        const existing = await findContactByEmail(db, organizationId, input.email);
+        const existing = input.email ? await findContactByEmail(db, organizationId, input.email) : null;
         if (existing) {
           const updated = await updateContact(db, organizationId, existing.id, {
             ...input,

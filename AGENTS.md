@@ -1,5 +1,60 @@
 # Agent instructions (Twiniti CRM)
 
+## Application design (0.10.55.16)
+
+TWI-1080 (application scope only): `apps/web/src/application-theme.css` owns
+Precision Stark tokens and overrides, gated by `.shell` or `.auth-page` presence.
+Keep both landing implementations unchanged. Preserve the light theme under
+dark OS preference, accessible focus rings, semantic feedback colors, and
+mobile navigation. See `docs/architecture/APPLICATION_THEME.md`.
+Load the Google font stylesheet only while an application or authentication
+surface is mounted; the public React landing route must not request it.
+
+## Personal contact sync (0.10.55.17)
+
+TWI-1087 adds inbound-only Google People and iCloud CardDAV sync for personal
+workspaces. Apply additive migration 0027 before enabling API/worker/web.
+Preserve owner and organization checks, forced RLS, regional credential storage,
+generation fencing, preview-before-import, stable provider IDs, local overrides,
+and history-preserving deletions. Never use email as provider identity, silently
+merge ambiguous contacts, infer marketing consent, request a normal Apple Account
+password, or write back to providers. Contacts may have a null email; campaign and
+email paths must exclude them explicitly. Keep CONTACT_SYNC_ENCRYPTION_KEY stable
+and never log credentials or contact payloads. See
+`docs/operations/PERSONAL_CONTACT_SYNC.md`.
+
+## WV App saved setup (0.10.55.14)
+
+TWI-1079: Org Admin provisions the website key; installation shows it read-only.
+Never substitute a webhook token for a website key. Apply additive migration
+0026 before the API. Webhook tokens have dedicated AES-GCM ciphertext storage
+and hash lookup; admin responses are no-store. WV_CREDENTIAL_ENCRYPTION_KEY
+falls back to RESEND_CREDENTIAL_ENCRYPTION_KEY; keep the selected key stable.
+Rotation updates stored/displayed webhook credentials without changing website
+code. Never silently rotate legacy hash-only credentials.
+
+## WV App Web Visitors (0.10.55.12)
+
+Revision 0.10.55.13 / TWI-1069: preserve typed DNS lookup callbacks and socket
+pinning; test the actual transport and generated loader. Redact webhook paths
+in request, error and message log serializers. The limiter is bounded per IP
+and per API instance. Ingestion and review require transactions and share an
+organization advisory lock; reassignment must rebuild every prior owner summary.
+
+TWI-1067 adds organization-admin WV App configuration, token-authenticated
+webhook ingestion, deterministic visitor identity resolution, and contact/company
+visit histories. Preserve exactly-one-record attribution: resolved people update
+the contact; otherwise an independently resolved company may be updated. Never
+match a contact from name/title similarity, create a contact without a real email,
+or scrape LinkedIn. `customer_events` is authoritative and summary counters are
+updated only after a unique event insert. Apply additive migration 0025 before
+deploying API/worker/web. See `docs/architecture/WEB_VISITORS.md`.
+TWI-1068 adds an admin-only installation side card and public-site validation.
+Keep validation SSRF-safe: HTTP(S) only, no URL credentials, public DNS/IPs on
+every redirect hop, bounded redirects/time/body, HTML only, and no cookies or
+authorization forwarding. The check confirms the organization-specific loader
+URL is present in published HTML; it does not execute scripts or emit a visit.
+
 ## Production email templates (0.10.55.10)
 
 TWI-1061: `emails/hexclave/production` contains eight native Hexclave TSX templates

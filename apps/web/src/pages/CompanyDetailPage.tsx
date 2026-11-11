@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 
 type CompanyContact = {
   id: string;
-  email: string;
+  email: string | null;
   phone: string | null;
   firstName: string | null;
   lastName: string | null;
@@ -19,17 +19,21 @@ type CompanyDetail = {
   lifecycleStage?: string | null;
   properties: Record<string, unknown>;
   contacts: CompanyContact[];
+  webVisitors?: { visitCount: number; firstVisitedAt: string | null; lastVisitedAt: string | null };
 };
+
+type WebVisit = { id: string; occurredAt: string; payload: { capturedUrl?: string; referrer?: string | null; timePrecision?: string } };
 
 export function CompanyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [company, setCompany] = useState<CompanyDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [webVisits, setWebVisits] = useState<WebVisit[]>([]);
 
   useEffect(() => {
     if (!id) return;
-    void api(`/api/v1/companies/${id}`)
-      .then((res) => setCompany(res.data as CompanyDetail))
+    void Promise.all([api(`/api/v1/companies/${id}`), api(`/api/v1/companies/${id}/web-visits`)])
+      .then(([companyRes, visitsRes]) => { setCompany(companyRes.data as CompanyDetail); setWebVisits((visitsRes.data ?? []) as WebVisit[]); })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load company"));
   }, [id]);
 
@@ -84,6 +88,20 @@ export function CompanyDetailPage() {
           </section>
 
           <section className="panel" style={{ marginTop: 16 }}>
+            <p className="eyebrow">Web Visitors</p>
+            <h3>Website visits: {company.webVisitors?.visitCount ?? 0}</h3>
+            <p className="muted">
+              First visit: {company.webVisitors?.firstVisitedAt ? new Date(company.webVisitors.firstVisitedAt).toLocaleString() : "—"}
+              {" · "}Last visit: {company.webVisitors?.lastVisitedAt ? new Date(company.webVisitors.lastVisitedAt).toLocaleString() : "—"}
+            </p>
+            {webVisits.length ? (
+              <div className="table-wrap"><table><thead><tr><th>Visited</th><th>Page</th><th>Referrer</th></tr></thead><tbody>
+                {webVisits.map((visit) => <tr key={visit.id}><td>{visit.payload.timePrecision === "date" ? new Date(visit.occurredAt).toLocaleDateString() : new Date(visit.occurredAt).toLocaleString()}</td><td>{visit.payload.capturedUrl ?? "—"}</td><td>{visit.payload.referrer ?? "—"}</td></tr>)}
+              </tbody></table></div>
+            ) : <p className="muted">No website visits recorded.</p>}
+          </section>
+
+          <section className="panel" style={{ marginTop: 16 }}>
             <p className="eyebrow">Associated contacts</p>
             <h3>Contacts at this company</h3>
             {company.contacts.length === 0 ? (
@@ -103,7 +121,7 @@ export function CompanyDetailPage() {
                     {company.contacts.map((contact) => (
                       <tr key={contact.id}>
                         <td>
-                          <Link to={`/contacts/${contact.id}`}>{contact.email}</Link>
+                          <Link to={`/contacts/${contact.id}`}>{contact.email ?? contact.phone ?? "Unnamed contact"}</Link>
                         </td>
                         <td>{[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}</td>
                         <td>{contact.phone ?? "—"}</td>

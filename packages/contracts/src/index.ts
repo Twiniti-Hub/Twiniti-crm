@@ -106,7 +106,7 @@ export const duplicateEmailConflictSchema = z.object({
 
 export const contactSchema = z.object({
   id: z.string().uuid(),
-  email: z.string().email(),
+  email: z.string().email().nullable(),
   phone: z.string().trim().max(80).nullable(),
   firstName: z.string().nullable(),
   lastName: z.string().nullable(),
@@ -114,17 +114,48 @@ export const contactSchema = z.object({
   properties: z.record(propertyValueSchema)
 });
 
-export const createContactSchema = z.object({
-  email: z.string().email(),
+const contactInputSchema = z.object({
+  email: z.string().email().nullable().optional(),
   phone: z.string().trim().max(80).nullable().optional(),
   firstName: z.string().trim().max(100).optional(),
   lastName: z.string().trim().max(100).optional(),
   lifecycleStage: z.string().trim().max(80).optional(),
   properties: z.record(propertyValueSchema).default({})
 });
+export const createContactSchema = contactInputSchema.superRefine((value, context) => {
+  if (!value.email && !value.phone?.trim() && !value.firstName?.trim() && !value.lastName?.trim()) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "A contact needs a name, email, or phone" });
+  }
+});
 
-export const updateContactSchema = createContactSchema.partial().extend({
+export const updateContactSchema = contactInputSchema.partial().extend({
   version: z.number().int().nonnegative().optional()
+});
+
+export const contactSyncProviderSchema = z.enum(["google", "icloud"]);
+export const contactSyncConnectionSchema = z.object({
+  id: z.string().uuid(),
+  provider: contactSyncProviderSchema,
+  accountLabel: z.string(),
+  status: z.string(),
+  selectedScope: z.array(z.string()),
+  generation: z.number().int().positive(),
+  previewRevision: z.number().int().nonnegative(),
+  lastSuccessAt: z.string().datetime().nullable(),
+  nextRunAt: z.string().datetime().nullable(),
+  lastErrorCode: z.string().nullable(),
+  lastErrorMessage: z.string().nullable()
+});
+export const createIcloudConnectionSchema = z.object({
+  account: z.string().trim().email(),
+  appSpecificPassword: z.string().trim().min(8).max(128)
+});
+export const updateContactSyncScopeSchema = z.object({
+  selectedScope: z.array(z.string().trim().min(1).max(500)).max(100)
+});
+export const disconnectContactSyncSchema = z.object({
+  mode: z.enum(["retain", "archive_eligible"]).default("retain"),
+  generation: z.number().int().positive()
 });
 
 /** Free-form contact note captured in the CRM UI (stored as a timeline event). */
@@ -132,8 +163,12 @@ export const createContactNoteSchema = z.object({
   body: z.string().trim().min(1).max(8000)
 });
 
-export const upsertContactSchema = createContactSchema.extend({
+export const upsertContactSchema = contactInputSchema.extend({
   id: z.string().uuid().optional()
+}).superRefine((value, context) => {
+  if (!value.email && !value.phone?.trim() && !value.firstName?.trim() && !value.lastName?.trim()) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "A contact needs a name, email, or phone" });
+  }
 });
 
 export const contactSearchSchema = z.object({
@@ -920,6 +955,83 @@ export const agentToolNameSchema = z.enum([
   "log_outbound_email"
 ]);
 
+export const webVisitorProfileTypeSchema = z.enum(["person", "company"]);
+export const webVisitorSettingsSchema = z.object({
+  createContacts: z.boolean().default(false),
+  createCompanies: z.boolean().default(true),
+  publicKey: z.string().trim().regex(/^[A-Za-z0-9_-]{6,100}$/).nullable().optional()
+}).strict();
+export const webVisitorIncomingPayloadSchema = z.object({
+  visitorId: z.string().trim().max(255).nullable().optional(),
+  firstName: z.string().trim().max(100).nullable().optional(),
+  lastName: z.string().trim().max(100).nullable().optional(),
+  businessEmail: z.string().trim().email().max(320).nullable().optional(),
+  professionalProfileUrl: z.string().trim().url().max(2048).nullable().optional(),
+  companyName: z.string().trim().max(200).nullable().optional(),
+  companyWebsite: z.string().trim().max(2048).nullable().optional(),
+  title: z.string().trim().max(160).nullable().optional(),
+  industry: z.string().trim().max(120).nullable().optional(),
+  employeeCount: z.union([z.string().max(80), z.number()]).nullable().optional(),
+  estimatedRevenue: z.string().trim().max(120).nullable().optional(),
+  city: z.string().trim().max(120).nullable().optional(),
+  state: z.string().trim().max(120).nullable().optional(),
+  postalCode: z.string().trim().max(40).nullable().optional(),
+  seenAt: z.string().datetime({ offset: true }),
+  timePrecision: z.enum(["timestamp", "date"]).default("timestamp"),
+  referrer: z.string().url().max(2048).nullable().optional(),
+  capturedUrl: z.string().url().max(2048),
+  tags: z.array(z.string().trim().max(100)).max(50).default([]),
+  repeatVisit: z.boolean().default(false),
+  profileType: webVisitorProfileTypeSchema
+}).strict().superRefine((value, context) => {
+  if (value.profileType === "person" && !value.businessEmail && !value.professionalProfileUrl) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Person profiles require a business email or professional profile URL" });
+  }
+  if (value.profileType === "company" && !value.companyWebsite) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Company profiles require a company website" });
+  }
+  if (new Date(value.seenAt).getTime() > Date.now() + 300_000) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "seenAt may not be more than five minutes in the future" });
+  }
+});
+export const webVisitorSupplierPayloadSchema = z.object({
+  "LinkedIn URL": z.string().max(2048).nullable().optional(),
+  "First Name": z.string().max(100).nullable().optional(),
+  "Last Name": z.string().max(100).nullable().optional(),
+  "Title": z.string().max(160).nullable().optional(),
+  "Company Name": z.string().max(200).nullable().optional(),
+  "Business Email": z.string().max(320).nullable().optional(),
+  "Website": z.string().max(2048).nullable().optional(),
+  "Industry": z.string().max(120).nullable().optional(),
+  "Employee Count": z.union([z.string().max(80), z.number()]).nullable().optional(),
+  "Estimate Revenue": z.string().max(120).nullable().optional(),
+  "City": z.string().max(120).nullable().optional(),
+  "State": z.string().max(120).nullable().optional(),
+  "Zipcode": z.string().max(40),
+  "Seen At": z.string().max(80),
+  "Referrer": z.string().max(2048).nullable().optional(),
+  "Captured URL": z.string().max(2048),
+  "Tags": z.string().max(5000).nullable().optional(),
+  is_repeat_visit: z.boolean().optional(),
+  is_repeat_visitor: z.boolean().optional(),
+  customer_id: z.string().max(255).optional()
+}).strict();
+export const updateWebVisitorIntegrationSchema = z.object({
+  enabled: z.boolean(),
+  publicKey: z.string().trim().regex(/^[A-Za-z0-9_-]{6,100}$/).optional(),
+  settings: webVisitorSettingsSchema.omit({ publicKey: true }).optional()
+}).strict();
+export const validateWebVisitorInstallationSchema = z.object({
+  url: z.string().trim().url().max(2048).refine((value) => {
+    try { return ["http:", "https:"].includes(new URL(value).protocol); } catch { return false; }
+  }, "Website URL must use HTTP or HTTPS")
+}).strict();
+export const reviewWebVisitorResolutionSchema = z.object({
+  action: z.enum(["attach", "reject"]),
+  contactId: z.string().uuid().nullable().optional(),
+  reason: z.string().trim().min(1).max(1000)
+}).strict();
+
 export type PropertyValue = z.infer<typeof propertyValueSchema>;
 export type Role = z.infer<typeof roleSchema>;
 export type PaginationMeta = z.infer<typeof paginationMetaSchema>;
@@ -980,3 +1092,6 @@ export type HubspotPropertyDefinitionImport = z.infer<typeof hubspotPropertyDefi
 export type HubspotPropertyDefinitionsImportBody = z.infer<typeof hubspotPropertyDefinitionsImportBodySchema>;
 export type HubspotContactsImportBody = z.infer<typeof hubspotContactsImportBodySchema>;
 export type AgentToolName = z.infer<typeof agentToolNameSchema>;
+export type WebVisitorProfile = z.infer<typeof webVisitorIncomingPayloadSchema>;
+export type WebVisitorSettings = z.infer<typeof webVisitorSettingsSchema>;
+export type ValidateWebVisitorInstallation = z.infer<typeof validateWebVisitorInstallationSchema>;

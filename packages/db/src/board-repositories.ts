@@ -577,6 +577,7 @@ export async function listBoardCards(
     const rows = await db.select({
       id: contacts.id,
       email: contacts.email,
+      phone: contacts.phone,
       firstName: contacts.firstName,
       lastName: contacts.lastName,
       lifecycleStage: contacts.lifecycleStage,
@@ -604,7 +605,7 @@ export async function listBoardCards(
     const next = rows.length > limit ? rows[limit] : null;
     return {
       data: page.map((row) => {
-        const name = [row.firstName, row.lastName].filter(Boolean).join(" ").trim() || row.email;
+        const name = [row.firstName, row.lastName].filter(Boolean).join(" ").trim() || row.email || row.phone || "Unnamed contact";
         return {
           id: row.id,
           name,

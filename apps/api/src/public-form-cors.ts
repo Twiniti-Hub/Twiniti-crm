@@ -8,7 +8,10 @@ export const PUBLIC_FORM_MARKETING_ORIGINS = [
   "https://twiniti.ai",
   "https://www.twiniti.ai",
   "https://cto.twiniti.ai",
-  "https://twiniti-cto-advisory-dev.onrender.com"
+  "https://twiniti-cto-advisory-dev.onrender.com",
+  "https://newsletters.twiniti.ai",
+  "https://newsletter.twiniti.ai",
+  "https://newsletters-dev.onrender.com"
 ] as const;
 
 const CRM_CORS_HEADERS = ["Content-Type", "Authorization", "X-Twiniti-Workspace-Id"] as const;

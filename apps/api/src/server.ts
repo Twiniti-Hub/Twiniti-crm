@@ -20,7 +20,10 @@ import { registerMarketingRoutes } from "./routes/marketing.js";
 import { registerOrganizationRoutes } from "./routes/organizations.js";
 import { registerWebsiteContactRoutes } from "./routes/website-contact.js";
 import { registerResendWebhookRoutes } from "./routes/resend-webhook.js";
+import { registerWebVisitorRoutes } from "./routes/web-visitors.js";
+import { registerContactSyncRoutes } from "./routes/contact-sync.js";
 import { resolvePublicFormCorsOptions } from "./public-form-cors.js";
+import { safeRequestSerializers } from "./web-visitor-security.js";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 loadDotenv({ path: path.join(rootDir, ".env") });
@@ -32,7 +35,7 @@ const env = loadEnv({
   DATABASE_URL: process.env.DATABASE_URL ?? ""
 });
 
-const app = Fastify({ logger: true });
+const app = Fastify({ logger: { serializers: safeRequestSerializers } });
 const databaseUrl = regionalDatabaseUrl(env, env.REGION_CODE);
 const db = scopedDb(getDb(databaseUrl));
 const pool = getPool(databaseUrl);
@@ -88,6 +91,8 @@ await registerRunCredentialRoutes(app, db);
 await registerMarketingRoutes(app, db, env);
 registerWebsiteContactRoutes(app, env);
 registerResendWebhookRoutes(app, db, env);
+await registerWebVisitorRoutes(app, db, env.WV_CREDENTIAL_ENCRYPTION_KEY || env.RESEND_CREDENTIAL_ENCRYPTION_KEY);
+await registerContactSyncRoutes(app, db, env);
 await registerMcpRoutes(app, db, env, pool);
 
 app.get("/docs", async (_, reply) => reply.redirect("/documentation"));

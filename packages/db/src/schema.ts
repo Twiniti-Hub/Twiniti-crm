@@ -136,14 +136,17 @@ export const organizationInvitations = pgTable("organization_invitations", {
 export const contacts = pgTable("contacts", {
   id: uuid("id").defaultRandom().primaryKey(),
   organizationId: uuid("organization_id").notNull().references(() => organizations.id),
-  email: varchar("email", { length: 320 }).notNull(),
-  emailNormalized: varchar("email_normalized", { length: 320 }).notNull(),
+  email: varchar("email", { length: 320 }),
+  emailNormalized: varchar("email_normalized", { length: 320 }),
   phone: varchar("phone", { length: 80 }),
   phoneNormalized: varchar("phone_normalized", { length: 40 }),
   firstName: varchar("first_name", { length: 100 }),
   lastName: varchar("last_name", { length: 100 }),
   lifecycleStage: varchar("lifecycle_stage", { length: 80 }),
   properties: jsonb("properties").notNull().default({}),
+  webVisitorVisitCount: integer("web_visitor_visit_count").notNull().default(0),
+  webVisitorFirstVisitedAt: timestamp("web_visitor_first_visited_at", { withTimezone: true }),
+  webVisitorLastVisitedAt: timestamp("web_visitor_last_visited_at", { withTimezone: true }),
   version: integer("version").notNull().default(1),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   mergedIntoContactId: uuid("merged_into_contact_id"),
@@ -158,6 +161,99 @@ export const contacts = pgTable("contacts", {
     table.updatedAt,
     table.id
   )
+}));
+
+export const contactSyncConnections = pgTable("contact_sync_connections", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  ownerUserId: uuid("owner_user_id").notNull().references(() => crmUsers.id),
+  provider: varchar("provider", { length: 24 }).notNull(),
+  providerAccountId: varchar("provider_account_id", { length: 500 }),
+  accountLabel: varchar("account_label", { length: 500 }).notNull(),
+  status: varchar("status", { length: 40 }).notNull().default("pending"),
+  selectedScope: jsonb("selected_scope").$type<string[]>().notNull().default([]),
+  secretCiphertext: text("secret_ciphertext"),
+  secretKeyVersion: varchar("secret_key_version", { length: 40 }).notNull().default("v1"),
+  generation: integer("generation").notNull().default(1),
+  previewRevision: integer("preview_revision").notNull().default(0),
+  lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+  nextRunAt: timestamp("next_run_at", { withTimezone: true }),
+  lastErrorCode: varchar("last_error_code", { length: 80 }),
+  lastErrorMessage: varchar("last_error_message", { length: 500 }),
+  disconnectedAt: timestamp("disconnected_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  activeProviderIndex: uniqueIndex("contact_sync_connections_active_provider_idx")
+    .on(table.organizationId, table.ownerUserId, table.provider)
+    .where(sql`${table.disconnectedAt} IS NULL`),
+  dueIndex: index("contact_sync_connections_due_idx").on(table.status, table.nextRunAt)
+}));
+
+export const contactSyncSources = pgTable("contact_sync_sources", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  connectionId: uuid("connection_id").notNull().references(() => contactSyncConnections.id),
+  contactId: uuid("contact_id").references(() => contacts.id),
+  addressBookKey: varchar("address_book_key", { length: 500 }).notNull().default("default"),
+  externalId: varchar("external_id", { length: 1000 }).notNull(),
+  etag: varchar("etag", { length: 500 }),
+  contentHash: varchar("content_hash", { length: 64 }),
+  disposition: varchar("disposition", { length: 32 }).notNull().default("pending"),
+  normalizedData: jsonb("normalized_data").$type<Record<string, unknown>>().notNull().default({}),
+  localOverrides: jsonb("local_overrides").$type<string[]>().notNull().default([]),
+  lastSeenRunId: uuid("last_seen_run_id"),
+  removedAt: timestamp("removed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  externalIndex: uniqueIndex("contact_sync_sources_external_idx").on(table.connectionId, table.addressBookKey, table.externalId),
+  contactIndex: index("contact_sync_sources_contact_idx").on(table.organizationId, table.contactId),
+  dispositionIndex: index("contact_sync_sources_disposition_idx").on(table.connectionId, table.disposition)
+}));
+
+export const contactSyncCursors = pgTable("contact_sync_cursors", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  connectionId: uuid("connection_id").notNull().references(() => contactSyncConnections.id),
+  addressBookKey: varchar("address_book_key", { length: 500 }).notNull().default("default"),
+  cursor: text("cursor"),
+  requestFingerprint: varchar("request_fingerprint", { length: 64 }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  connectionBookIndex: uniqueIndex("contact_sync_cursors_connection_book_idx").on(table.connectionId, table.addressBookKey)
+}));
+
+export const contactSyncRuns = pgTable("contact_sync_runs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  connectionId: uuid("connection_id").notNull().references(() => contactSyncConnections.id),
+  generation: integer("generation").notNull(),
+  trigger: varchar("trigger", { length: 32 }).notNull(),
+  status: varchar("status", { length: 32 }).notNull().default("queued"),
+  stats: jsonb("stats").$type<Record<string, number>>().notNull().default({}),
+  errorCode: varchar("error_code", { length: 80 }),
+  errorMessage: varchar("error_message", { length: 500 }),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  connectionIndex: index("contact_sync_runs_connection_idx").on(table.connectionId, table.createdAt)
+}));
+
+export const contactSyncOauthTransactions = pgTable("contact_sync_oauth_transactions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  ownerUserId: uuid("owner_user_id").notNull().references(() => crmUsers.id),
+  provider: varchar("provider", { length: 24 }).notNull(),
+  stateHash: varchar("state_hash", { length: 64 }).notNull(),
+  codeVerifierCiphertext: text("code_verifier_ciphertext").notNull(),
+  redirectUri: varchar("redirect_uri", { length: 1000 }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  stateIndex: uniqueIndex("contact_sync_oauth_state_idx").on(table.stateHash)
 }));
 
 export const contactIdentities = pgTable("contact_identities", {
@@ -192,6 +288,9 @@ export const companies = pgTable("companies", {
   industry: varchar("industry", { length: 120 }),
   lifecycleStage: varchar("lifecycle_stage", { length: 80 }),
   properties: jsonb("properties").notNull().default({}),
+  webVisitorVisitCount: integer("web_visitor_visit_count").notNull().default(0),
+  webVisitorFirstVisitedAt: timestamp("web_visitor_first_visited_at", { withTimezone: true }),
+  webVisitorLastVisitedAt: timestamp("web_visitor_last_visited_at", { withTimezone: true }),
   version: integer("version").notNull().default(1),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -514,11 +613,58 @@ export const webhookEvents = pgTable("webhook_events", {
   organizationId: uuid("organization_id").references(() => organizations.id),
   provider: varchar("provider", { length: 50 }).notNull(),
   eventType: varchar("event_type", { length: 120 }),
+  dedupeKey: varchar("dedupe_key", { length: 255 }),
   payload: jsonb("payload").notNull(),
   signatureValid: boolean("signature_valid").notNull().default(false),
   processedAt: timestamp("processed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
-});
+}, (table) => ({
+  providerDedupeIndex: uniqueIndex("webhook_events_provider_dedupe_idx")
+    .on(table.organizationId, table.provider, table.dedupeKey)
+}));
+
+export const webVisitorIntegrations = pgTable("web_visitor_integrations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  enabled: boolean("enabled").notNull().default(false),
+  apiKeyCiphertext: text("api_key_ciphertext"),
+  webhookTokenHash: varchar("webhook_token_hash", { length: 128 }).notNull(),
+  webhookTokenCiphertext: text("webhook_token_ciphertext"),
+  settings: jsonb("settings").notNull().default({}),
+  lastWebhookAt: timestamp("last_webhook_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  organizationIndex: uniqueIndex("web_visitor_integrations_org_idx").on(table.organizationId),
+  tokenIndex: uniqueIndex("web_visitor_integrations_token_idx").on(table.webhookTokenHash)
+}));
+
+export const webVisitorIdentityMappings = pgTable("web_visitor_identity_mappings", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  integrationId: uuid("integration_id").notNull().references(() => webVisitorIntegrations.id),
+  identityFingerprint: varchar("identity_fingerprint", { length: 128 }).notNull(),
+  providerVisitorId: varchar("provider_visitor_id", { length: 255 }),
+  contactId: uuid("contact_id").references(() => contacts.id),
+  companyId: uuid("company_id").references(() => companies.id),
+  resolutionState: varchar("resolution_state", { length: 32 }).notNull().default("unresolved"),
+  confidence: varchar("confidence", { length: 16 }),
+  matchMethod: varchar("match_method", { length: 64 }),
+  candidateContactIds: jsonb("candidate_contact_ids").notNull().default([]),
+  evidence: jsonb("evidence").notNull().default([]),
+  resolverVersion: varchar("resolver_version", { length: 40 }).notNull().default("wv-identity-v1"),
+  firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).defaultNow().notNull(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  reviewedBy: varchar("reviewed_by", { length: 255 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  fingerprintIndex: uniqueIndex("web_visitor_identity_mappings_fingerprint_idx")
+    .on(table.organizationId, table.integrationId, table.identityFingerprint),
+  reviewIndex: index("web_visitor_identity_mappings_review_idx")
+    .on(table.organizationId, table.resolutionState, table.updatedAt)
+}));
 
 export const agentIdentities = pgTable("agent_identities", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -1041,6 +1187,11 @@ export const schema = {
   stripeEvents,
   crmUsers,
   contacts,
+  contactSyncConnections,
+  contactSyncSources,
+  contactSyncCursors,
+  contactSyncRuns,
+  contactSyncOauthTransactions,
   companies,
   contactCompanyAssociations,
   propertyDefinitions,

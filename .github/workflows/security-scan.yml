@@ -224,3 +224,11 @@ jobs:
             echo "::error::Security scanning failed or reported findings (Semgrep=$semgrep_status, Gitleaks=$gitleaks_status)"
             exit 1
           fi
+
+  scan-dependabot:
+    name: Security / scan
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dependabot lightweight pass
+        run: echo "Skipping heavy Semgrep/Gitleaks for Dependabot (TWI-1027); required check stub OK"

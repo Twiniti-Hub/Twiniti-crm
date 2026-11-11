@@ -7,6 +7,7 @@ import App from "./App";
 import { authConfigured, hexclaveApp } from "./hexclave/client";
 import "./styles.css";
 import "./analytics-consent.css";
+import "./application-theme.css";
 import {
   getAnalyticsConsent,
   initializeGoogleAnalytics,
@@ -18,6 +19,35 @@ const googleAnalyticsId =
   import.meta.env.VITE_GOOGLE_ANALYTICS_ID?.trim() || import.meta.env.Google_Analytics?.trim() || "";
 const microsoftClarityId = import.meta.env.VITE_MICROSOFT_CLARITY_ID?.trim() || "xyd0gcl234";
 const analyticsConfigured = Boolean(googleAnalyticsId || microsoftClarityId);
+const applicationFontStylesheetId = "loop-application-fonts";
+const applicationFontStylesheetUrl =
+  "https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap";
+
+function ApplicationFontLoader() {
+  useEffect(() => {
+    const sync = () => {
+      const applicationSurface = document.querySelector(".shell, .auth-page");
+      const current = document.getElementById(applicationFontStylesheetId);
+      if (applicationSurface && !current) {
+        const stylesheet = document.createElement("link");
+        stylesheet.id = applicationFontStylesheetId;
+        stylesheet.rel = "stylesheet";
+        stylesheet.href = applicationFontStylesheetUrl;
+        document.head.append(stylesheet);
+      } else if (!applicationSurface && current) {
+        current.remove();
+      }
+    };
+    const observer = new MutationObserver(sync);
+    observer.observe(root!, { childList: true, subtree: true });
+    sync();
+    return () => {
+      observer.disconnect();
+      document.getElementById(applicationFontStylesheetId)?.remove();
+    };
+  }, []);
+  return null;
+}
 
 function initializeOptionalAnalytics(): void {
   if (googleAnalyticsId) {
@@ -98,6 +128,7 @@ function BootstrapApp() {
 
 createRoot(root).render(
   <StrictMode>
+    <ApplicationFontLoader />
     <BootstrapApp />
   </StrictMode>
 );

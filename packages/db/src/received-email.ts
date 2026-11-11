@@ -103,7 +103,7 @@ export async function resolveContactsForReceivedEmail(
   const existing = lookupEmails.length > 0
     ? await findContactsByEmails(db, organizationId, lookupEmails)
     : [];
-  const contactsByEmail = new Map(existing.map((row) => [row.emailNormalized, row]));
+  const contactsByEmail = new Map(existing.flatMap((row) => row.emailNormalized ? [[row.emailNormalized, row] as const] : []));
 
   const classification = classifyEmailActivity({
     fromEmail,

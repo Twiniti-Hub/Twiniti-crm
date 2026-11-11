@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+- Revision 0.10.55.17 (TWI-1087): add personal-workspace inbound Google Contacts and iCloud CardDAV preview/import with encrypted credentials, durable regional refresh jobs, stable source mappings, conflict staging, disconnect fencing, and personal Settings controls. Additive migration 0027 makes contact email nullable and adds forced-RLS sync tables; apply it before enabling API/worker/web. Contacts without email are excluded from campaign delivery. Add provider setup, rollback, agent, and user documentation. Package version remains 0.10.55.
+
+- Revision 0.10.55.16 (TWI-1080): scope the Precision Stark Google Font request to mounted application and authentication surfaces so the React landing route remains unchanged. No migration; package version remains 0.10.55.
+
+- Revision 0.10.55.15 (TWI-1080, TWI-1070/1073/1074): apply Precision Stark light tokens, typography, navigation, actions, authentication forms and WV installation styling to the application only. Preserve both landing implementations and public pricing. No additional migration; package version remains 0.10.55.
+
+- Revision 0.10.55.14 (TWI-1079): simplify WV App setup to saved webhook, read-only website key, automatic code and repeatable validation. Org Admin provisions the website key in organization settings. Encrypted webhook retrieval survives reload and rotation; legacy hash-only URLs require explicit rotation. Additive migration 0026; apply before API deployment. Package version remains 0.10.55.
+
+- Revision 0.10.55.13 (TWI-1069): keep installation instructions and re-testing visible regardless of saved configuration; load WV App independently of email/invitations. Repair hostname transport and bodyless responses, recognize the generated installation snippet, redact webhook credentials from application logs, bound per-IP throttling, and reconcile prior contact/company summaries during atomic reassignment. Serialize ingestion and review per organization. No migration; package version remains 0.10.55.
+
+- Revision 0.10.55.12 (TWI-1068): add an organization-admin WV App installation side card with copy-ready loader code, publishing guidance, and a server-side website validation test. Validation is SSRF-safe, bounded, redirect-aware, HTML-only, and checks the saved organization's exact loader URL without executing scripts or creating visitor activity. Update code, AI-agent, and user documentation; no database migration or package-version change.
+
+- Revision 0.10.55.11 (TWI-1067): add organization-level WV App Web Visitors configuration, one-time webhook tokens, deduplicated queued ingestion, deterministic business-email/professional-profile/company-domain resolution, ambiguity review, and immutable contact/company visit histories with atomic first/last/count summaries. Additive migration 0025 adds integration/mapping tables and visit summary fields. LinkedIn scraping is explicitly prohibited. Update code, AI-agent, and user documentation; package version remains 0.10.55 pending release.
+
 - Revision 0.10.55.10 (TWI-1061): apply the user-verified Hexclave editor fix across all eight production templates: remove Preview components and literal logo tables, retain PreviewVariables, and center Img directly in Section. Preserve the Development verification source from PR #162. Update publishing/agent/user guidance; no DB, runtime or live configuration changes.
 
 - Revision 0.10.55.9 (TWI-1061): add eight production Hexclave email templates, companion theme, exact event-variable manifest and setup/user guidance. Every email uses the existing public Loop logo at top center. Trial copy supports cardless signup. Assets only; no live provider changes, dependencies or database migration. Package version remains 0.10.55.
