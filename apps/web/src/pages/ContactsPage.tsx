@@ -20,7 +20,7 @@ type PropertyDefinition = {
 
 type Contact = {
   id: string;
-  email: string;
+  email: string | null;
   phone: string | null;
   firstName: string | null;
   lastName: string | null;
@@ -727,7 +727,7 @@ export function ContactsPage() {
             {contacts.map((contact) => (
               <tr key={contact.id}>
                 <td>
-                  <Link to={`/contacts/${contact.id}`}>{contact.email}</Link>
+                  <Link to={`/contacts/${contact.id}`}>{contact.email ?? contact.phone ?? ([contact.firstName, contact.lastName].filter(Boolean).join(" ") || "Unnamed contact")}</Link>
                 </td>
                 <td>{contact.phone ?? "—"}</td>
                 <td>{[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}</td>

@@ -41,7 +41,7 @@ import { audit, requireActor, requireOrgId, requireUserRole, sendError } from ".
 
 function mapContact(row: {
   id: string;
-  email: string;
+  email: string | null;
   phone: string | null;
   firstName: string | null;
   lastName: string | null;
@@ -231,7 +231,7 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
       else requireUserRole(actor, "member");
       const input = createContactSchema.parse(request.body);
       const dryRun = (request.headers["x-dry-run"] === "true");
-      const existing = await findContactByEmail(db, requireOrgId(actor), input.email);
+      const existing = input.email ? await findContactByEmail(db, requireOrgId(actor), input.email) : null;
       if (existing) {
         return reply.code(409).send({
           status: "conflict",
@@ -273,7 +273,7 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
         }
       } else requireUserRole(actor, "member");
       const input = upsertContactSchema.parse(request.body);
-      const existing = await findContactByEmail(db, requireOrgId(actor), input.email);
+      const existing = input.email ? await findContactByEmail(db, requireOrgId(actor), input.email) : null;
       if (existing) {
         const result = await updateContact(db, requireOrgId(actor), existing.id, {
           ...input,
@@ -572,7 +572,7 @@ export async function registerCrmRoutes(app: FastifyInstance, db: Db) {
       requireUserRole(actor, "member");
       const rows = await searchContacts(db, requireOrgId(actor), { limit: 100 });
       const csv = ["email,phone,firstName,lastName,lifecycleStage", ...rows.map((row) =>
-        [row.email, row.phone ?? "", row.firstName ?? "", row.lastName ?? "", row.lifecycleStage ?? ""].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")
+        [row.email ?? "", row.phone ?? "", row.firstName ?? "", row.lastName ?? "", row.lifecycleStage ?? ""].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")
       )].join("\n");
       reply.header("content-type", "text/csv; charset=utf-8");
       return csv;

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Revision 0.10.55.17 (TWI-1087): add personal-workspace inbound Google Contacts and iCloud CardDAV preview/import with encrypted credentials, durable regional refresh jobs, stable source mappings, conflict staging, disconnect fencing, and personal Settings controls. Additive migration 0027 makes contact email nullable and adds forced-RLS sync tables; apply it before enabling API/worker/web. Contacts without email are excluded from campaign delivery. Add provider setup, rollback, agent, and user documentation. Package version remains 0.10.55.
+
 - Revision 0.10.55.16 (TWI-1080): scope the Precision Stark Google Font request to mounted application and authentication surfaces so the React landing route remains unchanged. No migration; package version remains 0.10.55.
 
 - Revision 0.10.55.15 (TWI-1080, TWI-1070/1073/1074): apply Precision Stark light tokens, typography, navigation, actions, authentication forms and WV installation styling to the application only. Preserve both landing implementations and public pricing. No additional migration; package version remains 0.10.55.

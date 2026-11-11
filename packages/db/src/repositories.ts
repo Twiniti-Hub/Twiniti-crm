@@ -18,6 +18,7 @@ import {
   contacts,
   contactCompanyAssociations,
   contactIdentities,
+  contactSyncSources,
   crmUsers,
   customerEvents,
   digitalWorkers,
@@ -174,14 +175,14 @@ async function syncContactIdentities(
   input: {
     organizationId: string;
     contactId: string;
-    email: string;
+    email: string | null;
     phone?: string | null;
     context?: ContactChangeContext;
   }
 ) {
   const now = new Date();
   const desired = [
-    { identityType: "email", provider: "crm", value: input.email, isPrimary: true },
+    ...(input.email?.trim() ? [{ identityType: "email", provider: "crm", value: input.email, isPrimary: true }] : []),
     ...(input.phone?.trim() ? [{ identityType: "phone", provider: "crm", value: input.phone, isPrimary: true }] : [])
   ].map((identity) => ({
     ...identity,
@@ -842,7 +843,8 @@ export async function createInvitation(
     throw error;
   }
 
-  const emailNormalized = normalizeEmail(input.email);
+  const email = input.email.trim();
+  const emailNormalized = normalizeEmail(email);
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + (input.expiresInDays ?? 14));
   const token = createInviteToken();
@@ -873,7 +875,7 @@ export async function createInvitation(
 
   const [created] = await db.insert(organizationInvitations).values({
     organizationId: input.organizationId,
-    email: input.email.trim(),
+    email,
     emailNormalized,
     role: input.role,
     token,
@@ -1062,7 +1064,7 @@ export async function createContact(
   db: Db,
   input: {
     organizationId: string;
-    email: string;
+    email?: string | null;
     phone?: string | null;
     firstName?: string | null;
     lastName?: string | null;
@@ -1071,11 +1073,12 @@ export async function createContact(
     change?: ContactChangeContext;
   }
 ) {
-  const emailNormalized = normalizeEmail(input.email);
+  const email = input.email?.trim() || null;
+  const emailNormalized = email ? normalizeEmail(email) : null;
   const phone = input.phone?.trim() || null;
   const [row] = await db.insert(contacts).values({
     organizationId: input.organizationId,
-    email: input.email.trim(),
+    email,
     emailNormalized,
     phone,
     phoneNormalized: phone ? normalizePhone(phone) : null,
@@ -1114,7 +1117,7 @@ export async function updateContact(
   organizationId: string,
   id: string,
   input: {
-    email?: string;
+    email?: string | null;
     phone?: string | null;
     firstName?: string | null;
     lastName?: string | null;
@@ -1130,14 +1133,14 @@ export async function updateContact(
   if (input.version !== undefined && input.version !== current.version) {
     return { conflict: true as const, current };
   }
-  const nextEmail = input.email?.trim() ?? current.email;
+  const nextEmail = input.email === undefined ? current.email : input.email?.trim() || null;
   const nextPhone = input.phone === undefined ? current.phone : input.phone?.trim() || null;
   const nextProperties = input.properties ?? current.properties;
   const updateFilters = [eq(contacts.id, id), eq(contacts.organizationId, organizationId)];
   if (input.version !== undefined) updateFilters.push(eq(contacts.version, current.version));
   const [row] = await db.update(contacts).set({
     email: nextEmail,
-    emailNormalized: input.email ? normalizeEmail(input.email) : current.emailNormalized,
+    emailNormalized: input.email === undefined ? current.emailNormalized : (nextEmail ? normalizeEmail(nextEmail) : null),
     phone: nextPhone,
     phoneNormalized: nextPhone ? normalizePhone(nextPhone) : null,
     firstName: input.firstName === undefined ? current.firstName : input.firstName,
@@ -1153,6 +1156,22 @@ export async function updateContact(
       eq(contacts.organizationId, organizationId)
     )).limit(1);
     return { conflict: true as const, current: latest ?? current };
+  }
+  if (!input.change?.source?.startsWith("contact-sync.")) {
+    const changedFields = (["email", "phone", "firstName", "lastName"] as const)
+      .filter((field) => input[field] !== undefined);
+    if (changedFields.length) {
+      const linkedSources = await db.select().from(contactSyncSources).where(and(
+        eq(contactSyncSources.organizationId, organizationId),
+        eq(contactSyncSources.contactId, id),
+        eq(contactSyncSources.disposition, "linked")
+      ));
+      for (const source of linkedSources) {
+        const overrides = [...new Set([...(source.localOverrides as string[]), ...changedFields])];
+        await db.update(contactSyncSources).set({ localOverrides: overrides, updatedAt: new Date() })
+          .where(eq(contactSyncSources.id, source.id));
+      }
+    }
   }
   await recordContactChanges(db, {
     organizationId,
@@ -1826,10 +1845,10 @@ export async function resolveCampaignAllowedRecipients(
   campaign: { segmentId: string | null; listId: string | null }
 ) {
   const recipients = await resolveCampaignRecipients(db, organizationId, campaign);
-  const allowed = [];
+  const allowed: Array<(typeof recipients)[number] & { email: string; emailNormalized: string }> = [];
   for (const contact of recipients) {
-    if (!(await isEmailSuppressed(db, organizationId, contact.email))) {
-      allowed.push(contact);
+    if (contact.email && contact.emailNormalized && !(await isEmailSuppressed(db, organizationId, contact.email))) {
+      allowed.push({ ...contact, email: contact.email, emailNormalized: contact.emailNormalized });
     }
   }
   return allowed;

@@ -106,7 +106,7 @@ export const duplicateEmailConflictSchema = z.object({
 
 export const contactSchema = z.object({
   id: z.string().uuid(),
-  email: z.string().email(),
+  email: z.string().email().nullable(),
   phone: z.string().trim().max(80).nullable(),
   firstName: z.string().nullable(),
   lastName: z.string().nullable(),
@@ -114,17 +114,48 @@ export const contactSchema = z.object({
   properties: z.record(propertyValueSchema)
 });
 
-export const createContactSchema = z.object({
-  email: z.string().email(),
+const contactInputSchema = z.object({
+  email: z.string().email().nullable().optional(),
   phone: z.string().trim().max(80).nullable().optional(),
   firstName: z.string().trim().max(100).optional(),
   lastName: z.string().trim().max(100).optional(),
   lifecycleStage: z.string().trim().max(80).optional(),
   properties: z.record(propertyValueSchema).default({})
 });
+export const createContactSchema = contactInputSchema.superRefine((value, context) => {
+  if (!value.email && !value.phone?.trim() && !value.firstName?.trim() && !value.lastName?.trim()) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "A contact needs a name, email, or phone" });
+  }
+});
 
-export const updateContactSchema = createContactSchema.partial().extend({
+export const updateContactSchema = contactInputSchema.partial().extend({
   version: z.number().int().nonnegative().optional()
+});
+
+export const contactSyncProviderSchema = z.enum(["google", "icloud"]);
+export const contactSyncConnectionSchema = z.object({
+  id: z.string().uuid(),
+  provider: contactSyncProviderSchema,
+  accountLabel: z.string(),
+  status: z.string(),
+  selectedScope: z.array(z.string()),
+  generation: z.number().int().positive(),
+  previewRevision: z.number().int().nonnegative(),
+  lastSuccessAt: z.string().datetime().nullable(),
+  nextRunAt: z.string().datetime().nullable(),
+  lastErrorCode: z.string().nullable(),
+  lastErrorMessage: z.string().nullable()
+});
+export const createIcloudConnectionSchema = z.object({
+  account: z.string().trim().email(),
+  appSpecificPassword: z.string().trim().min(8).max(128)
+});
+export const updateContactSyncScopeSchema = z.object({
+  selectedScope: z.array(z.string().trim().min(1).max(500)).max(100)
+});
+export const disconnectContactSyncSchema = z.object({
+  mode: z.enum(["retain", "archive_eligible"]).default("retain"),
+  generation: z.number().int().positive()
 });
 
 /** Free-form contact note captured in the CRM UI (stored as a timeline event). */
@@ -132,8 +163,12 @@ export const createContactNoteSchema = z.object({
   body: z.string().trim().min(1).max(8000)
 });
 
-export const upsertContactSchema = createContactSchema.extend({
+export const upsertContactSchema = contactInputSchema.extend({
   id: z.string().uuid().optional()
+}).superRefine((value, context) => {
+  if (!value.email && !value.phone?.trim() && !value.firstName?.trim() && !value.lastName?.trim()) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "A contact needs a name, email, or phone" });
+  }
 });
 
 export const contactSearchSchema = z.object({

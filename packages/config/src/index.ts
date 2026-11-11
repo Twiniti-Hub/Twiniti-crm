@@ -28,6 +28,11 @@ export const envSchema = z.object({
   VITE_HEXCLAVE_PROJECT_ID: z.string().optional().default(""),
   RESEND_CREDENTIAL_ENCRYPTION_KEY: z.string().optional().default(""),
   WV_CREDENTIAL_ENCRYPTION_KEY: z.string().optional().default(""),
+  CONTACT_SYNC_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  CONTACT_SYNC_ENCRYPTION_KEY: z.string().optional().default(""),
+  GOOGLE_CONTACTS_CLIENT_ID: z.string().optional().default(""),
+  GOOGLE_CONTACTS_CLIENT_SECRET: z.string().optional().default(""),
+  GOOGLE_CONTACTS_REDIRECT_URI: optionalUrl,
   // Shared platform Resend API key (Render common env group) for operational alerts.
   RESEND_API_KEY: z.string().optional().default(""),
   PLATFORM_EMAIL_FROM: z.string().optional().default("Twiniti Loop <noreply@crm.twiniti.ai>"),

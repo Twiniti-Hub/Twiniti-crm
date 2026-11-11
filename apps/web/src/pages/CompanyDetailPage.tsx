@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 
 type CompanyContact = {
   id: string;
-  email: string;
+  email: string | null;
   phone: string | null;
   firstName: string | null;
   lastName: string | null;
@@ -121,7 +121,7 @@ export function CompanyDetailPage() {
                     {company.contacts.map((contact) => (
                       <tr key={contact.id}>
                         <td>
-                          <Link to={`/contacts/${contact.id}`}>{contact.email}</Link>
+                          <Link to={`/contacts/${contact.id}`}>{contact.email ?? contact.phone ?? "Unnamed contact"}</Link>
                         </td>
                         <td>{[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}</td>
                         <td>{contact.phone ?? "—"}</td>

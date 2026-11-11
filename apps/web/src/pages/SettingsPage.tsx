@@ -27,6 +27,29 @@ type TrackingAddress = { address: string; domain: string; resendDomainId?: strin
 type ResendDomain = { id: string; domain: string; fromEmail: string; fromName: string | null; verificationStatus: string; isDefault: boolean; active: boolean; webhookSecretConfigured?: boolean };
 type WebVisitorIntegration = { configured: boolean; enabled: boolean; publicKey: string | null; loaderSnippet: string | null; settings: { createContacts: boolean; createCompanies: boolean }; lastWebhookAt: string | null; webhookToken?: string | null };
 type InstallationValidation = { status: "installed" | "missing" | "blocked" | "unreachable" | "timeout" | "too_large" | "non_html"; hostname: string; message: string };
+type ContactSyncConnection = {
+  id: string;
+  provider: "google" | "icloud";
+  accountLabel: string;
+  status: string;
+  selectedScope: string[];
+  generation: number;
+  previewRevision: number;
+  lastSuccessAt: string | null;
+  nextRunAt: string | null;
+  lastErrorCode: string | null;
+  lastErrorMessage: string | null;
+};
+type ContactSyncPerson = {
+  id: string;
+  displayName?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  emails?: Array<{ value: string; primary?: boolean }>;
+  phones?: Array<{ value: string; primary?: boolean }>;
+};
+type ContactSyncPreview = { count: number; sample: ContactSyncPerson[] };
+type ContactSyncConflict = { id: string; source: ContactSyncPerson };
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
@@ -70,6 +93,11 @@ export function SettingsPage() {
   const [webhookCopied, setWebhookCopied] = useState(false);
   const [replaceWebsiteKey, setReplaceWebsiteKey] = useState(false);
   const [confirmWebhookRotation, setConfirmWebhookRotation] = useState(false);
+  const [contactConnections, setContactConnections] = useState<ContactSyncConnection[]>([]);
+  const [contactPreviews, setContactPreviews] = useState<Record<string, ContactSyncPreview>>({});
+  const [contactConflicts, setContactConflicts] = useState<Record<string, ContactSyncConflict[]>>({});
+  const [icloudAccount, setIcloudAccount] = useState("");
+  const [icloudPassword, setIcloudPassword] = useState("");
 
   const isAdmin = me?.role === "admin" || me?.isSuperAdmin === true;
   const isPersonalWorkspace = me?.workspaceKind === "personal";
@@ -102,6 +130,31 @@ export function SettingsPage() {
     }
     const membersRes = await api("/api/v1/organization/members");
     setMembers(membersRes.data as Member[]);
+    if (nextMe.workspaceKind === "personal" && nextMe.role === "admin") {
+      try {
+        const connectionsRes = await api("/api/v1/personal/contact-connections");
+        const connections = connectionsRes.data as ContactSyncConnection[];
+        setContactConnections(connections);
+        const previewEntries = await Promise.all(connections
+          .filter((connection) => connection.status === "preview_ready")
+          .map(async (connection) => {
+            const result = await api(`/api/v1/personal/contact-connections/${connection.id}/preview`);
+            return [connection.id, { count: Number(result.data.count), sample: result.data.sample as ContactSyncPerson[] }] as const;
+          }));
+        setContactPreviews(Object.fromEntries(previewEntries));
+        const conflictEntries = await Promise.all(connections
+          .filter((connection) => connection.status === "connected" || connection.status === "error")
+          .map(async (connection) => {
+            const result = await api(`/api/v1/personal/contact-connections/${connection.id}/conflicts`);
+            return [connection.id, result.data as ContactSyncConflict[]] as const;
+          }));
+        setContactConflicts(Object.fromEntries(conflictEntries));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not load connected contact accounts");
+      }
+    } else {
+      setContactConnections([]);
+    }
     if (nextMe.role === "admin") {
       if (nextMe.workspaceKind !== "personal") {
         const invitesRes = await api("/api/v1/organization/invitations");
@@ -242,6 +295,79 @@ export function SettingsPage() {
     }
   }
 
+  async function connectGoogleContacts() {
+    setBusy(true); setError(null); setMessage(null);
+    try {
+      const result = await api("/api/v1/personal/contact-connections/google/authorize", { method: "POST", body: "{}" });
+      window.location.assign(String(result.data.authorizationUrl));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start Google authorization");
+      setBusy(false);
+    }
+  }
+
+  async function connectIcloudContacts(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError(null); setMessage(null);
+    try {
+      await api("/api/v1/personal/contact-connections/icloud", {
+        method: "POST",
+        body: JSON.stringify({ account: icloudAccount, appSpecificPassword: icloudPassword })
+      });
+      setIcloudPassword("");
+      setMessage("iCloud connected. Loop is preparing an import preview.");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not connect iCloud Contacts");
+    } finally { setBusy(false); }
+  }
+
+  async function runContactImport(connection: ContactSyncConnection) {
+    setBusy(true); setError(null); setMessage(null);
+    try {
+      await api(`/api/v1/personal/contact-connections/${connection.id}/import`, {
+        method: "POST", body: JSON.stringify({ previewRevision: connection.previewRevision })
+      });
+      setMessage("Contact import queued. You can leave this page while it runs.");
+      await refresh();
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not start contact import"); }
+    finally { setBusy(false); }
+  }
+
+  async function syncContacts(connection: ContactSyncConnection) {
+    setBusy(true); setError(null); setMessage(null);
+    try {
+      await api(`/api/v1/personal/contact-connections/${connection.id}/sync`, { method: "POST", body: "{}" });
+      setMessage("Contact sync queued.");
+      await refresh();
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not start contact sync"); }
+    finally { setBusy(false); }
+  }
+
+  async function resolveContactConflict(connection: ContactSyncConnection, conflict: ContactSyncConflict, action: "create" | "ignore") {
+    setBusy(true); setError(null); setMessage(null);
+    try {
+      await api(`/api/v1/personal/contact-connections/${connection.id}/conflicts/${conflict.id}/resolve`, {
+        method: "POST", body: JSON.stringify({ action })
+      });
+      setMessage(action === "create" ? "Created a separate contact from the provider record." : "Ignored the provider record.");
+      await refresh();
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not resolve contact review item"); }
+    finally { setBusy(false); }
+  }
+
+  async function disconnectContacts(connection: ContactSyncConnection) {
+    if (!window.confirm(`Disconnect ${connection.accountLabel}? Imported contacts and Loop history will be retained.`)) return;
+    setBusy(true); setError(null); setMessage(null);
+    try {
+      await api(`/api/v1/personal/contact-connections/${connection.id}/disconnect`, {
+        method: "POST", body: JSON.stringify({ mode: "retain", generation: connection.generation })
+      });
+      setMessage("Contact account disconnected. Imported contacts were retained.");
+      await refresh();
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not disconnect contact account"); }
+    finally { setBusy(false); }
+  }
+
   useEffect(() => {
     refresh().catch((err) => setError(err instanceof Error ? err.message : "Failed to load settings"));
   }, []);
@@ -312,6 +438,78 @@ export function SettingsPage() {
           {isPersonalWorkspace ? " · Visible only to you" : ""}
         </p>
       </section>
+
+      {isAdmin && isPersonalWorkspace ? (
+        <section className="panel" style={{ marginTop: 15 }}>
+          <p className="eyebrow">Personal contacts</p>
+          <h3>Connected accounts</h3>
+          <p className="muted">Import saved contacts from Google or iCloud and keep them refreshed in this personal workspace. Sync is inbound only; Loop never changes contacts at the provider.</p>
+          {contactConnections.length ? (
+            <div className="table-wrap" style={{ marginBottom: 16 }}>
+              <table>
+                <thead><tr><th>Provider</th><th>Account</th><th>Status</th><th>Last synced</th><th>Actions</th></tr></thead>
+                <tbody>
+                  {contactConnections.map((connection) => (
+                    <tr key={connection.id}>
+                      <td>{connection.provider === "google" ? "Google" : "iCloud"}</td>
+                      <td>{connection.accountLabel}</td>
+                      <td>
+                        {connection.status.replaceAll("_", " ")}
+                        {contactPreviews[connection.id] ? <div className="muted">{contactPreviews[connection.id].count} contacts ready to review</div> : null}
+                        {contactConflicts[connection.id]?.length ? <div className="muted">{contactConflicts[connection.id].length} need review</div> : null}
+                        {connection.lastErrorMessage ? <div className="muted">{connection.lastErrorMessage}</div> : null}
+                      </td>
+                      <td>{connection.lastSuccessAt ? new Date(connection.lastSuccessAt).toLocaleString() : "Not yet"}</td>
+                      <td className="row-actions">
+                        {connection.status === "preview_ready" ? <button className="primary" type="button" disabled={busy} onClick={() => void runContactImport(connection)}>Import contacts</button> : null}
+                        {connection.status === "connected" || connection.status === "error" ? <button className="secondary" type="button" disabled={busy} onClick={() => void syncContacts(connection)}>Sync now</button> : null}
+                        <button className="secondary" type="button" disabled={busy} onClick={() => void disconnectContacts(connection)}>Disconnect</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {contactConnections.map((connection) => {
+                const preview = contactPreviews[connection.id];
+                const conflicts = contactConflicts[connection.id] ?? [];
+                if (!preview && conflicts.length === 0) return null;
+                return (
+                  <div key={`${connection.id}-review`} style={{ padding: 12 }}>
+                    {preview ? <>
+                      <h4>Import preview · {connection.accountLabel}</h4>
+                      <p className="muted">Showing {Math.min(preview.sample.length, preview.count)} of {preview.count}. Check the account before importing.</p>
+                      <ul>{preview.sample.slice(0, 8).map((person) => <li key={person.id}>{person.displayName || [person.firstName, person.lastName].filter(Boolean).join(" ") || person.emails?.[0]?.value || person.phones?.[0]?.value || "Unnamed contact"}</li>)}</ul>
+                    </> : null}
+                    {conflicts.length ? <>
+                      <h4>Contacts needing review · {connection.accountLabel}</h4>
+                      {conflicts.map((conflict) => {
+                        const label = conflict.source.displayName || [conflict.source.firstName, conflict.source.lastName].filter(Boolean).join(" ") || conflict.source.emails?.[0]?.value || conflict.source.phones?.[0]?.value || "Unnamed contact";
+                        return <div className="form-row" key={conflict.id} style={{ alignItems: "center", marginBottom: 8 }}><span style={{ flex: 1 }}>{label}</span><button className="secondary" type="button" disabled={busy} onClick={() => void resolveContactConflict(connection, conflict, "create")}>Create separate</button><button className="secondary" type="button" disabled={busy} onClick={() => void resolveContactConflict(connection, conflict, "ignore")}>Ignore</button></div>;
+                      })}
+                    </> : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : <p className="muted">No contact accounts connected.</p>}
+          {!contactConnections.some((connection) => connection.provider === "google") ? (
+            <div className="form-row" style={{ marginBottom: 16 }}>
+              <button className="primary" type="button" disabled={busy} onClick={() => void connectGoogleContacts()}>Connect Google Contacts</button>
+            </div>
+          ) : null}
+          {!contactConnections.some((connection) => connection.provider === "icloud") ? (
+            <form className="stack-form" style={{ boxShadow: "none", border: 0, padding: 0 }} onSubmit={connectIcloudContacts}>
+              <h4>Connect iCloud Contacts</h4>
+              <p className="muted">Use your Apple Account email and an app-specific password. Never enter your normal Apple Account password. <a href="https://support.apple.com/en-us/102654" target="_blank" rel="noreferrer">Create an app-specific password</a>.</p>
+              <div className="form-row">
+                <label style={{ flex: 1 }}>Apple Account email<input type="email" value={icloudAccount} onChange={(event) => setIcloudAccount(event.target.value)} required /></label>
+                <label style={{ flex: 1 }}>App-specific password<input type="password" autoComplete="new-password" value={icloudPassword} onChange={(event) => setIcloudPassword(event.target.value)} required /></label>
+              </div>
+              <div className="form-row"><button className="primary" type="submit" disabled={busy}>{busy ? "Connecting…" : "Connect iCloud Contacts"}</button></div>
+            </form>
+          ) : null}
+        </section>
+      ) : null}
 
       {isAdmin ? (
         <section className="panel" style={{ marginTop: 15 }}>

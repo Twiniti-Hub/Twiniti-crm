@@ -6,6 +6,8 @@ export * from "./filters.js";
 export * from "./board.js";
 export * from "./board-repositories.js";
 export * from "./jobs.js";
+export * from "./contact-sync.js";
+export * from "./contact-providers.js";
 export * from "./hubspot.js";
 export * from "./email-tracking.js";
 export * from "./outbound-email.js";
