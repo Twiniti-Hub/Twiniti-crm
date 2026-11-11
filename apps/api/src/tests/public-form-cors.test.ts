@@ -47,3 +47,10 @@ test("CTO Advisory marketing origins are allowed on website-contact; unknown ori
   assert.ok(allowed.includes("https://twiniti-cto-advisory-dev.onrender.com"));
   assert.equal(allowed.includes("https://not-a-marketing-site.example"), false);
 });
+
+test("newsletter marketing origins are allowed on website-contact", () => {
+  const allowed = allowedCorsOriginsForPath("/api/v1/public/website-contact", env);
+  assert.ok(allowed.includes("https://newsletters.twiniti.ai"));
+  assert.ok(allowed.includes("https://newsletter.twiniti.ai"));
+  assert.ok(allowed.includes("https://newsletters-dev.onrender.com"));
+});
