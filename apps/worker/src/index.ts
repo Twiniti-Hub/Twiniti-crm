@@ -1,4 +1,5 @@
 import { licenseJobHandlers } from "./license-jobs.js";
+import { enqueueDueContactSyncs, processContactSyncJob } from "./contact-sync.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
@@ -1182,6 +1183,15 @@ async function handleJob(kind: string, payload: Record<string, unknown>, organiz
     case "contacts.reconcile_companies":
       await processContactCompanyReconciliation(payload as { organizationId: string });
       return;
+    case "contacts.sync":
+      if (!organizationId) throw new Error("Contact sync jobs require an organization");
+      await processContactSyncJob(
+        db,
+        env,
+        payload as { connectionId: string; runId: string; generation: number },
+        organizationId
+      );
+      return;
     case "noop":
       return;
     default:
@@ -1197,6 +1207,9 @@ async function tick(): Promise<boolean> {
     for (const target of getRegionalDatabases()) {
       activeRegion = target.region;
       db = target.db;
+      if (env.CONTACT_SYNC_ENABLED) {
+        await withServiceRls(db, null, (serviceDb) => enqueueDueContactSyncs(serviceDb));
+      }
       const claimed = await withServiceRls(db, null, (serviceDb) => claimJobs(serviceDb, 5));
       if (claimed.length > 0) hadWork = true;
       for (const job of claimed) {

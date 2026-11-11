@@ -15,7 +15,7 @@ type PropertyDefinition = {
 
 type Contact = {
   id: string;
-  email: string;
+  email: string | null;
   phone: string | null;
   firstName: string | null;
   lastName: string | null;
@@ -297,7 +297,7 @@ export function ContactDetailPage() {
       .then(([contactRes, propsRes, timelineRes, historyRes]) => {
         const row = contactRes.data as Contact;
         setContact(row);
-        setEmail(row.email);
+        setEmail(row.email ?? "");
         setPhone(row.phone ?? "");
         setFirstName(row.firstName ?? "");
         setLastName(row.lastName ?? "");
@@ -332,7 +332,7 @@ export function ContactDetailPage() {
       const res = await api(`/api/v1/contacts/${contact.id}`, {
         method: "PATCH",
         body: JSON.stringify({
-          email,
+          email: email || null,
           phone: phone || null,
           firstName: firstName || null,
           lastName: lastName || null,
@@ -446,7 +446,7 @@ export function ContactDetailPage() {
             <div className="form-row">
               <label>
                 Email
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Optional" />
               </label>
               <label>
                 Phone

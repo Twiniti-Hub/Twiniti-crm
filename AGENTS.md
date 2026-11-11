@@ -10,6 +10,19 @@ mobile navigation. See `docs/architecture/APPLICATION_THEME.md`.
 Load the Google font stylesheet only while an application or authentication
 surface is mounted; the public React landing route must not request it.
 
+## Personal contact sync (0.10.55.17)
+
+TWI-1087 adds inbound-only Google People and iCloud CardDAV sync for personal
+workspaces. Apply additive migration 0027 before enabling API/worker/web.
+Preserve owner and organization checks, forced RLS, regional credential storage,
+generation fencing, preview-before-import, stable provider IDs, local overrides,
+and history-preserving deletions. Never use email as provider identity, silently
+merge ambiguous contacts, infer marketing consent, request a normal Apple Account
+password, or write back to providers. Contacts may have a null email; campaign and
+email paths must exclude them explicitly. Keep CONTACT_SYNC_ENCRYPTION_KEY stable
+and never log credentials or contact payloads. See
+`docs/operations/PERSONAL_CONTACT_SYNC.md`.
+
 ## WV App saved setup (0.10.55.14)
 
 TWI-1079: Org Admin provisions the website key; installation shows it read-only.

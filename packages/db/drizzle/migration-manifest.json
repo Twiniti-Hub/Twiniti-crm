@@ -30,6 +30,7 @@
     {"file":"0023_crm_users_multi_membership.sql","status":"journaled","sha256":"e3a1f958c2a353d2a17043809bda892d16bbef77c8ba064731405da7d50fba03"},
     {"file":"0024_user_license_verification.sql","status":"journaled","sha256":"39a22243e4267b44f6322017ee1aa3927c981c7f5f3863b2a9f4a03c6a5ed954"},
     {"file":"0025_web_visitors.sql","status":"journaled","sha256":"ee7d982c40079f93982a368184f5a6e41c3902eac0f9ab483d5274620749af06"},
-    {"file":"0026_web_visitor_saved_webhook.sql","status":"journaled","sha256":"a2ff6229cb813b5785e5821eb1d661cf3c882b98a2b01d04b7e5e2a87a90f50a"}
+    {"file":"0026_web_visitor_saved_webhook.sql","status":"journaled","sha256":"a2ff6229cb813b5785e5821eb1d661cf3c882b98a2b01d04b7e5e2a87a90f50a"},
+    {"file":"0027_personal_contact_sync.sql","status":"journaled","sha256":"6444bb9d2df979ce1518d233f4024006308ad127e5c4a0ccdd1216f43e3d88c5"}
   ]
 }
