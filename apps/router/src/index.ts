@@ -1,4 +1,5 @@
 import { resolveWebSurface, type Surface } from "./surface";
+import { DEV_ROBOTS_TXT, isCrawler, isProduction, wakingPage, wantsDocument } from "./edge";
 
 export interface Env {
   DEFAULT_REGION: string;
@@ -75,7 +76,18 @@ async function proxyWeb(request: Request, env: Env) {
   const url = new URL(request.url);
   const surface = resolveWebSurface(url.pathname, request.headers.get("Cookie"));
   const response = await proxyOrigin(request, surface === "app" ? env.APP_ORIGIN : env.WEB_ORIGIN);
-  return withSurfaceCookie(response, surface);
+  // The app serves no 429s on document routes; this is Render refusing to wake a sleeping origin.
+  if (surface === "app" && response.status === 429 && wantsDocument(request)) {
+    return wakingPage([env.APP_ORIGIN, env.API_ORIGIN_US, env.API_ORIGIN_EU, env.API_ORIGIN_UK]);
+  }
+  const tagged = withSurfaceCookie(response, surface);
+  if (!isProduction(env.DEPLOYMENT_ENV)) tagged.headers.set("X-Robots-Tag", "noindex, nofollow");
+  return tagged;
+}
+
+/** A sleeping free-plan cell answers 429; treat it as unavailable, not as "no workspace here". */
+function cellUnavailable(response: Response) {
+  return response.status >= 500 || response.status === 429;
 }
 
 async function proxy(request: Request, env: Env, region: Region) {
@@ -109,7 +121,7 @@ export async function discoverWorkspace(request: Request, env: Env, timeoutMs = 
   const admin = results.find((result) => result?.body?.data?.isSuperAdmin);
   if (admin) return admin.response;
   // Do not claim setup is needed when a cell could contain the user's workspace.
-  if (results.some((result) => !result || result.response.status >= 500)) {
+  if (results.some((result) => !result || cellUnavailable(result.response))) {
     return Response.json({ error: { code: "workspace_discovery_unavailable", message: "A workspace service is unavailable. Please retry." } },
       { status: 503, headers: corsHeaders(request) });
   }
@@ -165,9 +177,9 @@ export async function proxyBootstrapFanout(request: Request, env: Env, timeoutMs
       return null;
     }
   }));
-  const hit = results.find((result) => result && result.response.status !== 404 && result.response.status < 500);
+  const hit = results.find((result) => result && result.response.status !== 404 && !cellUnavailable(result.response));
   if (hit) return hit.response;
-  if (results.some((result) => !result || result.response.status >= 500)) {
+  if (results.some((result) => !result || cellUnavailable(result.response))) {
     return Response.json(
       { error: { code: "workspace_discovery_unavailable", message: "A workspace service is unavailable. Please retry." } },
       { status: 503, headers: corsHeaders(request) }
@@ -193,6 +205,17 @@ export default {
       service: "twiniti-loop-router",
       environment: env.DEPLOYMENT_ENV
     });
+    if (!isProduction(env.DEPLOYMENT_ENV)) {
+      if (url.pathname === "/robots.txt") {
+        return new Response(DEV_ROBOTS_TXT, { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=3600" } });
+      }
+      if (isCrawler(request.headers.get("User-Agent"))) {
+        return new Response("Crawling is disabled on this environment.\n", {
+          status: 403,
+          headers: { "content-type": "text/plain; charset=utf-8", "x-robots-tag": "noindex, nofollow" }
+        });
+      }
+    }
     if (!url.pathname.startsWith("/api/")) return proxyWeb(request, env);
 
     const workspaceId = request.headers.get("X-Twiniti-Workspace-Id");
