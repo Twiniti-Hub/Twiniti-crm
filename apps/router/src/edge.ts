@@ -29,29 +29,64 @@ export function wantsDocument(request: Request) {
   return accept === "" || accept.includes("text/html") || accept.includes("*/*");
 }
 
-/** Origin health URLs the browser should hit directly so Render sees a real client IP. */
-export function wakeTargets(origins: string[]) {
-  return [...new Set(origins.filter(Boolean).map((origin) => `${origin.replace(/\/$/, "")}/health`))];
+/** Same-origin readiness path the waking page polls; the Worker forwards it to APP_ORIGIN/health. */
+export const READY_PATH = "/health/app";
+
+export const WAKE_POLL_INTERVAL_MS = 3000;
+export const WAKE_POLL_DEADLINE_MS = 90000;
+
+/** Plain 503 for crawlers and other non-visitors: no script, no pings, no refresh. */
+export function sleepingResponse() {
+  return new Response("Loop is starting. Please try again in a minute.\n", {
+    status: 503,
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "no-store",
+      "retry-after": "60",
+      "x-robots-tag": "noindex, nofollow"
+    }
+  });
 }
 
-export function wakingPage(origins: string[]) {
-  const targets = JSON.stringify(wakeTargets(origins));
+/**
+ * Waking page for a real visitor. Only the origin that served the 429 is woken
+ * (one direct no-cors GET from the visitor's browser, so Render sees a real IP).
+ * Readiness is then polled same-origin every 3s for at most 90s; the first 200
+ * triggers exactly one reload. No interval, service worker, or meta refresh.
+ */
+export function wakingPage(appOrigin: string) {
+  const wakeUrl = JSON.stringify(`${appOrigin.replace(/\/$/, "")}/health`);
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<meta http-equiv="refresh" content="20">
 <title>Starting Loop…</title>
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:20vh auto;padding:0 1rem;color:#1f2937}</style>
 </head><body>
-<h1>Starting Loop…</h1>
-<p>This environment sleeps when idle. It usually takes under a minute to start. This page reloads on its own.</p>
-<p><a href="">Retry now</a></p>
+<h1 id="wake-title">Starting Loop…</h1>
+<p id="wake-status">This environment sleeps when idle. It usually takes under a minute to start.</p>
+<noscript><p>Wait a minute, then <a href="">try again</a>.</p></noscript>
+<p id="wake-retry" hidden><a href="">Try again</a></p>
 <script>
 (function () {
-  var targets = ${targets};
-  targets.forEach(function (url) { fetch(url, { mode: "no-cors", cache: "no-store", credentials: "omit" }).catch(function () {}); });
-  setTimeout(function () { location.reload(); }, 15000);
+  var READY = ${JSON.stringify(READY_PATH)}, INTERVAL = ${WAKE_POLL_INTERVAL_MS}, DEADLINE = ${WAKE_POLL_DEADLINE_MS};
+  var KEY = "loopWakeReloadedAt", started = Date.now();
+  function giveUp(message) {
+    document.getElementById("wake-status").textContent = message;
+    document.getElementById("wake-retry").hidden = false;
+  }
+  var last = Number(sessionStorage.getItem(KEY) || 0);
+  if (last && Date.now() - last < 120000) { giveUp("Loop is still starting. Try again in a moment."); return; }
+  fetch(${wakeUrl}, { mode: "no-cors", cache: "no-store", credentials: "omit" }).catch(function () {});
+  function poll() {
+    fetch(READY, { cache: "no-store", credentials: "omit" }).then(function (r) { return r.status; }, function () { return 0; })
+      .then(function (status) {
+        if (status === 200) { sessionStorage.setItem(KEY, String(Date.now())); location.reload(); return; }
+        if (Date.now() - started + INTERVAL > DEADLINE) { giveUp("Loop is taking longer than usual to start."); return; }
+        setTimeout(poll, INTERVAL);
+      });
+  }
+  setTimeout(poll, INTERVAL);
 })();
 </script>
 </body></html>`;

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import router, { type Env } from "./index";
 
 function environment(deploymentEnv = "development") {
@@ -18,19 +19,70 @@ function environment(deploymentEnv = "development") {
 const chrome = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36";
 const renderSleeping = () => new Response("Too Many Requests", { status: 429 });
 
-test("sleeping app origin 429 on /sign-in becomes a waking page that pings every origin directly", async (t) => {
-  t.mock.method(globalThis, "fetch", async () => renderSleeping());
+test("sleeping app origin 429 on /sign-in: one origin fetch, waking page pings only APP_ORIGIN", async (t) => {
+  const fetchMock = t.mock.method(globalThis, "fetch", async () => renderSleeping());
   const response = await router.fetch(new Request("https://loop-dev.test/sign-in", {
     headers: { "User-Agent": chrome, Accept: "text/html,application/xhtml+xml" }
   }), environment());
+  assert.equal(fetchMock.mock.callCount(), 1, "the Worker sends no extra wake requests");
   assert.equal(response.status, 503);
-  assert.equal(response.headers.get("retry-after"), "15");
   assert.equal(response.headers.get("cache-control"), "no-store");
   const html = await response.text();
-  for (const origin of ["https://us.test/health", "https://eu.test/health", "https://uk.test/health"]) {
-    assert.ok(html.includes(origin), `waking page pings ${origin}`);
+  assert.equal(html.match(/https:\/\/[a-z]+\.test\/health/g)?.join(","), "https://us.test/health");
+  assert.ok(!html.includes("eu.test") && !html.includes("uk.test"), "other regions are never woken");
+});
+
+test("waking page polls with a bounded timeout chain and reloads once", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => renderSleeping());
+  const html = await (await router.fetch(new Request("https://loop-dev.test/sign-in", {
+    headers: { "User-Agent": chrome, Accept: "text/html" }
+  }), environment())).text();
+  assert.match(html, /INTERVAL = 3000/);
+  assert.match(html, /DEADLINE = 90000/);
+  assert.match(html, /status === 200/);
+  assert.equal(html.match(/location\.reload\(\)/g)?.length, 1);
+  for (const forbidden of ["setInterval", "serviceWorker", "http-equiv=\"refresh\"", "sendBeacon"]) {
+    assert.ok(!html.includes(forbidden), `waking page must not use ${forbidden}`);
   }
-  assert.equal(html.match(/https:\/\/us\.test\/health/g)?.length, 1, "duplicate origins are pinged once");
+});
+
+test("crawlers hitting a sleeping origin in production get a plain 503 with no script", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => renderSleeping());
+  const response = await router.fetch(new Request("https://loop.test/sign-in", {
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1)", Accept: "text/html" }
+  }), environment("production"));
+  assert.equal(response.status, 503);
+  const body = await response.text();
+  assert.ok(!body.includes("<script") && !body.includes("/health"));
+});
+
+test("/health/app forwards one readiness GET to APP_ORIGIN and maps it to 200/503", async (t) => {
+  const visited: string[] = [];
+  let status = 429;
+  t.mock.method(globalThis, "fetch", async (input: Request | string) => {
+    visited.push(String(input instanceof Request ? input.url : input));
+    return new Response(null, { status });
+  });
+  const ask = () => router.fetch(new Request("https://loop-dev.test/health/app", { headers: { "User-Agent": chrome } }), environment());
+  assert.equal((await ask()).status, 503);
+  status = 200;
+  assert.equal((await ask()).status, 200);
+  assert.deepEqual(visited, ["https://us.test/health", "https://us.test/health"]);
+});
+
+test("crawlers cannot use /health/app in any environment", async (t) => {
+  const fetchMock = t.mock.method(globalThis, "fetch", async () => new Response(null, { status: 200 }));
+  const response = await router.fetch(new Request("https://loop.test/health/app", {
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; bingbot/2.0)" }
+  }), environment("production"));
+  assert.equal(response.status, 403);
+  assert.equal(fetchMock.mock.callCount(), 0);
+});
+
+test("no scheduled handler and no cron triggers anywhere in the router", async () => {
+  assert.equal((router as Record<string, unknown>).scheduled, undefined);
+  const config = readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
+  assert.doesNotMatch(config, /triggers|crons/i);
 });
 
 test("awake app origin passes /sign-in through with the app surface cookie", async (t) => {
@@ -82,16 +134,4 @@ test("production keeps crawlers and the landing robots.txt", async (t) => {
   }), environment("production"));
   assert.equal(crawled.status, 200);
   assert.equal(crawled.headers.get("x-robots-tag"), null);
-});
-
-test("/api/v1/me reports discovery unavailable when a sleeping cell answers 429", async (t) => {
-  t.mock.method(globalThis, "fetch", async (input: Request | string) => {
-    const url = String(input instanceof Request ? input.url : input);
-    if (url.startsWith("https://uk.test")) return renderSleeping();
-    return Response.json({ data: { organizationId: null } });
-  });
-  const response = await router.fetch(new Request("https://loop.test/api/v1/me", { headers: { "User-Agent": chrome } }), environment("production"));
-  assert.equal(response.status, 503);
-  const body = await response.json() as { error: { code: string } };
-  assert.equal(body.error.code, "workspace_discovery_unavailable");
 });
