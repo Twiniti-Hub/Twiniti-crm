@@ -1,4 +1,5 @@
 import { resolveWebSurface, type Surface } from "./surface";
+import { DEV_ROBOTS_TXT, READY_PATH, isCrawler, isProduction, sleepingResponse, wakingPage, wantsDocument } from "./edge";
 
 export interface Env {
   DEFAULT_REGION: string;
@@ -75,7 +76,14 @@ async function proxyWeb(request: Request, env: Env) {
   const url = new URL(request.url);
   const surface = resolveWebSurface(url.pathname, request.headers.get("Cookie"));
   const response = await proxyOrigin(request, surface === "app" ? env.APP_ORIGIN : env.WEB_ORIGIN);
-  return withSurfaceCookie(response, surface);
+  // The app serves no 429s on document routes; this is Render refusing to wake a sleeping origin.
+  if (surface === "app" && response.status === 429 && wantsDocument(request)) {
+    // Only real visitors get the script that wakes APP_ORIGIN; crawlers get a plain 503.
+    return isCrawler(request.headers.get("User-Agent")) ? sleepingResponse() : wakingPage(env.APP_ORIGIN);
+  }
+  const tagged = withSurfaceCookie(response, surface);
+  if (!isProduction(env.DEPLOYMENT_ENV)) tagged.headers.set("X-Robots-Tag", "noindex, nofollow");
+  return tagged;
 }
 
 async function proxy(request: Request, env: Env, region: Region) {
@@ -193,6 +201,26 @@ export default {
       service: "twiniti-loop-router",
       environment: env.DEPLOYMENT_ENV
     });
+    if (url.pathname === READY_PATH) {
+      if (request.method !== "GET" || isCrawler(request.headers.get("User-Agent"))) return new Response(null, { status: 403 });
+      // Forwards the waking page's poll; from the Worker IP this cannot wake a sleeping origin.
+      const status = await fetch(`${env.APP_ORIGIN.replace(/\/$/, "")}/health`, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(10_000)
+      }).then((ready) => ready.status, () => 0);
+      return new Response(null, { status: status === 200 ? 200 : 503, headers: { "cache-control": "no-store" } });
+    }
+    if (!isProduction(env.DEPLOYMENT_ENV)) {
+      if (url.pathname === "/robots.txt") {
+        return new Response(DEV_ROBOTS_TXT, { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=3600" } });
+      }
+      if (isCrawler(request.headers.get("User-Agent"))) {
+        return new Response("Crawling is disabled on this environment.\n", {
+          status: 403,
+          headers: { "content-type": "text/plain; charset=utf-8", "x-robots-tag": "noindex, nofollow" }
+        });
+      }
+    }
     if (!url.pathname.startsWith("/api/")) return proxyWeb(request, env);
 
     const workspaceId = request.headers.get("X-Twiniti-Workspace-Id");
