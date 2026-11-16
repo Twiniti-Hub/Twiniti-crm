@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Revision 0.10.55.20 (TWI-1111): repair the WV App setup flow by generating a separate public installation key automatically, keeping the webhook credential private, and allowing administrators to rotate each independently. Installation code is generated without manual key entry. Additive migration 0028 backfills missing installation keys for existing integrations; apply it before the API/web rollout. Update API tests and architecture, agent, and user documentation. Package version remains 0.10.55.
+
 - Revision 0.10.55.19 (TWI-1109): harden the Regional database migration GitHub Action with canonical Production-branch enforcement, exact operator confirmation, required backup/PITR evidence, protected-environment approval, and complete migration receipts containing the manifest checksums and schema-verification outcome. Preserve the existing US → EU → UK stop-on-first-failure runner; no migration is executed by this change and the package version remains 0.10.55.
 
 - Revision 0.10.55.18 (TWI-1107): reconcile Production tip `3b56fb2` into Development ancestry before the next policy-compliant promotion. This is a history-only merge that preserves Development changes for TWI-1095 and TWI-1097; it does not change application behavior, dependencies, database schema, configuration, or package version.

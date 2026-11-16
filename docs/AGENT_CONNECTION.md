@@ -68,6 +68,11 @@ Revision 0.10.55.13 (TWI-1069): installation instructions remain visible to admi
 
 Revision 0.10.55.14 (TWI-1079): saved webhook retrieval and rotation are admin-user-only. Installation uses the Org Admin-provisioned website key read-only. Never expose webhook tokens in generated website code, logs, or agent responses.
 
+Revision 0.10.55.20 (TWI-1111): Loop provisions and rotates a separate public
+installation key for website code. The encrypted webhook credential remains
+private and rotates independently. Both actions remain organization-admin
+user-only; agents must not retrieve, rotate, or disclose either value.
+
 The credential is organization-bound. An agent does not choose an organization
 with a header or query parameter, and it cannot cross the organization or
 regional boundary of its credential. Revoke it from the Agents page if it is
