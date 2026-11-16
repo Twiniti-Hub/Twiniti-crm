@@ -78,11 +78,10 @@ In production, the API refuses to start without the Stripe secret, webhook secre
 ### Agent and operator validation
 
 Run billing tests, API/web typechecks, web build and repository policy checks.
-The signup E2E must follow account creation through `/onboarding`, create the
-saved workspace, and complete Stripe Checkout without entering a card. It must
-then verify `trialing` or `active` access and a real CRM write. Do not restore the
-legacy direct-signup-to-Checkout path or add card details to the new-workspace
-trial test.
+The public signup E2E ends at the authoritative email-verification gate because
+it does not control the recipient inbox. Exercise onboarding and the cardless
+Stripe trial with a verified authenticated test account; do not bypass email
+verification or reintroduce the legacy direct-signup-to-Checkout assumption.
 After Development deployment, verify both Price IDs resolve to the USD monthly
 amounts above in the correct Stripe environment. Test both plans without a card,
 trialing webhook activation, portal payment-method updates, and test-clock trial

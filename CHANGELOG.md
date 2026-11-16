@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Revision 0.10.55.22 (TWI-1111): make the Development signup E2E honor mandatory server-side email verification. The public test now validates account creation, the addressed verification gate, resend/continue controls, and sign-out without bypassing Hexclave or claiming inbox redemption. Verified-account billing tests and operator smoke checks continue to cover onboarding and the cardless Stripe trial. Update billing and agent guidance; no database, runtime, or package-version change.
+
 - Revision 0.10.55.21 (TWI-1111): align the Development signup promotion gate with the supported onboarding and cardless-trial flow. The E2E now provisions the saved company workspace from `/onboarding`, confirms Stripe offers the seven-day trial without card fields, completes Checkout, and verifies trialing/active CRM access. Update billing operator, agent, and test documentation. No database, runtime, or package-version change.
 
 - Revision 0.10.55.20 (TWI-1111): repair the WV App setup flow by generating a separate public installation key automatically, keeping the webhook credential private, and allowing administrators to rotate each independently. Installation code is generated without manual key entry. Additive migration 0028 backfills missing installation keys for existing integrations; apply it before the API/web rollout. Update API tests, the landing-page setup guidance, the signup E2E selector, and architecture, agent, and user documentation. Package version remains 0.10.55.
