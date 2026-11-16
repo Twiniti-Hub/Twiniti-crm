@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Revision 0.10.55.18 (TWI-1107): reconcile Production tip `3b56fb2` into Development ancestry before the next policy-compliant promotion. This is a history-only merge that preserves Development changes for TWI-1095 and TWI-1097; it does not change application behavior, dependencies, database schema, configuration, or package version.
+
 - Revision 0.10.55.17 (TWI-1087): add personal-workspace inbound Google Contacts and iCloud CardDAV preview/import with encrypted credentials, durable regional refresh jobs, stable source mappings, conflict staging, disconnect fencing, and personal Settings controls. Additive migration 0027 makes contact email nullable and adds forced-RLS sync tables; apply it before enabling API/worker/web. Contacts without email are excluded from campaign delivery. Add provider setup, rollback, agent, and user documentation. Package version remains 0.10.55.
 
 - Revision 0.10.55.16 (TWI-1080): scope the Precision Stark Google Font request to mounted application and authentication surfaces so the React landing route remains unchanged. No migration; package version remains 0.10.55.
