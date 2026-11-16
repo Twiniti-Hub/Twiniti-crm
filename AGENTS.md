@@ -31,15 +31,16 @@ email paths must exclude them explicitly. Keep CONTACT_SYNC_ENCRYPTION_KEY stabl
 and never log credentials or contact payloads. See
 `docs/operations/PERSONAL_CONTACT_SYNC.md`.
 
-## WV App saved setup (0.10.55.14)
+## WV App saved setup (0.10.55.20)
 
-TWI-1079: Org Admin provisions the website key; installation shows it read-only.
-Never substitute a webhook token for a website key. Apply additive migration
-0026 before the API. Webhook tokens have dedicated AES-GCM ciphertext storage
-and hash lookup; admin responses are no-store. WV_CREDENTIAL_ENCRYPTION_KEY
-falls back to RESEND_CREDENTIAL_ENCRYPTION_KEY; keep the selected key stable.
-Rotation updates stored/displayed webhook credentials without changing website
-code. Never silently rotate legacy hash-only credentials.
+TWI-1111: Loop generates the public installation key; installation shows it
+read-only and generates website code without manual entry. Apply additive
+migration 0028 to backfill existing integrations. Never substitute the private
+webhook token for the public installation key. Webhook tokens retain dedicated
+AES-GCM ciphertext storage and hash lookup; admin responses are no-store.
+Webhook and installation-key rotation are separate: webhook rotation leaves
+website code unchanged, while installation-key rotation requires publishing the
+replacement code. Never silently rotate legacy hash-only credentials.
 
 ## WV App Web Visitors (0.10.55.12)
 
