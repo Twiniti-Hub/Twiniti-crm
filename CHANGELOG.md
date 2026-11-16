@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Revision 0.10.55.22 (TWI-1111): make the Development signup E2E honor mandatory server-side email verification. The public test now validates account creation, the addressed verification gate, resend/continue controls, and sign-out without bypassing Hexclave or claiming inbox redemption. Verified-account billing tests and operator smoke checks continue to cover onboarding and the cardless Stripe trial. Update billing and agent guidance; no database, runtime, or package-version change.
+
+- Revision 0.10.55.21 (TWI-1111): align the Development signup promotion gate with the supported onboarding and cardless-trial flow. The E2E now provisions the saved company workspace from `/onboarding`, confirms Stripe offers the seven-day trial without card fields, completes Checkout, and verifies trialing/active CRM access. Update billing operator, agent, and test documentation. No database, runtime, or package-version change.
+
+- Revision 0.10.55.20 (TWI-1111): repair the WV App setup flow by generating a separate public installation key automatically, keeping the webhook credential private, and allowing administrators to rotate each independently. Installation code is generated without manual key entry. Additive migration 0028 backfills missing installation keys for existing integrations; apply it before the API/web rollout. Update API tests, the landing-page setup guidance, the signup E2E selector, and architecture, agent, and user documentation. Package version remains 0.10.55.
+
+- Revision 0.10.55.19 (TWI-1109): harden the Regional database migration GitHub Action with canonical Production-branch enforcement, exact operator confirmation, required backup/PITR evidence, protected-environment approval, and complete migration receipts containing the manifest checksums and schema-verification outcome. Preserve the existing US → EU → UK stop-on-first-failure runner; no migration is executed by this change and the package version remains 0.10.55.
+
+- Revision 0.10.55.18 (TWI-1107): reconcile Production tip `3b56fb2` into Development ancestry before the next policy-compliant promotion. This is a history-only merge that preserves Development changes for TWI-1095 and TWI-1097; it does not change application behavior, dependencies, database schema, configuration, or package version.
+
 - Revision 0.10.55.17 (TWI-1087): add personal-workspace inbound Google Contacts and iCloud CardDAV preview/import with encrypted credentials, durable regional refresh jobs, stable source mappings, conflict staging, disconnect fencing, and personal Settings controls. Additive migration 0027 makes contact email nullable and adds forced-RLS sync tables; apply it before enabling API/worker/web. Contacts without email are excluded from campaign delivery. Add provider setup, rollback, agent, and user documentation. Package version remains 0.10.55.
 
 - Revision 0.10.55.16 (TWI-1080): scope the Precision Stark Google Font request to mounted application and authentication surfaces so the React landing route remains unchanged. No migration; package version remains 0.10.55.

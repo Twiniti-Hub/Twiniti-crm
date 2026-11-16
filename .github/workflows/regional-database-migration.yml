@@ -14,6 +14,14 @@ on:
         description: Linear issue or approved change identifier
         required: true
         type: string
+      backup_pitr_reference:
+        description: Required for Production — Neon backup/PITR evidence reference
+        required: false
+        type: string
+      production_confirmation:
+        description: Required for Production — enter MIGRATE PRODUCTION
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -47,6 +55,9 @@ jobs:
           DEPLOYMENT_ENV: ${{ inputs.environment }}
           MIGRATION_APPROVED: ${{ inputs.environment == 'production' && 'true' || 'false' }}
           MIGRATION_CHANGE_ID: ${{ inputs.change_id }}
+          MIGRATION_BACKUP_REFERENCE: ${{ inputs.backup_pitr_reference }}
+          MIGRATION_CONFIRMATION: ${{ inputs.production_confirmation }}
+          MIGRATION_SOURCE_REF: ${{ github.ref }}
           MIGRATION_RECEIPT_PATH: migration-receipt.json
           DATABASE_URL_Dev_US: ${{ secrets.DATABASE_URL_DEV_US }}
           DATABASE_URL_Dev_EU: ${{ secrets.DATABASE_URL_DEV_EU }}
@@ -63,3 +74,12 @@ jobs:
           name: migration-receipt-${{ inputs.environment }}-${{ github.run_id }}
           path: migration-receipt.json
           if-no-files-found: ignore
+
+      - name: Publish migration receipt summary
+        if: always() && hashFiles('migration-receipt.json') != ''
+        shell: bash
+        run: |
+          echo '## Regional migration receipt' >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat migration-receipt.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

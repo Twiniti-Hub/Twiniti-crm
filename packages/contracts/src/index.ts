@@ -1018,7 +1018,6 @@ export const webVisitorSupplierPayloadSchema = z.object({
 }).strict();
 export const updateWebVisitorIntegrationSchema = z.object({
   enabled: z.boolean(),
-  publicKey: z.string().trim().regex(/^[A-Za-z0-9_-]{6,100}$/).optional(),
   settings: webVisitorSettingsSchema.omit({ publicKey: true }).optional()
 }).strict();
 export const validateWebVisitorInstallationSchema = z.object({

@@ -14,6 +14,8 @@ export const LOOP_INTRO_VIDEO_THUMBNAIL_HQ = `https://i.ytimg.com/vi/${LOOP_INTR
 const LOOP_INTRO_VIDEO_DESCRIPTION =
   "Watch a short introduction to Loop, Twiniti's marketing CRM for startups and founders—contacts, segments, and approval-gated campaigns in one workspace.";
 
+const LOOP_INTRO_VIDEO_CAPTION = "Watch a short introduction to Loop.";
+
 export const loopIntroVideoObjectJsonLd = {
   "@context": "https://schema.org",
   "@type": "VideoObject",
@@ -52,8 +54,7 @@ export function renderLoopIntroVideoMarkup(): string {
             alt="Video thumbnail: ${LOOP_INTRO_VIDEO_TITLE}"
             width="1280"
             height="720"
-            loading="eager"
-            fetchpriority="high"
+            loading="lazy"
             data-loop-intro-video-thumb
           />
           <span class="landing-video-play" aria-hidden="true">
@@ -67,10 +68,7 @@ export function renderLoopIntroVideoMarkup(): string {
           </span>
         </button>
       </div>
-      <figcaption class="landing-video-caption">
-        ${LOOP_INTRO_VIDEO_DESCRIPTION}
-        <a href="${LOOP_INTRO_VIDEO_WATCH_URL}" rel="noopener noreferrer">Watch on YouTube</a>
-      </figcaption>
+      <figcaption class="landing-video-caption">${LOOP_INTRO_VIDEO_CAPTION}</figcaption>
     </figure>
   `;
 }

@@ -1,6 +1,6 @@
 # WV App Web Visitors architecture
 
-Revision: 0.10.55.14
+Revision: 0.10.55.20
 Linear: TWI-1067, TWI-1068
 Follow-up: TWI-1069
 
@@ -16,10 +16,12 @@ Visitor processing and reassignment share an organization-scoped transaction adv
 
 ## Scope
 
-TWI-1079 setup has four persistent sections: saved webhook URL, read-only website
-key, generated code and website validation. Only the Org Admin provisions or
-replaces the website key in organization settings. Webhook rotation does not
-change that key or the generated website code.
+TWI-1111 setup keeps the inbound webhook credential private and generates a
+separate public installation key automatically. The installation card shows the
+public key read-only and builds the website code without manual copy/paste.
+Admins rotate the webhook credential and installation key independently. Webhook
+rotation does not change website code; installation-key rotation does not change
+the webhook URL and requires publishing the replacement website code.
 
 Migration 0026 adds nullable webhook_token_ciphertext. New/rotated tokens use
 AES-256-GCM with a random IV and retain SHA-256 lookup hashes. GET/PUT/rotation
@@ -36,7 +38,7 @@ by that runtime leaves stale ciphertext: reconcile by explicit rotation on the
 new runtime before redisplaying credentials. Coordinate sender updates. No live
 tokens are rotated by this migration.
 
-WV App Web Visitors is configured per Loop organization. The Org Admin provisions the public website-loader key and enables ingestion. Loop stores a SHA-256 webhook lookup hash and encrypted token for admin retrieval. The browser loader continues to use the supplier-required runtime global, but all Loop product, database, API, worker, and audit naming uses `web_visitors` / **WV App Web Visitors**.
+WV App Web Visitors is configured per Loop organization. Loop automatically provisions the public website-loader key while the Org Admin enables ingestion. Loop stores a SHA-256 webhook lookup hash and encrypted private token for admin retrieval. The browser loader receives only the separate public installation key. All Loop product, database, API, worker, and audit naming uses `web_visitors` / **WV App Web Visitors**.
 
 ## Data flow
 
@@ -62,6 +64,12 @@ A visit never increments both contact and company. Contact-company reporting may
 ## Website installation validation
 
 Organization admins open **Settings → WV App → Web Visitors → Install on your website** to copy the exact loader generated from the saved public key. `POST /api/v1/organization/integrations/web-visitors/validate-installation` fetches a supplied public page and confirms that its published HTML contains the exact organization loader URL. The check does not execute JavaScript and never creates a visitor event.
+
+Migration `0028_web_visitor_installation_keys.sql` backfills a random `wvi_…`
+installation key for integrations created before TWI-1111. New integrations
+receive one on first save. `POST .../rotate-installation-key` replaces only this
+public key and its generated code. The private `wv_…` webhook token must never be
+substituted into the loader.
 
 The validator accepts only HTTP(S) URLs without credentials. It resolves DNS before each request, rejects the request if any answer is loopback, private, link-local, reserved, multicast, or otherwise non-public, and repeats those checks for every redirect. Redirect count, response time, and response body are bounded; only HTML/XHTML is read. No browser cookies, customer credentials, or authorization headers are forwarded. Audit metadata contains only the hostname and result status, never a URL query or fragment.
 

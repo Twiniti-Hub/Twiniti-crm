@@ -14,7 +14,7 @@ import { randomBytes } from "node:crypto";
 const key = "R6G5YH5RVG65";
 const publicLookup = async () => [{ address: "93.184.216.34", family: 4 }];
 
-test("saved webhook survives reload/settings save and rotation preserves website code", async () => {
+test("private webhook and automatic installation key survive reload and rotate independently", async () => {
   let stored: Record<string, unknown> | undefined;
   const db = {
     select: () => ({ from: () => ({ where: () => ({ limit: async () => stored ? [stored] : [] }) }) }),
@@ -32,10 +32,13 @@ test("saved webhook survives reload/settings save and rotation preserves website
   await registerWebVisitorRoutes(app, db, randomBytes(32).toString("base64"));
   const path = "/api/v1/organization/integrations/web-visitors";
   try {
-    const saved = await app.inject({ method: "PUT", url: path, payload: { enabled: true, publicKey: key } });
+    const saved = await app.inject({ method: "PUT", url: path, payload: { enabled: true } });
     assert.equal(saved.statusCode, 200);
     const initial = saved.json().data;
     assert.ok(initial.webhookToken.startsWith("wv_"));
+    assert.ok(initial.publicKey.startsWith("wvi_"));
+    assert.doesNotMatch(initial.loaderSnippet, new RegExp(initial.webhookToken));
+    assert.match(initial.loaderSnippet, new RegExp(initial.publicKey));
     assert.notEqual(stored!.webhookTokenCiphertext, initial.webhookToken);
     assert.equal(stored!.webhookTokenHash, hashCredential(initial.webhookToken));
     const loaded = await app.inject({ method: "GET", url: path });
@@ -48,6 +51,11 @@ test("saved webhook survives reload/settings save and rotation preserves website
     assert.notEqual(rotated.json().data.webhookToken, initial.webhookToken);
     assert.equal(rotated.json().data.loaderSnippet, initial.loaderSnippet);
     assert.equal((await app.inject({ method: "GET", url: path })).json().data.webhookToken, rotated.json().data.webhookToken);
+    const installationRotated = await app.inject({ method: "POST", url: `${path}/rotate-installation-key`, payload: {} });
+    assert.equal(installationRotated.statusCode, 200);
+    assert.equal(installationRotated.json().data.webhookToken, rotated.json().data.webhookToken);
+    assert.notEqual(installationRotated.json().data.publicKey, initial.publicKey);
+    assert.notEqual(installationRotated.json().data.loaderSnippet, initial.loaderSnippet);
     delete stored!.webhookTokenCiphertext;
     const legacy = (await app.inject({ method: "GET", url: path })).json().data;
     assert.equal(legacy.webhookNeedsRotation, true);

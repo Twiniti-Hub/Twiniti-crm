@@ -1,5 +1,22 @@
 # Agent instructions (Twiniti CRM)
 
+## Signup promotion gate (0.10.55.22)
+
+TWI-1111 follow-up: the public Development signup E2E stops at the mandatory
+email-verification gate; it must not bypass server verification or pretend to
+redeem a link from an inbox it cannot access. Test onboarding and the seven-day
+cardless Stripe trial separately with a verified authenticated account. Do not
+reintroduce direct signup-to-Checkout assumptions. See `docs/BILLING.md` and
+`docs/operations/EMAIL_VERIFICATION.md`.
+
+## Production database action (0.10.55.19)
+
+TWI-1109: Production schema changes run only through the Regional database
+migration GitHub Action from the canonical `production` branch. Require the
+protected environment approval, change ID, backup/PITR reference, and exact
+`MIGRATE PRODUCTION` confirmation. Preserve US → EU → UK order and attach the
+generated receipt to Linear. Never use pooled URLs or manual Production SQL.
+
 ## Application design (0.10.55.16)
 
 TWI-1080 (application scope only): `apps/web/src/application-theme.css` owns
@@ -23,15 +40,16 @@ email paths must exclude them explicitly. Keep CONTACT_SYNC_ENCRYPTION_KEY stabl
 and never log credentials or contact payloads. See
 `docs/operations/PERSONAL_CONTACT_SYNC.md`.
 
-## WV App saved setup (0.10.55.14)
+## WV App saved setup (0.10.55.20)
 
-TWI-1079: Org Admin provisions the website key; installation shows it read-only.
-Never substitute a webhook token for a website key. Apply additive migration
-0026 before the API. Webhook tokens have dedicated AES-GCM ciphertext storage
-and hash lookup; admin responses are no-store. WV_CREDENTIAL_ENCRYPTION_KEY
-falls back to RESEND_CREDENTIAL_ENCRYPTION_KEY; keep the selected key stable.
-Rotation updates stored/displayed webhook credentials without changing website
-code. Never silently rotate legacy hash-only credentials.
+TWI-1111: Loop generates the public installation key; installation shows it
+read-only and generates website code without manual entry. Apply additive
+migration 0028 to backfill existing integrations. Never substitute the private
+webhook token for the public installation key. Webhook tokens retain dedicated
+AES-GCM ciphertext storage and hash lookup; admin responses are no-store.
+Webhook and installation-key rotation are separate: webhook rotation leaves
+website code unchanged, while installation-key rotation requires publishing the
+replacement code. Never silently rotate legacy hash-only credentials.
 
 ## WV App Web Visitors (0.10.55.12)
 
