@@ -1,12 +1,13 @@
 # Agent instructions (Twiniti CRM)
 
-## Signup promotion gate (0.10.55.21)
+## Signup promotion gate (0.10.55.22)
 
-TWI-1111 follow-up: the Development signup E2E follows account creation to
-`/onboarding`, provisions the saved workspace, completes the seven-day Stripe
-trial without entering card details, and verifies authenticated CRM access. Do
-not reintroduce direct signup-to-Checkout assumptions or require a card for a
-new-workspace trial. See `docs/BILLING.md`.
+TWI-1111 follow-up: the public Development signup E2E stops at the mandatory
+email-verification gate; it must not bypass server verification or pretend to
+redeem a link from an inbox it cannot access. Test onboarding and the seven-day
+cardless Stripe trial separately with a verified authenticated account. Do not
+reintroduce direct signup-to-Checkout assumptions. See `docs/BILLING.md` and
+`docs/operations/EMAIL_VERIFICATION.md`.
 
 ## Production database action (0.10.55.19)
 
