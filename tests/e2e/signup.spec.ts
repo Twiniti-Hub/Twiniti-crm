@@ -9,7 +9,7 @@ test("new user can create an account and reach authenticated billing", async ({ 
 
   const landingUrl = process.env.E2E_LANDING_URL ?? baseURL ?? "https://loop-dev.twiniti.ai";
   await page.goto(landingUrl, { waitUntil: "domcontentloaded" });
-  await page.getByText("Start your workspace", { exact: false }).first().click();
+  await page.getByRole("link", { name: /Start free/i }).first().click();
   await expect(page).toHaveURL(/\/sign-up(?:[/?#]|$)/);
   await page.getByLabel("Company name", { exact: true }).fill(`E2E Workspace ${runId}`);
   await page.locator("select").first().selectOption({ label: "United States" });
