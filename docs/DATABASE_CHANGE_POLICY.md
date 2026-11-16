@@ -38,3 +38,23 @@ Record the commit SHA, migration manifest version, migration IDs and checksums,
 target environment, region order, start/end timestamps, result per cell, schema
 verification result, backup/PITR reference, rollback or forward-fix plan, and
 operator/change reference. Never record connection strings or credentials.
+
+## Production GitHub Action
+
+Use **Actions → Regional database migration → Run workflow** from the canonical
+`production` branch. Select `production` and provide:
+
+- the approved Linear/change identifier;
+- a backup or Neon PITR evidence reference that an operator has verified; and
+- the exact confirmation `MIGRATE PRODUCTION`.
+
+The protected `production` environment supplies the direct regional database
+URLs and provides the approval boundary. The runner validates the checked-in
+migration chain, requires all three current schemas to share a valid migration
+prefix, and migrates strictly US → EU → UK, stopping on the first failure. It
+then verifies full regional schema equality and uploads `migration-receipt.json`
+as both an artifact and workflow summary. Attach that receipt and the resulting
+regional health evidence to the Linear change.
+
+Never dispatch a Production migration from `development`, a task branch, or a
+historical SHA. Never substitute pooled application URLs or manual SQL.

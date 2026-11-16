@@ -1,5 +1,13 @@
 # Agent instructions (Twiniti CRM)
 
+## Production database action (0.10.55.19)
+
+TWI-1109: Production schema changes run only through the Regional database
+migration GitHub Action from the canonical `production` branch. Require the
+protected environment approval, change ID, backup/PITR reference, and exact
+`MIGRATE PRODUCTION` confirmation. Preserve US → EU → UK order and attach the
+generated receipt to Linear. Never use pooled URLs or manual Production SQL.
+
 ## Application design (0.10.55.16)
 
 TWI-1080 (application scope only): `apps/web/src/application-theme.css` owns

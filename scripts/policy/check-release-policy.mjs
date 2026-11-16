@@ -19,6 +19,7 @@ const packageJson = JSON.parse(read("package.json") || "{}");
 const changelog = read("CHANGELOG.md");
 const ci = read(".github/workflows/ci.yml");
 const promotion = read(".github/workflows/production-promotion.yml");
+const regionalMigration = read(".github/workflows/regional-database-migration.yml");
 const devBlueprint = read("render.yaml");
 const prodBlueprint = read("render.production.yaml");
 
@@ -70,6 +71,16 @@ if (!/branches:\s*\[main,\s*development,\s*production\]/m.test(ci)) {
 if (!/pull_request:/m.test(ci)) failures.push("CI must run for pull requests");
 if (!/E2E \/ development-smoke/m.test(promotion)) {
   failures.push("Production promotion must require the exact successful Development E2E check");
+}
+for (const requiredProductionMigrationGate of [
+  "MIGRATION_BACKUP_REFERENCE",
+  "MIGRATION_CONFIRMATION",
+  "MIGRATION_SOURCE_REF",
+  "MIGRATE PRODUCTION"
+]) {
+  if (!regionalMigration.includes(requiredProductionMigrationGate)) {
+    failures.push(`Regional migration workflow is missing ${requiredProductionMigrationGate}`);
+  }
 }
 if (/DATABASE_URL_Prod_/m.test(devBlueprint)) failures.push("Development Blueprint contains a production database key");
 if (/DATABASE_URL_Dev_/m.test(prodBlueprint)) failures.push("Production Blueprint contains a development database key");
