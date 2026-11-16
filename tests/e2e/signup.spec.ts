@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures";
 
-test("new user can create an account and reach authenticated billing", async ({ page, baseURL }) => {
+test("new user can create a workspace and start a cardless trial", async ({ page, baseURL }) => {
   test.setTimeout(180_000);
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const emailDomain = process.env.E2E_SIGNUP_EMAIL_DOMAIN ?? "example.test";
@@ -17,25 +17,15 @@ test("new user can create an account and reach authenticated billing", async ({ 
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Create account", exact: true }).click();
 
-  await expect.poll(() => page.url(), { timeout: 60_000 }).toMatch(/checkout\.stripe\.com/);
+  // Account creation precedes workspace provisioning. The saved signup draft
+  // supplies the organization details on the onboarding screen.
+  await expect(page).toHaveURL(/\/onboarding(?:[/?#]|$)/, { timeout: 60_000 });
+  await expect(page.getByRole("heading", { name: "Choose your workspace" })).toBeVisible();
+  await page.getByRole("button", { name: "Create company", exact: true }).click();
 
-  const cardMethod = page.getByRole("radio", { name: "Card", exact: true });
-  const cardNumber = page.getByRole("textbox", { name: "Card number", exact: true });
-  await expect.poll(async () => (await cardMethod.isVisible()) || (await cardNumber.isVisible())).toBe(true);
-  if (!(await cardNumber.isVisible())) {
-    await cardMethod.check({ force: true });
-    await expect(cardMethod).toBeChecked();
-  }
-  await cardNumber.fill("4242 4242 4242 4242");
-  await page.getByRole("textbox", { name: "Expiration", exact: true }).fill("12 / 34");
-  await page.getByRole("textbox", { name: "CVC", exact: true }).fill("123");
-  await page.getByRole("textbox", { name: "Cardholder name", exact: true }).fill("Twiniti E2E Test");
-  const postalCode = page.getByRole("textbox", { name: /ZIP|Postal code/i });
-  if (await postalCode.isVisible()) await postalCode.fill("10001");
-  const savePaymentDetails = page.getByRole("checkbox", { name: /Save my information/i });
-  if (await savePaymentDetails.isVisible() && await savePaymentDetails.isChecked()) {
-    await savePaymentDetails.uncheck();
-  }
+  await expect.poll(() => page.url(), { timeout: 60_000 }).toMatch(/checkout\.stripe\.com/);
+  await expect(page.getByText(/7[- ]day|7 days/i).first()).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Card number", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: /start trial|subscribe|complete order/i }).last().click();
   await expect.poll(() => page.url(), { timeout: 60_000 }).not.toMatch(/checkout\.stripe\.com/);
   await expect(page.locator("body")).toContainText(/Status:\s*(active|trialing)/i, { timeout: 60_000 });

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Revision 0.10.55.21 (TWI-1111): align the Development signup promotion gate with the supported onboarding and cardless-trial flow. The E2E now provisions the saved company workspace from `/onboarding`, confirms Stripe offers the seven-day trial without card fields, completes Checkout, and verifies trialing/active CRM access. Update billing operator, agent, and test documentation. No database, runtime, or package-version change.
+
 - Revision 0.10.55.20 (TWI-1111): repair the WV App setup flow by generating a separate public installation key automatically, keeping the webhook credential private, and allowing administrators to rotate each independently. Installation code is generated without manual key entry. Additive migration 0028 backfills missing installation keys for existing integrations; apply it before the API/web rollout. Update API tests, the landing-page setup guidance, the signup E2E selector, and architecture, agent, and user documentation. Package version remains 0.10.55.
 
 - Revision 0.10.55.19 (TWI-1109): harden the Regional database migration GitHub Action with canonical Production-branch enforcement, exact operator confirmation, required backup/PITR evidence, protected-environment approval, and complete migration receipts containing the manifest checksums and schema-verification outcome. Preserve the existing US → EU → UK stop-on-first-failure runner; no migration is executed by this change and the package version remains 0.10.55.
