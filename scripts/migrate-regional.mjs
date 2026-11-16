@@ -2,21 +2,13 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertProductionMigrationGuard } from "./policy/production-migration-guard.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const deploymentEnvironment = process.env.DEPLOYMENT_ENV
   ?? (process.env.NODE_ENV === "production" ? "production" : "development");
 if (!["development", "production"].includes(deploymentEnvironment)) {
   console.error(`[db:migrate:regional] Unsupported DEPLOYMENT_ENV: ${deploymentEnvironment}`);
-  process.exit(1);
-}
-
-if (deploymentEnvironment === "production" && process.env.MIGRATION_APPROVED !== "true") {
-  console.error("[db:migrate:regional] Production migrations require protected-environment approval");
-  process.exit(1);
-}
-if (deploymentEnvironment === "production" && !process.env.MIGRATION_CHANGE_ID?.trim()) {
-  console.error("[db:migrate:regional] Production migrations require MIGRATION_CHANGE_ID");
   process.exit(1);
 }
 
@@ -29,6 +21,21 @@ const targets = [
 const missing = targets.filter(([, url]) => !url?.trim()).map(([region]) => region);
 if (missing.length) {
   console.error(`[db:migrate:regional] Missing ${deploymentEnvironment} database URL for: ${missing.join(", ")}`);
+  process.exit(1);
+}
+
+try {
+  assertProductionMigrationGuard({
+    environment: deploymentEnvironment,
+    approved: process.env.MIGRATION_APPROVED,
+    changeId: process.env.MIGRATION_CHANGE_ID,
+    backupReference: process.env.MIGRATION_BACKUP_REFERENCE,
+    confirmation: process.env.MIGRATION_CONFIRMATION,
+    sourceRef: process.env.MIGRATION_SOURCE_REF,
+    databaseUrls: targets.map(([region, url]) => ({ region, url }))
+  });
+} catch (error) {
+  console.error(`[db:migrate:regional] ${error instanceof Error ? error.message : error}`);
   process.exit(1);
 }
 
@@ -49,6 +56,7 @@ run(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["--filter", "@twiniti/d
 
 const startedAt = new Date().toISOString();
 const results = [];
+const manifest = JSON.parse(fs.readFileSync(path.join(root, "packages/db/drizzle/migration-manifest.json"), "utf8"));
 for (const [region, url] of targets) {
   console.log(`[db:migrate:regional] Applying migrations to ${region}`);
   const result = spawnSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["--filter", "@twiniti/db", "db:migrate"], {
@@ -70,9 +78,16 @@ const receipt = {
   schemaVersion: 1,
   deploymentEnvironment,
   changeId: process.env.MIGRATION_CHANGE_ID ?? null,
+  backupPitrReference: process.env.MIGRATION_BACKUP_REFERENCE?.trim() || null,
   commitSha: process.env.GITHUB_SHA ?? null,
+  sourceRef: process.env.MIGRATION_SOURCE_REF ?? null,
+  migrationManifestVersion: manifest.schemaVersion,
+  migrations: manifest.entries
+    .filter((entry) => entry.status === "journaled")
+    .map(({ file, sha256 }) => ({ file, sha256 })),
   startedAt,
   completedAt: new Date().toISOString(),
+  schemaVerified: true,
   regions: results
 };
 const receiptPath = process.env.MIGRATION_RECEIPT_PATH;
