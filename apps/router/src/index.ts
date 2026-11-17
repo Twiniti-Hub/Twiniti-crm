@@ -91,6 +91,15 @@ async function proxy(request: Request, env: Env, region: Region) {
   return withRouterHeaders(response, request, region);
 }
 
+/**
+ * A sleeping free-plan Render origin answers the Worker's shared egress IP with a
+ * 429 instead of waking. The API itself never rate-limits these routes, so treat
+ * a regional 429 like an outage: it must not hide a workspace in that cell.
+ */
+function cellUnavailable(result: { response: Response } | null) {
+  return !result || result.response.status >= 500 || result.response.status === 429;
+}
+
 /** Bounded parallel reads keep one unhealthy regional cell from hanging sign-in. */
 export async function discoverWorkspace(request: Request, env: Env, timeoutMs = 8000) {
   const results = await Promise.all(regions.map(async (region) => {
@@ -117,7 +126,7 @@ export async function discoverWorkspace(request: Request, env: Env, timeoutMs = 
   const admin = results.find((result) => result?.body?.data?.isSuperAdmin);
   if (admin) return admin.response;
   // Do not claim setup is needed when a cell could contain the user's workspace.
-  if (results.some((result) => !result || result.response.status >= 500)) {
+  if (results.some(cellUnavailable)) {
     return Response.json({ error: { code: "workspace_discovery_unavailable", message: "A workspace service is unavailable. Please retry." } },
       { status: 503, headers: corsHeaders(request) });
   }
@@ -173,9 +182,9 @@ export async function proxyBootstrapFanout(request: Request, env: Env, timeoutMs
       return null;
     }
   }));
-  const hit = results.find((result) => result && result.response.status !== 404 && result.response.status < 500);
+  const hit = results.find((result) => result && result.response.status !== 404 && !cellUnavailable(result));
   if (hit) return hit.response;
-  if (results.some((result) => !result || result.response.status >= 500)) {
+  if (results.some(cellUnavailable)) {
     return Response.json(
       { error: { code: "workspace_discovery_unavailable", message: "A workspace service is unavailable. Please retry." } },
       { status: 503, headers: corsHeaders(request) }
