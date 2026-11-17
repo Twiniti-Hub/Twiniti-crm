@@ -27,9 +27,9 @@ Company admins connect verified Resend domains under **Email delivery**:
 
 Full operator checklist: [`docs/operations/RESEND_EMAIL_SETUP.md`](../operations/RESEND_EMAIL_SETUP.md).
 
-## WV App Web Visitors (company admins)
+## Web Visitors module (company admins)
 
-Use **Settings → WV App → Web Visitors** to connect the website visitor feed for the current organization:
+Use **Settings → Web Visitors module** to connect the website visitor feed for the current organization:
 
 **Install on your website** is always available to organization administrators. Email and invitation setup do not control access to it. Paste the **provider script ID** from the install snippet in your Web Visitors provider account. Loop does not create this ID, and it is never your webhook. The private webhook credential is never placed in website code.
 
@@ -46,4 +46,4 @@ Rotate the webhook if its private URL is exposed. Confirming rotation saves and 
 
 Revision 0.10.55.13: installation validation supports the code copied from this card. If a request is rate limited, wait a minute before retrying. If an administrator reassigns a visitor, both the previous and new record's visit summaries are recalculated. Operators reviewing older logs should coordinate any necessary webhook-token rotation with the sender to avoid interrupted delivery.
 
-Loop can use a WV App-supplied LinkedIn person URL as an exact professional-profile identifier. It does not scrape LinkedIn, use LinkedIn cookies, or infer a person from name, title, or employer similarity. Conflicting email and professional-profile matches are held for admin review rather than attached automatically.
+Loop can use a provider-supplied LinkedIn person URL as an exact professional-profile identifier. It does not scrape LinkedIn, use LinkedIn cookies, or infer a person from name, title, or employer similarity. Conflicting email and professional-profile matches are held for admin review rather than attached automatically.

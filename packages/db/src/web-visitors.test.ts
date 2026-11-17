@@ -79,7 +79,7 @@ test("normalizes and bounds tags", () => {
   assert.equal(normalizeWebVisitorTags(Array.from({ length: 60 }, (_, index) => `tag-${index}`)).length, 50);
 });
 
-test("adapts the fixed WV App webhook payload", () => {
+test("adapts the fixed Web Visitors provider webhook payload", () => {
   const adapted = normalizeWebVisitorSupplierPayload({
     "LinkedIn URL": "https://www.linkedin.com/in/RetentionAdam/",
     "First Name": "Adam",
