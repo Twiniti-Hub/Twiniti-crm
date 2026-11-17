@@ -27,23 +27,23 @@ Company admins connect verified Resend domains under **Email delivery**:
 
 Full operator checklist: [`docs/operations/RESEND_EMAIL_SETUP.md`](../operations/RESEND_EMAIL_SETUP.md).
 
-## WV App Web Visitors (company admins)
+## Web Visitors module (company admins)
 
-Use **Settings → WV App → Web Visitors** to connect the website visitor feed for the current organization:
+Use **Settings → Web Visitors module** to connect the website visitor feed for the current organization:
 
-**Install on your website** is always available to organization administrators. Email and invitation setup do not control access to it. Loop generates a public installation key automatically when WV App settings are first saved; no key needs to be copied into an earlier screen. The private webhook credential is never placed in website code.
+**Install on your website** is always available to organization administrators. Email and invitation setup do not control access to it. Paste the **provider script ID** from the install snippet in your Web Visitors provider account. Loop does not create this ID, and it is never your webhook. The private webhook credential is never placed in website code.
 
 Open the installation card for this four-step flow:
 
 1. **Generate webhook**: generate and save the URL, or copy the saved URL. It remains available after reload. Configure your sender to deliver visitor payloads to it.
-2. **Install on website**: the separate public installation key is populated automatically and cannot be edited here. Use **Rotate installation key** only when you are ready to publish replacement code on every tracked site.
-3. **Your generated code**: copy the ready-to-use code into the global page template after consent controls, before `</body>` or in your site's script-managed head. No key or secret needs to be inserted manually.
+2. **Install on website**: paste the provider script ID and choose **Save script ID**. Loop accepts letters and numbers only and rejects its own `wv_`/`wvi_` credentials. If you change the ID, publish the new code on every tracked site.
+3. **Your generated code**: copy the ready-to-use code into the global page template after consent controls, before `</body>` or in your site's script-managed head. The code already contains your saved script ID.
 4. **Validate website**: publish, clear site caches, enter a public page URL, and validate. Return to re-test at any time.
 
-**Installation verified** means the published HTML contains this organization's exact loader URL. The test does not execute JavaScript or create a test visitor. A missing result usually means the site was not published, a cache still serves the old page, the code was installed on a different template, or a tag manager injects it only at runtime. The validator accepts public HTTP(S) pages only; local, private-network, credentialed, non-HTML, oversized, and slow pages are rejected safely.
+**Installation verified** means the published HTML contains this organization's exact loader URL and the provider serves a script for the saved script ID. **The provider does not serve a script for this script ID** means the code is on the page but the ID is wrong or the provider account is inactive. The test does not execute JavaScript or create a test visitor. A missing result usually means the site was not published, a cache still serves the old page, the code was installed on a different template, or a tag manager injects it only at runtime. The validator accepts public HTTP(S) pages only; local, private-network, credentialed, non-HTML, oversized, and slow pages are rejected safely.
 
-Rotate the webhook if its private URL is exposed. Confirming rotation saves and displays the replacement immediately; update your sender with that URL. The public installation key and website code stay unchanged. Rotate the installation key separately to generate replacement website code; this does not change the webhook URL. Earlier hash-only webhooks need one explicit rotation before Loop can redisplay them; they remain valid until you choose to rotate. Existing visits are retained.
+Rotate the webhook if its private URL is exposed. Confirming rotation saves and displays the replacement immediately; update your sender with that URL. The script ID and website code stay unchanged. Earlier hash-only webhooks need one explicit rotation before Loop can redisplay them; they remain valid until you choose to rotate. Existing visits are retained.
 
 Revision 0.10.55.13: installation validation supports the code copied from this card. If a request is rate limited, wait a minute before retrying. If an administrator reassigns a visitor, both the previous and new record's visit summaries are recalculated. Operators reviewing older logs should coordinate any necessary webhook-token rotation with the sender to avoid interrupted delivery.
 
-Loop can use a WV App-supplied LinkedIn person URL as an exact professional-profile identifier. It does not scrape LinkedIn, use LinkedIn cookies, or infer a person from name, title, or employer similarity. Conflicting email and professional-profile matches are held for admin review rather than attached automatically.
+Loop can use a provider-supplied LinkedIn person URL as an exact professional-profile identifier. It does not scrape LinkedIn, use LinkedIn cookies, or infer a person from name, title, or employer similarity. Conflicting email and professional-profile matches are held for admin review rather than attached automatically.

@@ -32,10 +32,6 @@ function mintWebhookToken() {
   return { token, hash: hashCredential(token) };
 }
 
-function mintInstallationKey() {
-  return `wvi_${randomBytes(24).toString("base64url")}`;
-}
-
 const allowWebhookRequest = createWebVisitorLimiter();
 
 function publicIntegration(row: typeof webVisitorIntegrations.$inferSelect | undefined, encryptionKey: string) {
@@ -43,9 +39,7 @@ function publicIntegration(row: typeof webVisitorIntegrations.$inferSelect | und
   // A rollback-era rotation may update only the hash: never redisplay an obsolete token.
   const webhookToken = decrypted && hashCredential(decrypted) === row?.webhookTokenHash ? decrypted : null;
   const settings = webVisitorSettingsSchema.parse(row?.settings ?? {});
-  const publicKey = typeof (row?.settings as Record<string, unknown> | null)?.publicKey === "string"
-    ? String((row?.settings as Record<string, unknown>).publicKey)
-    : null;
+  const publicKey = settings.publicKey ?? null;
   return {
     configured: Boolean(row),
     webhookToken,
@@ -62,7 +56,7 @@ function publicIntegration(row: typeof webVisitorIntegrations.$inferSelect | und
 
 export async function registerWebVisitorRoutes(app: FastifyInstance, db: Db, encryptionKey = "") {
   const encryptToken = (token: string) => {
-    if (!encryptionKey) throw new Error("WV App credential storage is not configured. Contact your administrator.");
+    if (!encryptionKey) throw new Error("Web Visitors module credential storage is not configured. Contact your administrator.");
     return encryptResendSecret(token, encryptionKey);
   };
   app.get("/api/v1/organization/integrations/web-visitors", async (request, reply) => {
@@ -84,11 +78,7 @@ export async function registerWebVisitorRoutes(app: FastifyInstance, db: Db, enc
       const input = updateWebVisitorIntegrationSchema.parse(request.body);
       const [existing] = await db.select().from(webVisitorIntegrations).where(eq(webVisitorIntegrations.organizationId, organizationId)).limit(1);
       const existingSettings = webVisitorSettingsSchema.parse(existing?.settings ?? {});
-      const nextSettings = {
-        ...existingSettings,
-        ...(input.settings ?? {}),
-        publicKey: existingSettings.publicKey ?? mintInstallationKey()
-      };
+      const nextSettings = { ...existingSettings, ...(input.settings ?? {}) };
       let row: typeof webVisitorIntegrations.$inferSelect;
       if (existing) {
         [row] = await db.update(webVisitorIntegrations).set({ enabled: input.enabled, settings: nextSettings, updatedAt: new Date() }).where(eq(webVisitorIntegrations.id, existing.id)).returning();
@@ -102,21 +92,6 @@ export async function registerWebVisitorRoutes(app: FastifyInstance, db: Db, enc
     } catch (error) { return sendError(reply, error); }
   });
 
-  app.post("/api/v1/organization/integrations/web-visitors/rotate-installation-key", async (request, reply) => {
-    try {
-      const actor = requireActor(request);
-      requireUserRole(actor, "admin");
-      const organizationId = requireOrgId(actor);
-      const [existing] = await db.select().from(webVisitorIntegrations).where(eq(webVisitorIntegrations.organizationId, organizationId)).limit(1);
-      if (!existing) return reply.code(404).send({ error: { code: "not_found", message: "WV App is not configured" } });
-      const settings = { ...webVisitorSettingsSchema.parse(existing.settings ?? {}), publicKey: mintInstallationKey() };
-      const [row] = await db.update(webVisitorIntegrations).set({ settings, updatedAt: new Date() }).where(eq(webVisitorIntegrations.id, existing.id)).returning();
-      await writeAudit(db, { organizationId, actorType: "user", actorId: actor.id, action: "web_visitors.installation_key_rotated", entityType: "web_visitor_integration", entityId: row.id });
-      reply.header("Cache-Control", "no-store");
-      return { data: publicIntegration(row, encryptionKey) };
-    } catch (error) { return sendError(reply, error); }
-  });
-
   app.post("/api/v1/organization/integrations/web-visitors/rotate-webhook-token", async (request, reply) => {
     try {
       const actor = requireActor(request);
@@ -124,7 +99,7 @@ export async function registerWebVisitorRoutes(app: FastifyInstance, db: Db, enc
       const organizationId = requireOrgId(actor);
       const minted = mintWebhookToken();
       const [row] = await db.update(webVisitorIntegrations).set({ webhookTokenHash: minted.hash, webhookTokenCiphertext: encryptToken(minted.token), updatedAt: new Date() }).where(eq(webVisitorIntegrations.organizationId, organizationId)).returning();
-      if (!row) return reply.code(404).send({ error: { code: "not_found", message: "WV App is not configured" } });
+      if (!row) return reply.code(404).send({ error: { code: "not_found", message: "The Web Visitors module is not configured" } });
       await writeAudit(db, { organizationId, actorType: "user", actorId: actor.id, action: "web_visitors.webhook_token_rotated", entityType: "web_visitor_integration", entityId: row.id });
       reply.header("Cache-Control", "no-store");
       return { data: publicIntegration(row, encryptionKey) };
@@ -138,9 +113,8 @@ export async function registerWebVisitorRoutes(app: FastifyInstance, db: Db, enc
       const organizationId = requireOrgId(actor);
       const input = validateWebVisitorInstallationSchema.parse(request.body);
       const [integration] = await db.select().from(webVisitorIntegrations).where(eq(webVisitorIntegrations.organizationId, organizationId)).limit(1);
-      const publicKey = typeof (integration?.settings as Record<string, unknown> | null)?.publicKey === "string"
-        ? String((integration!.settings as Record<string, unknown>).publicKey) : null;
-      if (!integration || !publicKey) return reply.code(409).send({ error: { code: "not_configured", message: "Save the WV App public key before validating installation." } });
+      const publicKey = integration ? webVisitorSettingsSchema.parse(integration.settings ?? {}).publicKey ?? null : null;
+      if (!integration || !publicKey) return reply.code(409).send({ error: { code: "not_configured", message: "Save the script ID from your Web Visitors provider before validating installation." } });
       const result = await validateWebVisitorInstallation({ websiteUrl: input.url, publicKey });
       await writeAudit(db, { organizationId, actorType: "user", actorId: actor.id, action: "web_visitors.installation_validated", entityType: "web_visitor_integration", entityId: integration.id, metadata: { hostname: result.hostname, status: result.status } });
       return { data: result };

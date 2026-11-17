@@ -77,7 +77,7 @@ function normalizeSupplierSeenAt(value: string) {
   if (!Number.isNaN(new Date(trimmed).getTime())) return new Date(trimmed).toISOString();
   const repaired = trimmed.replace(/^(.*T\d{2}:\d{2}:\d{2}):\d{2}\.\d+([+-]\d{2})\.(\d{2})$/, "$1$2:$3");
   if (!Number.isNaN(new Date(repaired).getTime())) return new Date(repaired).toISOString();
-  throw new Error("WV App Seen At is not a supported timestamp");
+  throw new Error("Web Visitors module Seen At is not a supported timestamp");
 }
 
 export function normalizeWebVisitorSupplierPayload(raw: unknown): WebVisitorProfile {
@@ -145,7 +145,8 @@ export function buildWebVisitorEventDedupeKey(input: { integrationId: string; pr
 
 export function buildWebVisitorLoaderSnippet(input: { publicKey: string }): string {
   const key = input.publicKey.trim();
-  if (!/^[A-Za-z0-9_-]{6,100}$/.test(key)) throw new Error("Invalid WV App public key");
+  // Provider script IDs are alphanumeric; Loop's wv_/wvi_ credentials must never reach website code.
+  if (!/^[A-Za-z0-9]+$/.test(key) || /^wvi?_/i.test(key)) throw new Error("Invalid Web Visitors script ID");
   return `<script>!function(key){if(window.reb2b)return;window.reb2b={loaded:true};var s=document.createElement("script");s.async=true;s.src="https://ddwl4m2hdecbv.cloudfront.net/b/"+key+"/"+key+".js.gz";document.getElementsByTagName("script")[0].parentNode.insertBefore(s,document.getElementsByTagName("script")[0]);}("${key}");</script>`;
 }
 

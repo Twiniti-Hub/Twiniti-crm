@@ -204,6 +204,13 @@
       "when": 1794862800000,
       "tag": "0028_web_visitor_installation_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1794949200000,
+      "tag": "0029_web_visitor_clear_self_generated_keys",
+      "breakpoints": true
     }
   ]
 }

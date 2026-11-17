@@ -1,4 +1,4 @@
-# WV App Web Visitors architecture
+# Web Visitors module architecture
 
 Revision: 0.10.55.20
 Linear: TWI-1067, TWI-1068
@@ -16,12 +16,12 @@ Visitor processing and reassignment share an organization-scoped transaction adv
 
 ## Scope
 
-TWI-1111 setup keeps the inbound webhook credential private and generates a
-separate public installation key automatically. The installation card shows the
-public key read-only and builds the website code without manual copy/paste.
-Admins rotate the webhook credential and installation key independently. Webhook
-rotation does not change website code; installation-key rotation does not change
-the webhook URL and requires publishing the replacement website code.
+TWI-1115 setup keeps the inbound webhook credential private. The admin enters the
+provider-issued script ID (letters and numbers only; Loop's own `wv_`/`wvi_`
+values are rejected), and Loop builds the website code from it. The provider CDN
+serves scripts only for IDs it issued, so Loop must never generate one. Webhook
+rotation does not change website code; changing the script ID requires publishing
+the replacement website code.
 
 Migration 0026 adds nullable webhook_token_ciphertext. New/rotated tokens use
 AES-256-GCM with a random IV and retain SHA-256 lookup hashes. GET/PUT/rotation
@@ -38,11 +38,11 @@ by that runtime leaves stale ciphertext: reconcile by explicit rotation on the
 new runtime before redisplaying credentials. Coordinate sender updates. No live
 tokens are rotated by this migration.
 
-WV App Web Visitors is configured per Loop organization. Loop automatically provisions the public website-loader key while the Org Admin enables ingestion. Loop stores a SHA-256 webhook lookup hash and encrypted private token for admin retrieval. The browser loader receives only the separate public installation key. All Loop product, database, API, worker, and audit naming uses `web_visitors` / **WV App Web Visitors**.
+The Web Visitors module is configured per Loop organization. The Org Admin pastes the provider-issued script ID from the provider's install snippet and enables ingestion; Loop never generates this ID. Loop stores a SHA-256 webhook lookup hash and encrypted private token for admin retrieval. The browser loader receives only the provider script ID. All Loop product, database, API, worker, and audit naming uses `web_visitors` / **Web Visitors module**.
 
 ## Data flow
 
-1. `POST /api/v1/webhooks/web-visitors/:token` hashes the bearer path token and resolves one enabled integration. The boundary adapter maps WV App's fixed title-cased webhook fields into the internal camelCase contract; supplier spellings do not leak into CRM processing.
+1. `POST /api/v1/webhooks/web-visitors/:token` hashes the bearer path token and resolves one enabled integration. The boundary adapter maps the provider's fixed title-cased webhook fields into the internal camelCase contract; supplier spellings do not leak into CRM processing.
 2. The API validates the bounded normalized payload, stores one deduplicated `webhook_events` receipt, enqueues `webhook.web_visitors.process`, and returns `202`.
 3. The regional worker reads the receipt under service RLS and runs the deterministic resolver.
 4. The resolver checks, in order, an existing confirmed mapping, exact normalized business email, then exact active normalized professional-profile identity. Company resolution uses an existing mapping or exact normalized domain.
@@ -53,7 +53,7 @@ WV App Web Visitors is configured per Loop organization. Loop automatically prov
 
 ## Professional-profile boundary
 
-Only HTTPS `linkedin.com/in/{slug}` identifiers supplied by WV App or already authorized in Loop are accepted. Normalization removes locale prefixes, query parameters, fragments, duplicate separators, and case differences. Deceptive hosts and non-person paths are rejected. Loop does not fetch LinkedIn pages, automate a LinkedIn session, retain LinkedIn cookies, or call undocumented LinkedIn endpoints.
+Only HTTPS `linkedin.com/in/{slug}` identifiers supplied by the provider or already authorized in Loop are accepted. Normalization removes locale prefixes, query parameters, fragments, duplicate separators, and case differences. Deceptive hosts and non-person paths are rejected. Loop does not fetch LinkedIn pages, automate a LinkedIn session, retain LinkedIn cookies, or call undocumented LinkedIn endpoints.
 
 ## Idempotency and attribution
 
@@ -63,13 +63,14 @@ A visit never increments both contact and company. Contact-company reporting may
 
 ## Website installation validation
 
-Organization admins open **Settings → WV App → Web Visitors → Install on your website** to copy the exact loader generated from the saved public key. `POST /api/v1/organization/integrations/web-visitors/validate-installation` fetches a supplied public page and confirms that its published HTML contains the exact organization loader URL. The check does not execute JavaScript and never creates a visitor event.
+Organization admins open **Settings → Web Visitors module → Install on your website** to copy the exact loader generated from the saved provider script ID. `POST /api/v1/organization/integrations/web-visitors/validate-installation` fetches a supplied public page and confirms that its published HTML contains the exact organization loader URL and that the provider CDN serves a script for that ID (`script_unavailable` otherwise). The check does not execute JavaScript and never creates a visitor event.
 
-Migration `0028_web_visitor_installation_keys.sql` backfills a random `wvi_…`
-installation key for integrations created before TWI-1111. New integrations
-receive one on first save. `POST .../rotate-installation-key` replaces only this
-public key and its generated code. The private `wv_…` webhook token must never be
-substituted into the loader.
+Migration `0028_web_visitor_installation_keys.sql` (TWI-1111) backfilled random
+`wvi_…` keys that the provider never issued. Migration
+`0029_web_visitor_clear_self_generated_keys.sql` (TWI-1115) clears those and any
+stored value whose SHA-256 matches the row's webhook hash, entirely in SQL. The
+rotate-installation-key endpoint is removed. The private `wv_…` webhook token must
+never be substituted into the loader.
 
 The validator accepts only HTTP(S) URLs without credentials. It resolves DNS before each request, rejects the request if any answer is loopback, private, link-local, reserved, multicast, or otherwise non-public, and repeats those checks for every redirect. Redirect count, response time, and response body are bounded; only HTML/XHTML is read. No browser cookies, customer credentials, or authorization headers are forwarded. Audit metadata contains only the hostname and result status, never a URL query or fragment.
 
@@ -92,5 +93,5 @@ Apply the migration to Development US, EU, and UK before deploying the worker, A
 - Tokens and personal payloads must not be logged.
 - Payload size and fields are bounded by strict contracts.
 - Identity decisions retain method, evidence, confidence band, resolver version, and review actor.
-- Agent credentials do not receive WV App configuration or ambiguity-review access in this revision.
+- Agent credentials do not receive Web Visitors module configuration or ambiguity-review access in this revision.
 - Installation validation is also organization-admin user-only and is not an agent tool.

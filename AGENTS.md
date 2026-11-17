@@ -40,18 +40,17 @@ email paths must exclude them explicitly. Keep CONTACT_SYNC_ENCRYPTION_KEY stabl
 and never log credentials or contact payloads. See
 `docs/operations/PERSONAL_CONTACT_SYNC.md`.
 
-## WV App saved setup (0.10.55.20)
+## Web Visitors module saved setup (TWI-1115)
 
-TWI-1111: Loop generates the public installation key; installation shows it
-read-only and generates website code without manual entry. Apply additive
-migration 0028 to backfill existing integrations. Never substitute the private
-webhook token for the public installation key. Webhook tokens retain dedicated
+TWI-1115 replaces TWI-1111's self-generated key: the admin enters the
+provider-issued script ID (alphanumeric; `wv_`/`wvi_` rejected) and Loop never
+generates one. Migration 0029 clears self-generated or webhook-token values.
+Never substitute the private webhook token for the provider script ID. Webhook tokens retain dedicated
 AES-GCM ciphertext storage and hash lookup; admin responses are no-store.
-Webhook and installation-key rotation are separate: webhook rotation leaves
-website code unchanged, while installation-key rotation requires publishing the
-replacement code. Never silently rotate legacy hash-only credentials.
+Webhook rotation leaves website code unchanged; changing the script ID requires
+publishing the replacement code. Never silently rotate legacy hash-only credentials.
 
-## WV App Web Visitors (0.10.55.12)
+## Web Visitors module (0.10.55.12)
 
 Revision 0.10.55.13 / TWI-1069: preserve typed DNS lookup callbacks and socket
 pinning; test the actual transport and generated loader. Redact webhook paths
@@ -59,7 +58,7 @@ in request, error and message log serializers. The limiter is bounded per IP
 and per API instance. Ingestion and review require transactions and share an
 organization advisory lock; reassignment must rebuild every prior owner summary.
 
-TWI-1067 adds organization-admin WV App configuration, token-authenticated
+TWI-1067 adds organization-admin Web Visitors module configuration, token-authenticated
 webhook ingestion, deterministic visitor identity resolution, and contact/company
 visit histories. Preserve exactly-one-record attribution: resolved people update
 the contact; otherwise an independently resolved company may be updated. Never

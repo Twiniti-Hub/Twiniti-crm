@@ -5,7 +5,7 @@ import { request as httpsRequest } from "node:https";
 import { Readable } from "node:stream";
 import { buildWebVisitorLoaderSnippet } from "@twiniti/db";
 
-export type InstallationValidationStatus = "installed" | "missing" | "blocked" | "unreachable" | "timeout" | "too_large" | "non_html";
+export type InstallationValidationStatus = "installed" | "missing" | "script_unavailable" | "blocked" | "unreachable" | "timeout" | "too_large" | "non_html";
 export type InstallationValidationResult = { status: InstallationValidationStatus; hostname: string; message: string };
 type Lookup = (hostname: string) => Promise<Array<{ address: string; family: number }>>;
 type Fetch = (input: string, init: RequestInit) => Promise<Response>;
@@ -53,7 +53,7 @@ export function requestPinned(url: URL, addresses: Array<{ address: string; fami
   return new Promise((resolve, reject) => {
     const req = request(url, {
       method: "GET", signal,
-      headers: { Accept: "text/html,application/xhtml+xml", "User-Agent": "Twiniti-WV-App-Validator/1.0" },
+      headers: { Accept: "text/html,application/xhtml+xml", "User-Agent": "Twiniti-Web-Visitors-Validator/1.0" },
       // Pin the socket to the address already classified above. This closes the
       // DNS-rebinding gap between validation and connection while retaining the
       // original hostname for Host and TLS SNI.
@@ -110,7 +110,7 @@ export async function validateWebVisitorInstallation(input: {
     for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
       const addresses = await assertPublicUrl(current, lookup);
       const response = input.fetch
-        ? await input.fetch(current.toString(), { method: "GET", redirect: "manual", signal: controller.signal, headers: { Accept: "text/html,application/xhtml+xml", "User-Agent": "Twiniti-WV-App-Validator/1.0" } })
+        ? await input.fetch(current.toString(), { method: "GET", redirect: "manual", signal: controller.signal, headers: { Accept: "text/html,application/xhtml+xml", "User-Agent": "Twiniti-Web-Visitors-Validator/1.0" } })
         : await requestPinned(current, addresses, controller.signal);
       if (response.status >= 300 && response.status < 400 && response.headers.get("location")) {
         await response.body?.cancel();
@@ -130,9 +130,13 @@ export async function validateWebVisitorInstallation(input: {
       const canonical = buildWebVisitorLoaderSnippet({ publicKey: input.publicKey }).replace(/\s/g, "");
       const installed = scripts.some((script) => script.replace(/\s/g, "") === canonical
         || new RegExp(`\\bsrc=["']${loaderUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`).test(script));
-      return installed
-        ? { status: "installed", hostname: initialHostname, message: "WV App is installed on this page." }
-        : { status: "missing", hostname: initialHostname, message: "WV App was not found in the page HTML. Publish the code, clear any site cache, and test again." };
+      if (!installed) return { status: "missing", hostname: initialHostname, message: "The Web Visitors code was not found in the page HTML. Publish the code, clear any site cache, and test again." };
+      // The code on the page only works if the provider's CDN actually serves a script for this ID.
+      const script = await (input.fetch ?? fetch)(loaderUrl, { method: "GET", signal: controller.signal, headers: { "User-Agent": "Twiniti-Web-Visitors-Validator/1.0" } });
+      await script.body?.cancel();
+      return script.ok
+        ? { status: "installed", hostname: initialHostname, message: "The Web Visitors code is on this page and the provider serves its script." }
+        : { status: "script_unavailable", hostname: initialHostname, message: "The code is on this page, but the provider does not serve a script for this script ID. Copy the script ID from your Web Visitors provider's install snippet and save it again." };
     }
     return { status: "unreachable", hostname: initialHostname, message: "The website could not be checked." };
   } catch (error) {
