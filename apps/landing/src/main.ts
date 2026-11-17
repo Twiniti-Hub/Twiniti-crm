@@ -61,7 +61,7 @@ const questions: Array<[string, string[]]> = [
   ["What's the difference between a personal workspace and an Organization workspace?", ["A personal workspace is just for you and doesn't take invites. An Organization workspace has members and invites, plus campaigns. You can have both and switch between them."]],
   ["Who approves a campaign?", ["In an Organization workspace, one person requests approval and a different admin approves it before it sends. Personal workspaces don't include campaigns."]],
   ["What do I need for the Web Visitors module?", [
-      "Save your WV App settings and Loop creates a separate public installation key automatically while keeping the inbound webhook private. Copy the generated installation code into your site and publish. Loop then checks that the code is on your published page.",
+      "An account with the Web Visitors provider. Copy the script ID from the install snippet in that account and paste it into Loop's Web Visitors settings. Loop keeps the inbound webhook private and gives you the installation code to publish on your site. Loop then checks that the code is on your published page and that the provider serves the script.",
     WEB_VISITORS_PRIVACY_LINE
   ]],
   ["Where is my data stored?", ["You choose your country when you sign up. UK workspaces go to Loop's UK region, EU countries to its EU region, and every other country to its US region. Your workspace's data is kept in that region."]]

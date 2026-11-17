@@ -26,7 +26,7 @@ type Invitation = {
 type TrackingAddress = { address: string; domain: string; resendDomainId?: string };
 type ResendDomain = { id: string; domain: string; fromEmail: string; fromName: string | null; verificationStatus: string; isDefault: boolean; active: boolean; webhookSecretConfigured?: boolean };
 type WebVisitorIntegration = { configured: boolean; enabled: boolean; publicKey: string | null; loaderSnippet: string | null; settings: { createContacts: boolean; createCompanies: boolean }; lastWebhookAt: string | null; webhookToken?: string | null };
-type InstallationValidation = { status: "installed" | "missing" | "blocked" | "unreachable" | "timeout" | "too_large" | "non_html"; hostname: string; message: string };
+type InstallationValidation = { status: "installed" | "missing" | "script_unavailable" | "blocked" | "unreachable" | "timeout" | "too_large" | "non_html"; hostname: string; message: string };
 type ContactSyncConnection = {
   id: string;
   provider: "google" | "icloud";
@@ -84,6 +84,7 @@ export function SettingsPage() {
   const [webVisitorCreateContacts, setWebVisitorCreateContacts] = useState(false);
   const [webVisitorCreateCompanies, setWebVisitorCreateCompanies] = useState(true);
   const [webVisitorToken, setWebVisitorToken] = useState<string | null>(null);
+  const [webVisitorScriptId, setWebVisitorScriptId] = useState("");
   const [installationOpen, setInstallationOpen] = useState(false);
   const [installationUrl, setInstallationUrl] = useState("");
   const [installationResult, setInstallationResult] = useState<InstallationValidation | null>(null);
@@ -91,7 +92,6 @@ export function SettingsPage() {
   const [loaderCopied, setLoaderCopied] = useState(false);
   const [webhookCopied, setWebhookCopied] = useState(false);
   const [confirmWebhookRotation, setConfirmWebhookRotation] = useState(false);
-  const [confirmInstallationKeyRotation, setConfirmInstallationKeyRotation] = useState(false);
   const [contactConnections, setContactConnections] = useState<ContactSyncConnection[]>([]);
   const [contactPreviews, setContactPreviews] = useState<Record<string, ContactSyncPreview>>({});
   const [contactConflicts, setContactConflicts] = useState<Record<string, ContactSyncConflict[]>>({});
@@ -114,6 +114,7 @@ export function SettingsPage() {
         setWebVisitors(integration);
         setWebVisitorToken(integration.webhookToken ?? null);
         setWebVisitorEnabled(integration.enabled);
+        setWebVisitorScriptId(integration.publicKey ?? "");
         setWebVisitorCreateContacts(integration.settings.createContacts);
         setWebVisitorCreateCompanies(integration.settings.createCompanies);
       } catch (err) { setError(err instanceof Error ? err.message : "Could not load Web Visitors settings"); }
@@ -168,9 +169,9 @@ export function SettingsPage() {
   async function saveWebVisitors(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(null); setMessage(null);
     try {
-      const res = await api("/api/v1/organization/integrations/web-visitors", { method: "PUT", body: JSON.stringify({ enabled: webVisitorEnabled, settings: { createContacts: webVisitorCreateContacts, createCompanies: webVisitorCreateCompanies } }) });
+      const res = await api("/api/v1/organization/integrations/web-visitors", { method: "PUT", body: JSON.stringify({ enabled: webVisitorEnabled, settings: { createContacts: webVisitorCreateContacts, createCompanies: webVisitorCreateCompanies, publicKey: webVisitorScriptId.trim() || null } }) });
       const integration = res.data as WebVisitorIntegration;
-      setWebVisitors(integration); setWebVisitorToken(integration.webhookToken ?? null); setLoaderCopied(false); setInstallationResult(null); setMessage("WV App settings, private webhook and installation key saved.");
+      setWebVisitors(integration); setWebVisitorToken(integration.webhookToken ?? null); setWebVisitorScriptId(integration.publicKey ?? ""); setLoaderCopied(false); setInstallationResult(null); setMessage("Web Visitors settings and private webhook saved.");
     } catch (err) { setError(err instanceof Error ? err.message : "Could not save WV App settings"); } finally { setBusy(false); }
   }
 
@@ -178,12 +179,6 @@ export function SettingsPage() {
     setBusy(true); setError(null); setMessage(null);
     try { const res = await api("/api/v1/organization/integrations/web-visitors/rotate-webhook-token", { method: "POST", body: "{}" }); setWebVisitors(res.data as WebVisitorIntegration); setWebVisitorToken(String(res.data.webhookToken)); setConfirmWebhookRotation(false); setWebhookCopied(false); setMessage("New webhook saved. Update the sender with this URL. Your website code has not changed."); }
     catch (err) { setError(err instanceof Error ? err.message : "Could not rotate webhook token"); } finally { setBusy(false); }
-  }
-
-  async function rotateWebVisitorInstallationKey() {
-    setBusy(true); setError(null); setMessage(null);
-    try { const res = await api("/api/v1/organization/integrations/web-visitors/rotate-installation-key", { method: "POST", body: "{}" }); setWebVisitors(res.data as WebVisitorIntegration); setConfirmInstallationKeyRotation(false); setLoaderCopied(false); setInstallationResult(null); setMessage("New installation key saved. Replace the generated code on your website."); }
-    catch (err) { setError(err instanceof Error ? err.message : "Could not rotate installation key"); } finally { setBusy(false); }
   }
 
   async function copyWebVisitorLoader() {
@@ -520,7 +515,7 @@ export function SettingsPage() {
           <p className="eyebrow">WV App</p><h3>Web Visitors</h3>
           <p className="muted">Identify website visitors and record each unique visit on the matched contact, or on the company when no contact is safely resolved. LinkedIn identifiers are matched only when WV App supplies them; Loop does not scrape LinkedIn.</p>
           <form className="stack-form" style={{ boxShadow: "none", border: 0, padding: 0 }} onSubmit={saveWebVisitors}>
-            <label>Installation key<input value={webVisitors?.publicKey ?? ""} readOnly placeholder="Generated automatically when settings are saved" /></label>
+            <label>Provider script ID<input value={webVisitorScriptId} onChange={(event) => setWebVisitorScriptId(event.target.value)} pattern="[A-Za-z0-9]+" autoComplete="off" spellCheck={false} placeholder="Paste the script ID from your provider's install snippet" /></label>
             <label><input type="checkbox" checked={webVisitorEnabled} onChange={(event) => setWebVisitorEnabled(event.target.checked)} /> Enable Web Visitors ingestion</label>
             <label><input type="checkbox" checked={webVisitorCreateCompanies} onChange={(event) => setWebVisitorCreateCompanies(event.target.checked)} /> Create companies for valid unmatched domains</label>
             <label><input type="checkbox" checked={webVisitorCreateContacts} onChange={(event) => setWebVisitorCreateContacts(event.target.checked)} /> Create contacts only when a valid business email is supplied</label>
@@ -844,18 +839,20 @@ export function SettingsPage() {
                   <button className="secondary" type="button" onClick={() => void navigator.clipboard.writeText(`${API_BASE || window.location.origin}/api/v1/webhooks/web-visitors/${webVisitorToken}`).then(() => setWebhookCopied(true)).catch(() => setError("Could not copy. Select the webhook URL and copy it manually."))}>{webhookCopied ? "Copied" : "Copy webhook URL"}</button>
                 </> : !webVisitors?.configured ? <form onSubmit={saveWebVisitors}><button className="primary" disabled={busy}>Generate and save webhook</button></form> : <p>Your earlier webhook was stored as a one-way hash. Rotate it once to save a URL you can retrieve here.</p>}
                 {webVisitors?.configured ? <button className="secondary" type="button" disabled={busy} onClick={() => setConfirmWebhookRotation(true)}>Rotate webhook</button> : null}
-                {confirmWebhookRotation ? <div role="alert"><p>Rotation replaces the current webhook immediately. Update your sender with the new URL. Your website key and code stay the same.</p><button className="primary" type="button" disabled={busy} onClick={() => void rotateWebVisitorToken()}>Rotate and save</button><button className="secondary" type="button" onClick={() => setConfirmWebhookRotation(false)}>Cancel</button></div> : null}
+                {confirmWebhookRotation ? <div role="alert"><p>Rotation replaces the current webhook immediately. Update your sender with the new URL. Your script ID and website code stay the same.</p><button className="primary" type="button" disabled={busy} onClick={() => void rotateWebVisitorToken()}>Rotate and save</button><button className="secondary" type="button" onClick={() => setConfirmWebhookRotation(false)}>Cancel</button></div> : null}
               </section>
               <section className="wv-setup-step">
               <h3>2. Install on website</h3>
-              <label>Saved installation key<input readOnly value={webVisitors?.publicKey ?? ""} placeholder="Generated automatically with the private webhook" /></label>
+              <form className="stack-form" style={{ boxShadow: "none", border: 0, padding: 0 }} onSubmit={saveWebVisitors}>
+                <label>Provider script ID<input value={webVisitorScriptId} onChange={(event) => setWebVisitorScriptId(event.target.value)} pattern="[A-Za-z0-9]+" autoComplete="off" spellCheck={false} placeholder="Paste the script ID from your provider's install snippet" /></label>
+                <p className="muted">Copy the script ID from the install snippet in your Web Visitors provider account. Loop does not create it, and it is not your webhook.</p>
+                <button className="secondary" type="submit" disabled={busy}>Save script ID</button>
+              </form>
               <p>Add this code to the global template for every public page you want to track. Place it after your consent controls and before the closing <code>&lt;/body&gt;</code> tag, or in your site's global head if that is how scripts are managed.</p>
-              {webVisitors?.configured ? <button className="secondary" type="button" disabled={busy} onClick={() => setConfirmInstallationKeyRotation(true)}>Rotate installation key</button> : null}
-              {confirmInstallationKeyRotation ? <div role="alert"><p>Rotation changes the generated website code immediately. Publish the replacement code on every tracked site.</p><button className="primary" type="button" disabled={busy} onClick={() => void rotateWebVisitorInstallationKey()}>Rotate and generate new code</button><button className="secondary" type="button" onClick={() => setConfirmInstallationKeyRotation(false)}>Cancel</button></div> : null}
               </section>
               <section className="wv-setup-step">
               <div className="install-code-heading"><h3>3. Your generated code</h3><button className="secondary" type="button" disabled={!webVisitors?.loaderSnippet} onClick={() => void copyWebVisitorLoader()}>{loaderCopied ? "Copied" : "Copy code"}</button></div>
-              <pre className="install-code"><code>{webVisitors?.loaderSnippet ?? "Your installation code will appear here after saving WV App settings."}</code></pre>
+              <pre className="install-code"><code>{webVisitors?.loaderSnippet ?? "Your installation code appears here after you save the provider's script ID."}</code></pre>
               <ol className="install-steps"><li>Paste the code into your website template.</li><li>Publish the website and clear any site or CDN cache.</li><li>Enter a public page URL below and run the validation test.</li></ol>
               </section>
               <section className="wv-setup-step">
@@ -865,7 +862,7 @@ export function SettingsPage() {
                 <button className="primary" type="submit" disabled={installationBusy}>{installationBusy ? "Checking…" : "Validate installation"}</button>
               </form>
               {installationResult ? <div className={`installation-result ${installationResult.status === "installed" ? "success" : "warning"}`} role="status"><strong>{installationResult.status === "installed" ? "Installation verified" : "Installation not verified"}</strong><p>{installationResult.message}</p></div> : null}
-              <p className="muted">Validation checks only the published HTML for this organization's loader key. It does not execute page scripts or submit a test visitor.</p>
+              <p className="muted">Validation checks the published HTML for this organization's loader and confirms the provider serves a script for the saved script ID. It does not execute page scripts or submit a test visitor.</p>
               </section>
             </div>
           </aside>
