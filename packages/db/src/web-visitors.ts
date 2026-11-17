@@ -145,7 +145,8 @@ export function buildWebVisitorEventDedupeKey(input: { integrationId: string; pr
 
 export function buildWebVisitorLoaderSnippet(input: { publicKey: string }): string {
   const key = input.publicKey.trim();
-  if (!/^[A-Za-z0-9_-]{6,100}$/.test(key)) throw new Error("Invalid WV App public key");
+  // Provider script IDs are alphanumeric; Loop's wv_/wvi_ credentials must never reach website code.
+  if (!/^[A-Za-z0-9]+$/.test(key) || /^wvi?_/i.test(key)) throw new Error("Invalid Web Visitors script ID");
   return `<script>!function(key){if(window.reb2b)return;window.reb2b={loaded:true};var s=document.createElement("script");s.async=true;s.src="https://ddwl4m2hdecbv.cloudfront.net/b/"+key+"/"+key+".js.gz";document.getElementsByTagName("script")[0].parentNode.insertBefore(s,document.getElementsByTagName("script")[0]);}("${key}");</script>`;
 }
 
