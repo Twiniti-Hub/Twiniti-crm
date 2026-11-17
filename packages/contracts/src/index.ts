@@ -956,10 +956,18 @@ export const agentToolNameSchema = z.enum([
 ]);
 
 export const webVisitorProfileTypeSchema = z.enum(["person", "company"]);
+/**
+ * The provider-issued script ID from the provider's install snippet. Format check only:
+ * Loop's own webhook tokens (wv_) and retired self-generated keys (wvi_) are never valid.
+ */
+export const webVisitorScriptIdSchema = z.string().trim()
+  .regex(/^[A-Za-z0-9]+$/, "Paste the script ID from your Web Visitors provider's install snippet (letters and numbers only).")
+  .refine((value) => !/^wvi?_/i.test(value), "That is a Loop credential, not the provider's script ID.");
+/** Stored settings: an invalid legacy script ID reads as missing instead of failing the integration. */
 export const webVisitorSettingsSchema = z.object({
   createContacts: z.boolean().default(false),
   createCompanies: z.boolean().default(true),
-  publicKey: z.string().trim().regex(/^[A-Za-z0-9_-]{6,100}$/).nullable().optional()
+  publicKey: webVisitorScriptIdSchema.nullable().optional().catch(null)
 }).strict();
 export const webVisitorIncomingPayloadSchema = z.object({
   visitorId: z.string().trim().max(255).nullable().optional(),
@@ -1018,7 +1026,7 @@ export const webVisitorSupplierPayloadSchema = z.object({
 }).strict();
 export const updateWebVisitorIntegrationSchema = z.object({
   enabled: z.boolean(),
-  settings: webVisitorSettingsSchema.omit({ publicKey: true }).optional()
+  settings: webVisitorSettingsSchema.extend({ publicKey: webVisitorScriptIdSchema.nullable().optional() }).optional()
 }).strict();
 export const validateWebVisitorInstallationSchema = z.object({
   url: z.string().trim().url().max(2048).refine((value) => {

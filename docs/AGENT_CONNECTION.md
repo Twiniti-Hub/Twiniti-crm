@@ -62,14 +62,14 @@ next request with that credential.
 
 Board and saved-view endpoints introduced for Contacts/Companies Kanban are **user-only** in this release. Agent credentials do not receive board-view scopes; continue using contact create/update/read for record changes.
 
-WV App Web Visitors configuration, installation validation, webhook-token rotation, and ambiguous identity review are also **organization-admin user-only** in revision 0.10.55.12. Agents may read contact timelines using existing scopes, where accepted website visits appear as `web_visitor.visit`; they must not validate customer websites, resolve identities, or rewrite visitor identities.
+Web Visitors module configuration, installation validation, webhook-token rotation, and ambiguous identity review are also **organization-admin user-only** in revision 0.10.55.12. Agents may read contact timelines using existing scopes, where accepted website visits appear as `web_visitor.visit`; they must not validate customer websites, resolve identities, or rewrite visitor identities.
 
 Revision 0.10.55.13 (TWI-1069): installation instructions remain visible to administrators independently of configuration. Installation validation remains user-only. Never log webhook URLs containing credentials.
 
 Revision 0.10.55.14 (TWI-1079): saved webhook retrieval and rotation are admin-user-only. Installation uses the Org Admin-provisioned website key read-only. Never expose webhook tokens in generated website code, logs, or agent responses.
 
-Revision 0.10.55.20 (TWI-1111): Loop provisions and rotates a separate public
-installation key for website code. The encrypted webhook credential remains
+TWI-1115: the admin enters the provider-issued script ID for website code; Loop
+no longer generates or rotates one. The encrypted webhook credential remains
 private and rotates independently. Both actions remain organization-admin
 user-only; agents must not retrieve, rotate, or disclose either value.
 

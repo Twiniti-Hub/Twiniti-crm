@@ -72,6 +72,33 @@ function withSurfaceCookie(response: Response, surface: Surface) {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
+/**
+ * Public Loop pages on the canonical host. The app shell (apps/web/index.html) ships a
+ * robots noindex meta so loop.us/loop.eu and Render hosts stay out of search; on
+ * loop.twiniti.ai the router removes it for these paths and adds X-Robots-Tag
+ * noindex to every other app-shell page, so crawlers see the decision without JS.
+ */
+const PUBLIC_PATHS = new Set(["/", "/pricing", "/sign-up", "/sign-in"]);
+const NOINDEX_META = /<meta\s+name=["']robots["']\s+content=["'][^"']*noindex[^"']*["']\s*\/?>\s*/gi;
+
+export function isPublicPath(pathname: string) {
+  return PUBLIC_PATHS.has(pathname.replace(/\/+$/, "") || "/");
+}
+
+async function applyRobotsPolicy(response: Response, pathname: string, surface: Surface) {
+  // The landing origin serves only public marketing pages; leave it untouched.
+  if (surface !== "app" || !(response.headers.get("content-type") ?? "").includes("text/html")) return response;
+  if (!isPublicPath(pathname)) {
+    response.headers.set("X-Robots-Tag", "noindex");
+    return response;
+  }
+  const headers = new Headers(response.headers);
+  headers.delete("X-Robots-Tag");
+  headers.delete("content-length");
+  const body = response.body ? (await response.text()).replace(NOINDEX_META, "") : null;
+  return new Response(body, { status: response.status, statusText: response.statusText, headers });
+}
+
 async function proxyWeb(request: Request, env: Env) {
   const url = new URL(request.url);
   const surface = resolveWebSurface(url.pathname, request.headers.get("Cookie"));
@@ -82,13 +109,25 @@ async function proxyWeb(request: Request, env: Env) {
     return isCrawler(request.headers.get("User-Agent")) ? sleepingResponse() : wakingPage(env.APP_ORIGIN);
   }
   const tagged = withSurfaceCookie(response, surface);
-  if (!isProduction(env.DEPLOYMENT_ENV)) tagged.headers.set("X-Robots-Tag", "noindex, nofollow");
-  return tagged;
+  if (!isProduction(env.DEPLOYMENT_ENV)) {
+    tagged.headers.set("X-Robots-Tag", "noindex, nofollow");
+    return tagged;
+  }
+  return applyRobotsPolicy(tagged, url.pathname, surface);
 }
 
 async function proxy(request: Request, env: Env, region: Region) {
   const response = await proxyOrigin(request, originFor(env, region));
   return withRouterHeaders(response, request, region);
+}
+
+/**
+ * A sleeping free-plan Render origin answers the Worker's shared egress IP with a
+ * 429 instead of waking. The API itself never rate-limits these routes, so treat
+ * a regional 429 like an outage: it must not hide a workspace in that cell.
+ */
+function cellUnavailable(result: { response: Response } | null) {
+  return !result || result.response.status >= 500 || result.response.status === 429;
 }
 
 /** Bounded parallel reads keep one unhealthy regional cell from hanging sign-in. */
@@ -117,7 +156,7 @@ export async function discoverWorkspace(request: Request, env: Env, timeoutMs = 
   const admin = results.find((result) => result?.body?.data?.isSuperAdmin);
   if (admin) return admin.response;
   // Do not claim setup is needed when a cell could contain the user's workspace.
-  if (results.some((result) => !result || result.response.status >= 500)) {
+  if (results.some(cellUnavailable)) {
     return Response.json({ error: { code: "workspace_discovery_unavailable", message: "A workspace service is unavailable. Please retry." } },
       { status: 503, headers: corsHeaders(request) });
   }
@@ -173,9 +212,9 @@ export async function proxyBootstrapFanout(request: Request, env: Env, timeoutMs
       return null;
     }
   }));
-  const hit = results.find((result) => result && result.response.status !== 404 && result.response.status < 500);
+  const hit = results.find((result) => result && result.response.status !== 404 && !cellUnavailable(result));
   if (hit) return hit.response;
-  if (results.some((result) => !result || result.response.status >= 500)) {
+  if (results.some(cellUnavailable)) {
     return Response.json(
       { error: { code: "workspace_discovery_unavailable", message: "A workspace service is unavailable. Please retry." } },
       { status: 503, headers: corsHeaders(request) }

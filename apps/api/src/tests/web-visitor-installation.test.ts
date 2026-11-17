@@ -14,7 +14,7 @@ import { randomBytes } from "node:crypto";
 const key = "R6G5YH5RVG65";
 const publicLookup = async () => [{ address: "93.184.216.34", family: 4 }];
 
-test("private webhook and automatic installation key survive reload and rotate independently", async () => {
+test("admin-entered provider script ID survives reload; Loop never invents one or accepts its own credentials", async () => {
   let stored: Record<string, unknown> | undefined;
   const db = {
     select: () => ({ from: () => ({ where: () => ({ limit: async () => stored ? [stored] : [] }) }) }),
@@ -36,34 +36,59 @@ test("private webhook and automatic installation key survive reload and rotate i
     assert.equal(saved.statusCode, 200);
     const initial = saved.json().data;
     assert.ok(initial.webhookToken.startsWith("wv_"));
-    assert.ok(initial.publicKey.startsWith("wvi_"));
-    assert.doesNotMatch(initial.loaderSnippet, new RegExp(initial.webhookToken));
-    assert.match(initial.loaderSnippet, new RegExp(initial.publicKey));
+    assert.equal(initial.publicKey, null, "Loop must not generate a script ID");
+    assert.equal(initial.loaderSnippet, null);
     assert.notEqual(stored!.webhookTokenCiphertext, initial.webhookToken);
     assert.equal(stored!.webhookTokenHash, hashCredential(initial.webhookToken));
+
+    for (const rejected of [initial.webhookToken, "wvi_abc123", "WV_ABC", "bad key", "abc-123"]) {
+      const response = await app.inject({ method: "PUT", url: path, payload: { enabled: true, settings: { publicKey: rejected } } });
+      assert.equal(response.statusCode, 400, rejected === initial.webhookToken ? "webhook token" : rejected);
+    }
+    assert.equal((await app.inject({ method: "GET", url: path })).json().data.publicKey, null);
+
+    const withKey = (await app.inject({ method: "PUT", url: path, payload: { enabled: true, settings: { publicKey: ` ${key} ` } } })).json().data;
+    assert.equal(withKey.publicKey, key);
+    assert.match(withKey.loaderSnippet, new RegExp(key));
+    assert.doesNotMatch(withKey.loaderSnippet, new RegExp(initial.webhookToken));
     const loaded = await app.inject({ method: "GET", url: path });
     assert.equal(loaded.headers["cache-control"], "no-store");
     assert.equal(loaded.json().data.webhookToken, initial.webhookToken);
-    const updated = await app.inject({ method: "PUT", url: path, payload: { enabled: false } });
-    assert.equal(updated.json().data.webhookToken, initial.webhookToken);
+    assert.equal(loaded.json().data.publicKey, key);
+    const toggled = (await app.inject({ method: "PUT", url: path, payload: { enabled: false } })).json().data;
+    assert.equal(toggled.publicKey, key, "saving other settings keeps the script ID");
+    assert.equal(toggled.webhookToken, initial.webhookToken);
+
     const rotated = await app.inject({ method: "POST", url: `${path}/rotate-webhook-token`, payload: {} });
     assert.equal(rotated.statusCode, 200);
     assert.notEqual(rotated.json().data.webhookToken, initial.webhookToken);
-    assert.equal(rotated.json().data.loaderSnippet, initial.loaderSnippet);
-    assert.equal((await app.inject({ method: "GET", url: path })).json().data.webhookToken, rotated.json().data.webhookToken);
-    const installationRotated = await app.inject({ method: "POST", url: `${path}/rotate-installation-key`, payload: {} });
-    assert.equal(installationRotated.statusCode, 200);
-    assert.equal(installationRotated.json().data.webhookToken, rotated.json().data.webhookToken);
-    assert.notEqual(installationRotated.json().data.publicKey, initial.publicKey);
-    assert.notEqual(installationRotated.json().data.loaderSnippet, initial.loaderSnippet);
+    assert.equal(rotated.json().data.loaderSnippet, withKey.loaderSnippet);
+    assert.equal((await app.inject({ method: "POST", url: `${path}/rotate-installation-key`, payload: {} })).statusCode, 404);
+
+    // Legacy rows written before the 0029 cleanup read as "no script ID" instead of failing or leaking.
+    for (const legacy of ["wvi_legacyGeneratedKey", rotated.json().data.webhookToken]) {
+      stored = { ...stored!, settings: { createContacts: false, createCompanies: true, publicKey: legacy } };
+      const read = (await app.inject({ method: "GET", url: path })).json().data;
+      assert.equal(read.publicKey, null);
+      assert.equal(read.loaderSnippet, null);
+      assert.equal((await app.inject({ method: "POST", url: `${path}/validate-installation`, payload: { url: "https://example.com/" } })).statusCode, 409);
+    }
+
     delete stored!.webhookTokenCiphertext;
-    const legacy = (await app.inject({ method: "GET", url: path })).json().data;
-    assert.equal(legacy.webhookNeedsRotation, true);
-    assert.equal(legacy.webhookToken, null);
+    const legacyWebhook = (await app.inject({ method: "GET", url: path })).json().data;
+    assert.equal(legacyWebhook.webhookNeedsRotation, true);
+    assert.equal(legacyWebhook.webhookToken, null);
     role = "member";
     assert.equal((await app.inject({ method: "GET", url: path })).statusCode, 403);
     assert.equal((await app.inject({ method: "POST", url: `${path}/rotate-webhook-token`, payload: {} })).statusCode, 403);
   } finally { await app.close(); }
+});
+
+test("the loader snippet refuses Loop credentials and non-alphanumeric IDs", () => {
+  for (const bad of ["wv_abc", "wvi_abc", "WVI_ABC", "abc-def", "abc_def", ""]) {
+    assert.throws(() => buildWebVisitorLoaderSnippet({ publicKey: bad }), /Invalid Web Visitors script ID/, bad);
+  }
+  assert.ok(buildWebVisitorLoaderSnippet({ publicKey: key }).includes(`("${key}")`));
 });
 
 test("accepts the actual customer snippet and rejects wrong keys and comments", async () => {
@@ -117,6 +142,19 @@ test("reports installed only when the organization loader URL is in HTML", async
   const fetch = async () => new Response(`<script src="https://ddwl4m2hdecbv.cloudfront.net/b/${key}/${key}.js.gz"></script>`, { headers: { "content-type": "text/html" } });
   const result = await validateWebVisitorInstallation({ websiteUrl: "https://example.com", publicKey: key, lookup: publicLookup, fetch });
   assert.equal(result.status, "installed");
+});
+
+test("reports script_unavailable when the page has the code but the provider CDN does not serve the script", async () => {
+  const requested: string[] = [];
+  const fetch = async (url: string) => {
+    requested.push(url);
+    return url.startsWith("https://ddwl4m2hdecbv.cloudfront.net/")
+      ? new Response("<Error><Code>AccessDenied</Code></Error>", { status: 403, headers: { "content-type": "application/xml" } })
+      : new Response(buildWebVisitorLoaderSnippet({ publicKey: key }), { headers: { "content-type": "text/html" } });
+  };
+  const result = await validateWebVisitorInstallation({ websiteUrl: "https://example.com", publicKey: key, lookup: publicLookup, fetch });
+  assert.equal(result.status, "script_unavailable");
+  assert.deepEqual(requested, ["https://example.com/", `https://ddwl4m2hdecbv.cloudfront.net/b/${key}/${key}.js.gz`]);
 });
 
 test("reports a missing loader without executing page JavaScript", async () => {

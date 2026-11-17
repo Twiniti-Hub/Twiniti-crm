@@ -777,7 +777,7 @@ async function processWebVisitorWebhook(payload: { webhookEventId: string; organ
     eq(webVisitorIntegrations.id, payload.integrationId),
     eq(webVisitorIntegrations.organizationId, payload.organizationId)
   )).limit(1);
-  if (!integration) throw new Error("WV App integration not found");
+  if (!integration) throw new Error("Web Visitors module integration not found");
   const profile = webVisitorIncomingPayloadSchema.parse(event.payload);
   const settings = webVisitorSettingsSchema.parse(integration.settings ?? {});
   await processWebVisitorProfile(db, {
@@ -1162,7 +1162,7 @@ async function handleJob(kind: string, payload: Record<string, unknown>, organiz
       await processResendWebhook(payload as { webhookEventId: string; organizationId?: string | null; receivingDomain?: string });
       return;
     case "webhook.web_visitors.process":
-      if (!organizationId || organizationId !== payload.organizationId) throw new Error("WV App webhook workspace mismatch");
+      if (!organizationId || organizationId !== payload.organizationId) throw new Error("Web Visitors module webhook workspace mismatch");
       await processWebVisitorWebhook(payload as { webhookEventId: string; organizationId: string; integrationId: string });
       return;
     case "workflow.trigger.form_submit":

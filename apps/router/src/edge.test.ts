@@ -135,3 +135,54 @@ test("production keeps crawlers and the landing robots.txt", async (t) => {
   assert.equal(crawled.status, 200);
   assert.equal(crawled.headers.get("x-robots-tag"), null);
 });
+
+const shellHtml = readFileSync(new URL("../../web/index.html", import.meta.url), "utf8");
+const htmlResponse = (body: string, headers: Record<string, string> = {}) =>
+  new Response(body, { headers: { "content-type": "text/html; charset=utf-8", ...headers } });
+const hasNoindexMeta = (html: string) => /<meta\s+name=["']robots["'][^>]*noindex/i.test(html);
+const sessionCookie = "__Host-hexclave-refresh-abc=1";
+
+test("the app shell itself ships noindex, so loop.us/loop.eu stay out of search without the router", () => {
+  assert.ok(hasNoindexMeta(shellHtml));
+});
+
+test("production: public pages served by the app shell are indexable (no meta, no header)", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => htmlResponse(shellHtml, { "x-robots-tag": "noindex" }));
+  for (const [path, cookie] of [["/sign-up", ""], ["/sign-in", ""], ["/pricing", ""], ["/pricing/", ""], ["/", sessionCookie]] as const) {
+    const response = await router.fetch(new Request(`https://loop.test${path}`, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1)", Accept: "text/html", Cookie: cookie }
+    }), environment("production"));
+    assert.equal(response.status, 200, path);
+    assert.equal(response.headers.get("x-robots-tag"), null, path);
+    const html = await response.text();
+    assert.ok(!hasNoindexMeta(html), `${path} must not carry a noindex meta`);
+    assert.ok(html.includes('<div id="root">'), `${path} still serves the shell`);
+  }
+});
+
+test("production: anonymous / on the landing origin is untouched and indexable", async (t) => {
+  const visited: string[] = [];
+  t.mock.method(globalThis, "fetch", async (url: string) => { visited.push(String(url)); return htmlResponse("<html><head></head><body>Loop</body></html>"); });
+  const response = await router.fetch(new Request("https://loop.test/", { headers: { Accept: "text/html" } }), environment("production"));
+  assert.ok(visited[0]!.startsWith("https://web.test/"));
+  assert.equal(response.headers.get("x-robots-tag"), null);
+});
+
+test("production: signed-in app pages get X-Robots-Tag noindex; assets do not", async (t) => {
+  t.mock.method(globalThis, "fetch", async (url: string) => String(url).includes("/assets/")
+    ? new Response("console.log(1)", { headers: { "content-type": "text/javascript" } })
+    : htmlResponse(shellHtml));
+  for (const path of ["/contacts", "/settings", "/onboarding", "/handler/email-verification", "/forgot-password"]) {
+    const response = await router.fetch(new Request(`https://loop.test${path}`, { headers: { Accept: "text/html", Cookie: sessionCookie } }), environment("production"));
+    assert.equal(response.headers.get("x-robots-tag"), "noindex", path);
+    assert.ok(hasNoindexMeta(await response.text()), path);
+  }
+  const asset = await router.fetch(new Request("https://loop.test/assets/index.js", { headers: { Cookie: sessionCookie } }), environment("production"));
+  assert.equal(asset.headers.get("x-robots-tag"), null);
+});
+
+test("non-production hosts stay noindex everywhere, public paths included", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => htmlResponse(shellHtml));
+  const response = await router.fetch(new Request("https://loop-dev.test/sign-up", { headers: { "User-Agent": chrome, Accept: "text/html" } }), environment());
+  assert.equal(response.headers.get("x-robots-tag"), "noindex, nofollow");
+});

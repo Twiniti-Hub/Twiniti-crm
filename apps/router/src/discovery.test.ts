@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import router, { discoverWorkspace, type Env } from "./index";
+import router, { discoverWorkspace, proxyBootstrapFanout, type Env } from "./index";
 
 const org = "00000000-0000-4000-8000-000000000001";
 function environment() {
@@ -58,4 +58,33 @@ test("unauthenticated regional replies return 401 without a fourth probe", async
   t.mock.method(globalThis, "fetch", async () => { calls++; return Response.json({ error: "unauthorized" }, { status: 401 }); });
   assert.equal((await discoverWorkspace(new Request("https://loop.test/api/v1/me"), env)).status, 401);
   assert.equal(calls, 3);
+});
+
+const renderSleeping = () => new Response("Too Many Requests", { status: 429 });
+
+test("a sleeping UK cell (Render 429 to the Worker IP) does not send a UK user to new-workspace setup", async (t) => {
+  const { env, writes } = environment();
+  t.mock.method(globalThis, "fetch", async (url: string) =>
+    String(url).startsWith("https://uk.test") ? renderSleeping() : Response.json({ data: { needsSetup: true } }));
+  const response = await discoverWorkspace(new Request("https://loop.test/api/v1/me"), env);
+  assert.equal(response.status, 503);
+  assert.equal((await response.json() as any).error.code, "workspace_discovery_unavailable");
+  assert.deepEqual(writes, []);
+});
+
+test("a sleeping UK cell does not hide a workspace found in another cell", async (t) => {
+  const { env } = environment();
+  t.mock.method(globalThis, "fetch", async (url: string) =>
+    String(url).startsWith("https://uk.test") ? renderSleeping() : Response.json({ data: String(url).startsWith("https://eu.test") ? { organizationId: org, regionCode: "eu" } : { needsSetup: true } }));
+  const response = await discoverWorkspace(new Request("https://loop.test/api/v1/me"), env);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json() as any).data.organizationId, org);
+});
+
+test("invite fan-out does not return a sleeping cell's 429 as the answer", async (t) => {
+  const { env } = environment();
+  t.mock.method(globalThis, "fetch", async (url: string) =>
+    String(url).startsWith("https://uk.test") ? renderSleeping() : Response.json({ error: "not_found" }, { status: 404 }));
+  const response = await proxyBootstrapFanout(new Request("https://loop.test/api/v1/invitations/abc"), env);
+  assert.equal(response.status, 503);
 });
