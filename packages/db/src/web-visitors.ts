@@ -77,7 +77,7 @@ function normalizeSupplierSeenAt(value: string) {
   if (!Number.isNaN(new Date(trimmed).getTime())) return new Date(trimmed).toISOString();
   const repaired = trimmed.replace(/^(.*T\d{2}:\d{2}:\d{2}):\d{2}\.\d+([+-]\d{2})\.(\d{2})$/, "$1$2:$3");
   if (!Number.isNaN(new Date(repaired).getTime())) return new Date(repaired).toISOString();
-  throw new Error("WV App Seen At is not a supported timestamp");
+  throw new Error("Web Visitors module Seen At is not a supported timestamp");
 }
 
 export function normalizeWebVisitorSupplierPayload(raw: unknown): WebVisitorProfile {

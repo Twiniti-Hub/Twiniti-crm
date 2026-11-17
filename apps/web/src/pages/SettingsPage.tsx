@@ -106,7 +106,7 @@ export function SettingsPage() {
     const nextMe = meRes.data as Me;
     setMe(nextMe);
     if (!nextMe.organizationId) return;
-    // Load WV App independently: a failure in invitations/email must not hide installation.
+    // Load the Web Visitors module independently: a failure in invitations/email must not hide installation.
     if (nextMe.role === "admin" || nextMe.isSuperAdmin) {
       try {
         const result = await api("/api/v1/organization/integrations/web-visitors");
@@ -172,7 +172,7 @@ export function SettingsPage() {
       const res = await api("/api/v1/organization/integrations/web-visitors", { method: "PUT", body: JSON.stringify({ enabled: webVisitorEnabled, settings: { createContacts: webVisitorCreateContacts, createCompanies: webVisitorCreateCompanies, publicKey: webVisitorScriptId.trim() || null } }) });
       const integration = res.data as WebVisitorIntegration;
       setWebVisitors(integration); setWebVisitorToken(integration.webhookToken ?? null); setWebVisitorScriptId(integration.publicKey ?? ""); setLoaderCopied(false); setInstallationResult(null); setMessage("Web Visitors settings and private webhook saved.");
-    } catch (err) { setError(err instanceof Error ? err.message : "Could not save WV App settings"); } finally { setBusy(false); }
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not save Web Visitors module settings"); } finally { setBusy(false); }
   }
 
   async function rotateWebVisitorToken() {
@@ -512,8 +512,8 @@ export function SettingsPage() {
 
       {isAdmin ? (
         <section className="panel" style={{ marginTop: 15 }}>
-          <p className="eyebrow">WV App</p><h3>Web Visitors</h3>
-          <p className="muted">Identify website visitors and record each unique visit on the matched contact, or on the company when no contact is safely resolved. LinkedIn identifiers are matched only when WV App supplies them; Loop does not scrape LinkedIn.</p>
+          <p className="eyebrow">Integration</p><h3>Web Visitors module</h3>
+          <p className="muted">Identify website visitors and record each unique visit on the matched contact, or on the company when no contact is safely resolved. LinkedIn identifiers are matched only when the provider supplies them; Loop does not scrape LinkedIn.</p>
           <form className="stack-form" style={{ boxShadow: "none", border: 0, padding: 0 }} onSubmit={saveWebVisitors}>
             <label>Provider script ID<input value={webVisitorScriptId} onChange={(event) => setWebVisitorScriptId(event.target.value)} pattern="[A-Za-z0-9]+" autoComplete="off" spellCheck={false} placeholder="Paste the script ID from your provider's install snippet" /></label>
             <label><input type="checkbox" checked={webVisitorEnabled} onChange={(event) => setWebVisitorEnabled(event.target.checked)} /> Enable Web Visitors ingestion</label>
@@ -825,7 +825,7 @@ export function SettingsPage() {
         <div className="side-card-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setInstallationOpen(false); }}>
           <aside className="side-card" role="dialog" aria-modal="true" aria-labelledby="web-visitor-install-title">
             <div className="side-card-header">
-              <div><p className="eyebrow">WV App</p><h2 id="web-visitor-install-title">Install Web Visitors</h2></div>
+              <div><p className="eyebrow">Web Visitors module</p><h2 id="web-visitor-install-title">Install Web Visitors</h2></div>
               <button className="secondary" type="button" aria-label="Close installation instructions" onClick={() => setInstallationOpen(false)}>Close</button>
             </div>
             <div className="side-card-body">
