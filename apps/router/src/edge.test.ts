@@ -186,3 +186,26 @@ test("non-production hosts stay noindex everywhere, public paths included", asyn
   const response = await router.fetch(new Request("https://loop-dev.test/sign-up", { headers: { "User-Agent": chrome, Accept: "text/html" } }), environment());
   assert.equal(response.headers.get("x-robots-tag"), "noindex, nofollow");
 });
+
+test("production: HEAD mirrors GET for public app routes", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => htmlResponse(shellHtml));
+  const get = await router.fetch(new Request("https://loop.test/sign-up", {
+    headers: { "User-Agent": chrome, Accept: "text/html" }
+  }), environment("production"));
+  const head = await router.fetch(new Request("https://loop.test/sign-up", {
+    method: "HEAD",
+    headers: { "User-Agent": chrome, Accept: "text/html" }
+  }), environment("production"));
+  assert.equal(get.status, 200);
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), "");
+});
+
+test("production: anonymous unknown app paths return 404", async (t) => {
+  const fetchMock = t.mock.method(globalThis, "fetch", async () => htmlResponse(shellHtml));
+  const response = await router.fetch(new Request("https://loop.test/this-does-not-exist-123", {
+    headers: { "User-Agent": chrome, Accept: "text/html" }
+  }), environment("production"));
+  assert.equal(response.status, 404);
+  assert.equal(fetchMock.mock.callCount(), 0);
+});

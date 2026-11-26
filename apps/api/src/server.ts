@@ -23,7 +23,16 @@ import { registerResendWebhookRoutes } from "./routes/resend-webhook.js";
 import { registerWebVisitorRoutes } from "./routes/web-visitors.js";
 import { registerContactSyncRoutes } from "./routes/contact-sync.js";
 import { resolvePublicFormCorsOptions } from "./public-form-cors.js";
+import { isGuestSpaDocumentPath, isHandlerDocumentPath } from "./spa-document-paths.js";
 import { safeRequestSerializers } from "./web-visitor-security.js";
+
+const SESSION_COOKIE_PREFIX =
+  /(?:^|;\s*)(?:__Host-)?(?:hexclave-refresh-|stack-refresh-)[^=]*=/;
+
+function hasAuthSessionCookie(cookieHeader: string | undefined) {
+  if (!cookieHeader) return false;
+  return SESSION_COOKIE_PREFIX.test(cookieHeader);
+}
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 loadDotenv({ path: path.join(rootDir, ".env") });
@@ -107,7 +116,15 @@ await app.register(fastifyStatic, {
 
 app.setNotFoundHandler((request, reply) => {
   const url = request.url.split("?")[0] ?? request.url;
-  if (request.method === "GET" && !url.startsWith("/api/") && !url.startsWith("/documentation") && url !== "/mcp") {
+  const isDocumentPath = !url.startsWith("/api/") && !url.startsWith("/documentation") && url !== "/mcp";
+  const allowSpa = isDocumentPath
+    && (hasAuthSessionCookie(request.headers.cookie)
+      || isGuestSpaDocumentPath(url)
+      || isHandlerDocumentPath(url));
+  if (allowSpa && (request.method === "GET" || request.method === "HEAD")) {
+    if (request.method === "HEAD") {
+      return reply.code(200).type("text/html; charset=utf-8").send();
+    }
     return reply.sendFile("index.html");
   }
   return reply.code(404).send({

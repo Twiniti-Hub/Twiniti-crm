@@ -10,6 +10,8 @@ import { BillingPage } from "../pages/BillingPage";
 import { LandingPage } from "../pages/LandingPage";
 import { OnboardingPage } from "../pages/OnboardingPage";
 import { ForgotPasswordPage } from "../pages/ForgotPasswordPage";
+import { NotFoundPage } from "../pages/NotFoundPage";
+import { PricingPage } from "../pages/PricingPage";
 import { SignInPage } from "../pages/SignInPage";
 import { SignUpPage } from "../pages/SignUpPage";
 import { VerifyEmailPage } from "../pages/VerifyEmailPage";
@@ -157,10 +159,11 @@ export function AuthGate() {
         <Route path="/" element={<LandingPage />} />
         <Route path="sign-in" element={<SignInPage />} />
         <Route path="sign-up" element={<SignUpPage />} />
+        <Route path="pricing" element={<PricingPage />} />
         <Route path="forgot-password" element={<ForgotPasswordPage />} />
         <Route path="accept-invite" element={<AcceptInvitePage />} />
         <Route path="handler/*" element={<HexclaveHandler fullPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     );
   }

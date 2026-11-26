@@ -94,6 +94,7 @@ test("sitemap.xml lists the canonical Loop landing URL", () => {
   const sitemap = fs.readFileSync(sitemapPath, "utf8");
   assert.match(sitemap, /<urlset\s+xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
   assert.match(sitemap, new RegExp(`<loc>${productionOrigin}/</loc>`));
+  assert.match(sitemap, new RegExp(`<loc>${productionOrigin}/pricing</loc>`));
   assert.doesNotMatch(sitemap, /<loc>https?:\/\/localhost/);
 });
 

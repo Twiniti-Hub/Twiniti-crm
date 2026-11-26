@@ -51,6 +51,7 @@ import {
   sendError
 } from "../auth-hook.js";
 import { createOrganizationCheckoutSession } from "./billing.js";
+import { trackGa4FunnelEvent } from "../ga4-funnel.js";
 import { enqueueLicenseProvisioning } from "../license-jobs.js";
 import { createLicenseApiClient } from "@twiniti/license-api";
 import { assertVerifiedPrimaryEmail } from "@twiniti/auth";
@@ -617,6 +618,11 @@ export async function registerOrganizationRoutes(app: FastifyInstance, db: Db, e
         });
 
         if (created.created && joinAsAdmin && actor.needsSetup) {
+          void trackGa4FunnelEvent(env, request.log, {
+            name: "sign_up",
+            clientId: actor.hexclaveSubject ?? actor.id,
+            params: { workspace_kind: workspaceKind, region_code: created.organization.residencyRegion }
+          });
           await notifySupportOfSignup(
             env,
             {

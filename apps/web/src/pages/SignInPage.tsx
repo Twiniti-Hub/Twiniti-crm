@@ -7,7 +7,7 @@ import { PAGE_META, usePageMeta } from "../lib/pageMeta";
 
 export function SignInPage() {
   const app = useHexclaveApp();
-  usePageMeta(PAGE_META.signIn.title, PAGE_META.signIn.description);
+  usePageMeta(PAGE_META.signIn.title, PAGE_META.signIn.description, PAGE_META.signIn);
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

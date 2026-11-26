@@ -16,6 +16,7 @@ import { buildSubscriptionState, enqueueLicenseSubscriptionSync } from "../licen
 import type { TrialKind } from "@twiniti/license-api";
 
 import { billingConfirmationError, mayReplaceSubscription, recoverCheckoutSubscription } from "../billing-recovery.js";
+import { trackGa4FunnelEvent } from "../ga4-funnel.js";
 
 type RawBodyRequest = FastifyRequest & { rawBody?: string | Buffer };
 
@@ -189,6 +190,14 @@ export async function createOrganizationCheckoutSession(
     stripeCheckoutSessionId: session.id,
     stripeCustomerId: stripeObjectId(session.customer),
     stripePriceId: priceId
+  });
+  void trackGa4FunnelEvent(env, undefined, {
+    name: "begin_checkout",
+    clientId: input.organizationId,
+    params: {
+      workspace_kind: input.workspaceKind ?? "company",
+      currency: "USD"
+    }
   });
   return session;
 }
@@ -497,7 +506,27 @@ export async function registerBillingRoutes(app: FastifyInstance, db: Db, env: A
         syncOrganizationId = await applyCheckoutCompleted(db, event, object);
         break;
       case "customer.subscription.created":
-      case "customer.subscription.updated":
+      case "customer.subscription.updated": {
+        const metadata = object.metadata && typeof object.metadata === "object"
+          ? object.metadata as Record<string, unknown>
+          : {};
+        const stripeOrgId = typeof metadata.organizationId === "string" ? metadata.organizationId : null;
+        const before = stripeOrgId ? await getOrganizationBilling(db, stripeOrgId) : null;
+        syncOrganizationId = await applySubscriptionEvent(db, event, object);
+        if (syncOrganizationId && before?.status !== "trialing") {
+          const after = await getOrganizationBilling(db, syncOrganizationId);
+          if (after?.status === "trialing") {
+            void trackGa4FunnelEvent(env, request.log, {
+              name: "trial_started",
+              clientId: syncOrganizationId,
+              params: {
+                workspace_kind: typeof metadata.workspaceKind === "string" ? metadata.workspaceKind : "company"
+              }
+            });
+          }
+        }
+        break;
+      }
       case "customer.subscription.deleted":
         syncOrganizationId = await applySubscriptionEvent(db, event, object);
         break;

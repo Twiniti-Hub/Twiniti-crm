@@ -11,7 +11,7 @@ type WorkspaceChoice = "personal" | "organization";
 
 export function SignUpPage() {
   const app = useHexclaveApp();
-  usePageMeta(PAGE_META.signUp.title, PAGE_META.signUp.description);
+  usePageMeta(PAGE_META.signUp.title, PAGE_META.signUp.description, PAGE_META.signUp);
   const navigate = useNavigate();
   const [workspaceChoice, setWorkspaceChoice] = useState<WorkspaceChoice>("organization");
   const [displayName, setDisplayName] = useState("");
@@ -106,7 +106,10 @@ export function SignUpPage() {
               Choose a personal CRM (only you) or an organization workspace for your company.
             </p>
           </div>
-          <p className="muted">{workspaceChoice === "personal" ? "Personal: $9/month" : "Organization: $29/month"} after 7 days free. No credit card required to start.</p>
+          <p className="muted">
+            {workspaceChoice === "personal" ? "Personal: $9/month" : "Organization: $29/month"} after 7 days free.
+            Next, you&apos;ll confirm your trial on Stripe&apos;s secure checkout. No card needed to start.
+          </p>
           {error ? <div className="banner error">{error}</div> : null}
           <fieldset className="workspace-choice">
             <legend>Workspace type</legend>
@@ -187,7 +190,7 @@ export function SignUpPage() {
             />
           </label>
           <button className="primary" type="submit" disabled={busy}>
-            {busy ? "Creating…" : "Create account"}
+            {busy ? "Creating…" : "Create account and continue"}
           </button>
           <p className="muted">
             Already have an account? <Link to="/sign-in">Sign in</Link>

@@ -67,7 +67,13 @@ export const envSchema = z.object({
   AUTH_DISABLED: z
     .enum(["true", "false"])
     .default("false")
-    .transform((value) => value === "true")
+    .transform((value) => value === "true"),
+  /** GA4 Measurement ID for server-side funnel events (same property as VITE_GOOGLE_ANALYTICS_ID in prod). */
+  GA4_MEASUREMENT_ID: z.string().optional().default(""),
+  /** GA4 Measurement Protocol API secret from the GA4 stream settings. */
+  GA4_API_SECRET: z.string().optional().default(""),
+  /** Optional GA4 event param (e.g. internal, agent_run) so dev and smoke traffic is filterable. */
+  GA4_TRAFFIC_TYPE: z.string().optional().default("")
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
