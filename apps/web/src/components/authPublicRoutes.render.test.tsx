@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
+import type { StackClientApp } from "@hexclave/react";
 import { HexclaveClientApp, HexclaveProvider, HexclaveTheme } from "@hexclave/react";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -8,7 +9,7 @@ import { installHappyDom } from "../test/happyDom.js";
 import { shouldMountHexclaveAuthShell } from "../lib/hexclaveShellMount.js";
 
 let domWindow: ReturnType<typeof installHappyDom>;
-let testHexclaveApp: HexclaveClientApp;
+let testHexclaveApp: StackClientApp<true>;
 
 function mountInDocument(tree: ReactNode) {
   const container = document.createElement("div");
