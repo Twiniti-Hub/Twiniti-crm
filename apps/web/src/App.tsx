@@ -1,13 +1,12 @@
 import { SessionExitLink } from "./components/SessionExit";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { BrowserRouter, useLocation } from "react-router";
 import { AuthGate } from "./components/AuthGate";
 import { CrmRoutes } from "./components/CrmRoutes";
 import { trackPageView } from "@twiniti/analytics";
 import { HexclaveProvider, HexclaveTheme, useUser } from "@hexclave/react";
 import { hexclaveApp } from "./hexclave/client";
-import { routeNeedsHexclave } from "./lib/hexclaveRoutes";
-import { hasHexclaveSessionCookie } from "./lib/sessionRoutes";
+import { shouldMountHexclaveAuthShell } from "./lib/hexclaveShellMount";
 
 function AnalyticsRouteTracker() {
   const location = useLocation();
@@ -26,16 +25,7 @@ function AuthenticatedSessionExit() {
 }
 
 function HexclaveOptionalShell({ authEnabled, children }: { authEnabled: boolean; children: ReactNode }) {
-  const location = useLocation();
-  const [sessionCookie, setSessionCookie] = useState(() => hasHexclaveSessionCookie());
-
-  useEffect(() => {
-    setSessionCookie(hasHexclaveSessionCookie());
-  }, [location.pathname, location.search]);
-
-  const mountHexclave = authEnabled
-    && Boolean(hexclaveApp)
-    && (sessionCookie || routeNeedsHexclave(location.pathname));
+  const mountHexclave = shouldMountHexclaveAuthShell(authEnabled, Boolean(hexclaveApp));
 
   if (!mountHexclave || !hexclaveApp) {
     return <>{children}</>;

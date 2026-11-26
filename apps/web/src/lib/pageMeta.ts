@@ -87,8 +87,9 @@ export function usePageMeta(title: string, description: string, spec?: Partial<P
   useEffect(() => {
     if (typeof document === "undefined") return;
     const previousTitle = document.title;
+    const previousDescription =
+      document.head.querySelector<HTMLMetaElement>(`meta[name="description"]`)?.content ?? "";
     const descriptionTag = upsertMetaName("description", description);
-    const previousDescription = descriptionTag.tag.content;
 
     const canonical = spec?.canonicalPath
       ? upsertLinkTag("canonical", absolutePublicUrl(spec.canonicalPath))

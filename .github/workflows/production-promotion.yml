@@ -50,7 +50,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          deadline=$((SECONDS + 3600))
+          deadline=$((SECONDS + 900))
           while [ "$SECONDS" -lt "$deadline" ]; do
             checks="$(gh api --paginate "repos/$REPOSITORY/commits/$HEAD_SHA/check-runs?per_page=100" --jq '.check_runs[] | [.name, .status, .conclusion] | @tsv')"
             if printf '%s\n' "$checks" | awk -F '\t' '$1 == "E2E / development-smoke" && $2 == "completed" && $3 == "success" { found = 1 } END { exit(found ? 0 : 1) }'; then

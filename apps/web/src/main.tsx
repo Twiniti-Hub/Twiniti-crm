@@ -1,5 +1,5 @@
 import { SessionExit, SessionExitLink } from "./components/SessionExit";
-import { isSignOutPath } from "./lib/sessionRoutes";
+import { hasHexclaveSessionCookie, isSignOutPath } from "./lib/sessionRoutes";
 import { StrictMode, Suspense, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
@@ -111,7 +111,12 @@ function BootstrapApp() {
   if (isSignOutPath(window.location.pathname)) return <SessionExit />;
 
   if (authEnabled == null) {
-    return <div className="banner info">Loading workspace…<SessionExitLink /></div>;
+    return (
+      <div className="banner info">
+        Loading workspace…
+        {hasHexclaveSessionCookie() ? <SessionExitLink /> : null}
+      </div>
+    );
   }
 
   return (

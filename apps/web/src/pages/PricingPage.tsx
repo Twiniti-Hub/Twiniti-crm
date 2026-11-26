@@ -2,7 +2,7 @@ import { Link } from "react-router";
 import { Brand } from "../components/Brand";
 import { PAGE_META, usePageMeta } from "../lib/pageMeta";
 
-const CONTACT_SYNC_ENABLED = import.meta.env.VITE_CONTACT_SYNC_ENABLED === "true";
+const CONTACT_SYNC_ENABLED = import.meta.env?.VITE_CONTACT_SYNC_ENABLED === "true";
 
 export function PricingPage() {
   usePageMeta(PAGE_META.pricing.title, PAGE_META.pricing.description, PAGE_META.pricing);
