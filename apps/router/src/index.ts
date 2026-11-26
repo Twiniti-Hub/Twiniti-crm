@@ -94,7 +94,11 @@ const GUEST_APP_DOCUMENT_PATHS = new Set([
 
 function isKnownGuestAppDocument(pathname: string) {
   const normalized = pathname.replace(/\/+$/, "") || "/";
-  return GUEST_APP_DOCUMENT_PATHS.has(normalized) || pathname.startsWith("/handler/");
+  return GUEST_APP_DOCUMENT_PATHS.has(normalized) || normalized === "/handler" || pathname.startsWith("/handler/");
+}
+
+function isAppStaticAssetPath(pathname: string) {
+  return pathname.startsWith("/assets/");
 }
 
 export function isPublicPath(pathname: string) {
@@ -294,6 +298,7 @@ export default {
         wantsDocument(request)
         && surface === "app"
         && !hasHexclaveSessionCookie(cookie)
+        && !isAppStaticAssetPath(url.pathname)
         && !isKnownGuestAppDocument(url.pathname)
       ) {
         const headers = { "content-type": "text/html; charset=utf-8", "x-robots-tag": "noindex" };

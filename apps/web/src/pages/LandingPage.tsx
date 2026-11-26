@@ -40,8 +40,8 @@ export function LandingPage() {
           <div className="landing-hero-copy">
             <p className="eyebrow">Twiniti Loop</p>
             <h1>
-              The CRM for
-              <span className="accent"> small businesses</span>
+              Marketing CRM for
+              <span className="accent"> agent-ready teams</span>
             </h1>
             <p className="landing-lede">
               Contacts, segments and campaigns in one place. Sign in to your workspace.

@@ -59,7 +59,7 @@ test("anonymous /, /pricing, and /sign-up render under HexclaveProvider", async 
   const { SignUpPage } = await import("../pages/SignUpPage.js");
 
   const cases: Array<[string, () => ReactNode, RegExp]> = [
-    ["/", () => <LandingPage />, /small businesses/i],
+    ["/", () => <LandingPage />, /agent-ready teams/i],
     ["/pricing", () => <PricingPage />, /Loop pricing/i],
     ["/sign-up", () => <SignUpPage />, /Start your Loop workspace/i]
   ];
