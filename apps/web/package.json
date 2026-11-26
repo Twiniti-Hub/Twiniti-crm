@@ -19,13 +19,14 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "tsx --test src/lib/billingCheckout.test.ts src/lib/authFlow.test.ts src/lib/csv.test.ts src/lib/board.test.ts src/lib/formatFilterAst.test.ts src/lib/resendWebhookUrl.test.ts src/lib/postAuthNavigation.test.ts",
+    "test": "tsx --test src/lib/billingCheckout.test.ts src/lib/authFlow.test.ts src/lib/csv.test.ts src/lib/board.test.ts src/lib/formatFilterAst.test.ts src/lib/resendWebhookUrl.test.ts src/lib/postAuthNavigation.test.ts src/lib/hexclaveRoutes.test.ts src/lib/hexclaveShellMount.test.ts src/lib/pageMeta.test.tsx src/components/authPublicRoutes.render.test.tsx",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
+    "happy-dom": "^20.14.6",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   }

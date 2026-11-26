@@ -4,14 +4,17 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./ga4-measurement": "./src/ga4-measurement.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "tsx --test src/ga4-measurement.test.ts"
   },
   "devDependencies": {
+    "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   }
 }

@@ -388,3 +388,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .email-viewer-text { max-height: min(60vh, 560px); }
 .activity-generic-details { margin: 0; font-size: 13px; line-height: 1.45; color: #243c44; }
 
+.pricing-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.pricing-card { border: 1px solid #e4ece8; border-radius: 16px; padding: 20px; display: grid; gap: 12px; background: #fff; }
+.pricing-card-elevated { box-shadow: 0 10px 28px rgba(31, 52, 63, 0.08); border-color: #cfdad6; }
+.pricing-amount { margin: 0; font-size: 1rem; }
+.pricing-list { margin: 0; padding-left: 1.1rem; display: grid; gap: 8px; }
+

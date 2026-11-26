@@ -24,6 +24,17 @@ function getStorage(): Storage | null {
   }
 }
 
+/** Skip client GA on Loop dev/preview hosts so traffic does not hit the production property. */
+export function shouldLoadClientGoogleAnalytics(
+  measurementId: string,
+  options?: { environmentLabel?: string }
+): boolean {
+  if (!measurementId.trim()) return false;
+  const label = options?.environmentLabel?.trim().toLowerCase() ?? "";
+  if (label.includes("development") || label.includes("preview")) return false;
+  return true;
+}
+
 export function getAnalyticsConsent(): AnalyticsConsent | null {
   const value = getStorage()?.getItem(CONSENT_STORAGE_KEY);
   return value === "granted" || value === "denied" ? value : null;

@@ -1,4 +1,4 @@
-import { resolveWebSurface, type Surface } from "./surface";
+import { hasHexclaveSessionCookie, resolveWebSurface, type Surface } from "./surface";
 import { DEV_ROBOTS_TXT, READY_PATH, isCrawler, isProduction, sleepingResponse, wakingPage, wantsDocument } from "./edge";
 
 export interface Env {
@@ -81,6 +81,26 @@ function withSurfaceCookie(response: Response, surface: Surface) {
 const PUBLIC_PATHS = new Set(["/", "/pricing", "/sign-up", "/sign-in"]);
 const NOINDEX_META = /<meta\s+name=["']robots["']\s+content=["'][^"']*noindex[^"']*["']\s*\/?>\s*/gi;
 
+/** Guest app routes that intentionally serve the SPA (not a soft 404). */
+const GUEST_APP_DOCUMENT_PATHS = new Set([
+  "/",
+  "/sign-in",
+  "/sign-up",
+  "/pricing",
+  "/forgot-password",
+  "/accept-invite",
+  "/logout"
+]);
+
+function isKnownGuestAppDocument(pathname: string) {
+  const normalized = pathname.replace(/\/+$/, "") || "/";
+  return GUEST_APP_DOCUMENT_PATHS.has(normalized) || normalized === "/handler" || pathname.startsWith("/handler/");
+}
+
+function isAppStaticAssetPath(pathname: string) {
+  return pathname.startsWith("/assets/");
+}
+
 export function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.has(pathname.replace(/\/+$/, "") || "/");
 }
@@ -99,6 +119,15 @@ async function applyRobotsPolicy(response: Response, pathname: string, surface: 
   return new Response(body, { status: response.status, statusText: response.statusText, headers });
 }
 
+function headMirrorBody(response: Response, request: Request) {
+  if (request.method !== "HEAD") return response;
+  return new Response(null, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers
+  });
+}
+
 async function proxyWeb(request: Request, env: Env) {
   const url = new URL(request.url);
   const surface = resolveWebSurface(url.pathname, request.headers.get("Cookie"));
@@ -106,14 +135,16 @@ async function proxyWeb(request: Request, env: Env) {
   // The app serves no 429s on document routes; this is Render refusing to wake a sleeping origin.
   if (surface === "app" && response.status === 429 && wantsDocument(request)) {
     // Only real visitors get the script that wakes APP_ORIGIN; crawlers get a plain 503.
-    return isCrawler(request.headers.get("User-Agent")) ? sleepingResponse() : wakingPage(env.APP_ORIGIN);
+  const waking = isCrawler(request.headers.get("User-Agent")) ? sleepingResponse() : wakingPage(env.APP_ORIGIN);
+    return headMirrorBody(waking, request);
   }
   const tagged = withSurfaceCookie(response, surface);
   if (!isProduction(env.DEPLOYMENT_ENV)) {
     tagged.headers.set("X-Robots-Tag", "noindex, nofollow");
-    return tagged;
+    return headMirrorBody(tagged, request);
   }
-  return applyRobotsPolicy(tagged, url.pathname, surface);
+  const policy = await applyRobotsPolicy(tagged, url.pathname, surface);
+  return headMirrorBody(policy, request);
 }
 
 async function proxy(request: Request, env: Env, region: Region) {
@@ -260,7 +291,21 @@ export default {
         });
       }
     }
-    if (!url.pathname.startsWith("/api/")) return proxyWeb(request, env);
+    if (!url.pathname.startsWith("/api/")) {
+      const cookie = request.headers.get("Cookie");
+      const surface = resolveWebSurface(url.pathname, cookie);
+      if (
+        wantsDocument(request)
+        && surface === "app"
+        && !hasHexclaveSessionCookie(cookie)
+        && !isAppStaticAssetPath(url.pathname)
+        && !isKnownGuestAppDocument(url.pathname)
+      ) {
+        const headers = { "content-type": "text/html; charset=utf-8", "x-robots-tag": "noindex" };
+        return headMirrorBody(new Response("Not Found", { status: 404, headers }), request);
+      }
+      return proxyWeb(request, env);
+    }
 
     const workspaceId = request.headers.get("X-Twiniti-Workspace-Id");
     if (!workspaceId && url.pathname === "/api/v1/me") return discoverWorkspace(request, env);
@@ -291,3 +336,4 @@ export default {
 };
 
 export { resolveWebSurface, hasHexclaveSessionCookie, cookieValue } from "./surface";
+export { isKnownGuestAppDocument };

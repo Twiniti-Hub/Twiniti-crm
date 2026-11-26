@@ -51,7 +51,7 @@ type ContactSyncPerson = {
 type ContactSyncPreview = { count: number; sample: ContactSyncPerson[] };
 type ContactSyncConflict = { id: string; source: ContactSyncPerson };
 
-const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+const API_BASE = (import.meta.env?.VITE_API_URL ?? "").replace(/\/$/, "");
 
 export function SettingsPage() {
   const [me, setMe] = useState<Me | null>(null);

@@ -16,6 +16,7 @@ import { buildSubscriptionState, enqueueLicenseSubscriptionSync } from "../licen
 import type { TrialKind } from "@twiniti/license-api";
 
 import { billingConfirmationError, mayReplaceSubscription, recoverCheckoutSubscription } from "../billing-recovery.js";
+import { trackGa4FunnelEvent } from "../ga4-funnel.js";
 
 type RawBodyRequest = FastifyRequest & { rawBody?: string | Buffer };
 
@@ -190,6 +191,14 @@ export async function createOrganizationCheckoutSession(
     stripeCustomerId: stripeObjectId(session.customer),
     stripePriceId: priceId
   });
+  void trackGa4FunnelEvent(env, undefined, {
+    name: "begin_checkout",
+    clientId: input.organizationId,
+    params: {
+      workspace_kind: input.workspaceKind ?? "company",
+      currency: "USD"
+    }
+  });
   return session;
 }
 
@@ -221,7 +230,17 @@ async function reconcileCheckoutBilling(
   return { billing: updated, subscription };
 }
 
-export async function applySubscriptionEvent(db: Db, event: Stripe.Event, subscription: Record<string, unknown>) {
+export type ApplySubscriptionSyncResult = {
+  organizationId: string;
+  enteredTrialing: boolean;
+  workspaceKind: string | null;
+};
+
+export function subscriptionEnteredTrialing(previousStatus: string, nextStatus: string) {
+  return previousStatus !== "trialing" && nextStatus === "trialing";
+}
+
+export async function applySubscriptionEvent(db: Db, event: Stripe.Event, subscription: Record<string, unknown>): Promise<ApplySubscriptionSyncResult | null> {
   const subscriptionId = stripeObjectId(subscription.id);
   const customerId = stripeObjectId(subscription.customer);
   const metadata = subscription.metadata && typeof subscription.metadata === "object"
@@ -249,11 +268,19 @@ export async function applySubscriptionEvent(db: Db, event: Stripe.Event, subscr
     billing.lastStripeEventCreatedAt
     && billing.lastStripeEventCreatedAt.getTime() > event.created * 1000
     && !(billing.status === "pending" && ["active", "trialing"].includes(nextStatus))
-  ) return billing.organizationId;
+  ) {
+    return {
+      organizationId: billing.organizationId,
+      enteredTrialing: false,
+      workspaceKind: typeof metadata.workspaceKind === "string" ? metadata.workspaceKind : null
+    };
+  }
   const discounts = stripeDiscountIds(subscription.discounts);
   const nextTrialKind = nextStatus === "trialing" ? trialKind(trialStart, trialEnd, 7) : "none";
   const convertedAt = billing.status === "trialing" && nextStatus === "active" ? new Date(event.created * 1000) : null;
   const periodEnd = subscriptionCurrentPeriodEnd(subscription);
+  const previousStatus = billing.status;
+  const workspaceKind = typeof metadata.workspaceKind === "string" ? metadata.workspaceKind : null;
   await updateOrganizationBilling(db, billing.organizationId, {
     status: nextStatus,
     stripeCustomerId: customerId,
@@ -270,7 +297,11 @@ export async function applySubscriptionEvent(db: Db, event: Stripe.Event, subscr
     ...(convertedAt ? { trialConvertedAt: convertedAt } : {}),
     lastStripeEventCreatedAt: new Date(event.created * 1000)
   });
-  return billing.organizationId;
+  return {
+    organizationId: billing.organizationId,
+    enteredTrialing: subscriptionEnteredTrialing(previousStatus, nextStatus),
+    workspaceKind
+  };
 }
 
 async function applyCheckoutCompleted(db: Db, event: Stripe.Event, session: Record<string, unknown>) {
@@ -334,7 +365,8 @@ export async function resyncOrganizationBillingFromStripe(
     type: "customer.subscription.updated",
     data: { object: subscription }
   } as unknown as Stripe.Event;
-  const syncedOrganizationId = await applySubscriptionEvent(db, event, subscription as unknown as Record<string, unknown>);
+  const sync = await applySubscriptionEvent(db, event, subscription as unknown as Record<string, unknown>);
+  const syncedOrganizationId = sync?.organizationId ?? null;
   if (!syncedOrganizationId) {
     const error = new Error("Unable to apply Stripe subscription to organization billing") as Error & { statusCode: number };
     error.statusCode = 409;
@@ -492,21 +524,35 @@ export async function registerBillingRoutes(app: FastifyInstance, db: Db, env: A
     if (!firstDelivery) return { received: true, duplicate: true };
 
     let syncOrganizationId: string | null = organizationId;
+    let trialSync: ApplySubscriptionSyncResult | null = null;
     switch (event.type) {
       case "checkout.session.completed":
         syncOrganizationId = await applyCheckoutCompleted(db, event, object);
         break;
       case "customer.subscription.created":
       case "customer.subscription.updated":
-      case "customer.subscription.deleted":
-        syncOrganizationId = await applySubscriptionEvent(db, event, object);
+        trialSync = await applySubscriptionEvent(db, event, object);
+        syncOrganizationId = trialSync?.organizationId ?? null;
         break;
+      case "customer.subscription.deleted": {
+        const deleted = await applySubscriptionEvent(db, event, object);
+        syncOrganizationId = deleted?.organizationId ?? null;
+        break;
+      }
       case "invoice.paid":
       case "invoice.payment_failed":
-        syncOrganizationId = await applyInvoiceSubscriptionEvent(db, stripe, event, object);
+        trialSync = await applyInvoiceSubscriptionEvent(db, stripe, event, object);
+        syncOrganizationId = trialSync?.organizationId ?? null;
         break;
       default:
         break;
+    }
+    if (trialSync?.enteredTrialing) {
+      void trackGa4FunnelEvent(env, request.log, {
+        name: "trial_started",
+        clientId: trialSync.organizationId,
+        params: { workspace_kind: trialSync.workspaceKind ?? "company" }
+      });
     }
     if (syncOrganizationId) {
       const billing = await getOrganizationBilling(db, syncOrganizationId);

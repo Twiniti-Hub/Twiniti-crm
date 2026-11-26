@@ -1,8 +1,7 @@
 import { SessionExit, SessionExitLink } from "./components/SessionExit";
-import { isSignOutPath } from "./lib/sessionRoutes";
+import { hasHexclaveSessionCookie, isSignOutPath } from "./lib/sessionRoutes";
 import { StrictMode, Suspense, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { HexclaveProvider, HexclaveTheme } from "@hexclave/react";
 import App from "./App";
 import { authConfigured, hexclaveApp } from "./hexclave/client";
 import "./styles.css";
@@ -12,11 +11,17 @@ import {
   getAnalyticsConsent,
   initializeGoogleAnalytics,
   initializeMicrosoftClarity,
-  mountAnalyticsConsentBanner
+  mountAnalyticsConsentBanner,
+  shouldLoadClientGoogleAnalytics
 } from "@twiniti/analytics";
 
-const googleAnalyticsId =
+const googleAnalyticsIdRaw =
   import.meta.env.VITE_GOOGLE_ANALYTICS_ID?.trim() || import.meta.env.Google_Analytics?.trim() || "";
+const googleAnalyticsId = shouldLoadClientGoogleAnalytics(googleAnalyticsIdRaw, {
+  environmentLabel: import.meta.env.VITE_ENVIRONMENT_LABEL
+})
+  ? googleAnalyticsIdRaw
+  : "";
 const microsoftClarityId = import.meta.env.VITE_MICROSOFT_CLARITY_ID?.trim() || "xyd0gcl234";
 const analyticsConfigured = Boolean(googleAnalyticsId || microsoftClarityId);
 const applicationFontStylesheetId = "loop-application-fonts";
@@ -106,24 +111,19 @@ function BootstrapApp() {
   if (isSignOutPath(window.location.pathname)) return <SessionExit />;
 
   if (authEnabled == null) {
-    return <div className="banner info">Loading workspace…<SessionExitLink /></div>;
-  }
-
-  const appTree = (
-    <Suspense fallback={<div className="banner info">Loading…<SessionExitLink /></div>}>
-      <App authEnabled={authEnabled} />
-    </Suspense>
-  );
-
-  if (authEnabled && hexclaveApp) {
     return (
-      <HexclaveProvider app={hexclaveApp}>
-        <HexclaveTheme>{appTree}</HexclaveTheme>
-      </HexclaveProvider>
+      <div className="banner info">
+        Loading workspace…
+        {hasHexclaveSessionCookie() ? <SessionExitLink /> : null}
+      </div>
     );
   }
 
-  return appTree;
+  return (
+    <Suspense fallback={<div className="banner info">Loading…</div>}>
+      <App authEnabled={authEnabled} />
+    </Suspense>
+  );
 }
 
 createRoot(root).render(

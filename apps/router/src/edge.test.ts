@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import router, { type Env } from "./index";
+import router, { type Env, isKnownGuestAppDocument } from "./index";
+import { wantsDocument } from "./edge";
 
 function environment(deploymentEnv = "development") {
   return {
@@ -185,4 +186,46 @@ test("non-production hosts stay noindex everywhere, public paths included", asyn
   t.mock.method(globalThis, "fetch", async () => htmlResponse(shellHtml));
   const response = await router.fetch(new Request("https://loop-dev.test/sign-up", { headers: { "User-Agent": chrome, Accept: "text/html" } }), environment());
   assert.equal(response.headers.get("x-robots-tag"), "noindex, nofollow");
+});
+
+test("production: HEAD mirrors GET for public app routes", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => htmlResponse(shellHtml));
+  const get = await router.fetch(new Request("https://loop.test/sign-up", {
+    headers: { "User-Agent": chrome, Accept: "text/html" }
+  }), environment("production"));
+  const head = await router.fetch(new Request("https://loop.test/sign-up", {
+    method: "HEAD",
+    headers: { "User-Agent": chrome, Accept: "text/html" }
+  }), environment("production"));
+  assert.equal(get.status, 200);
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), "");
+});
+
+test("wantsDocument is false for subresource */* requests", () => {
+  const request = new Request("https://loop.test/assets/index.js", { headers: { Accept: "*/*" } });
+  assert.equal(wantsDocument(request), false);
+});
+
+test("isKnownGuestAppDocument allows /handler and nested handler routes", () => {
+  assert.equal(isKnownGuestAppDocument("/handler"), true);
+  assert.equal(isKnownGuestAppDocument("/handler/email-verification"), true);
+});
+
+test("production: anonymous app assets are not rejected as guest 404", async (t) => {
+  const fetchMock = t.mock.method(globalThis, "fetch", async () => new Response("bundle", { status: 200 }));
+  const response = await router.fetch(new Request("https://loop.test/assets/index-abc.js", {
+    headers: { "User-Agent": chrome, Accept: "*/*", Cookie: "twiniti_surface=app" }
+  }), environment("production"));
+  assert.equal(response.status, 200);
+  assert.equal(fetchMock.mock.callCount(), 1);
+});
+
+test("production: anonymous unknown app paths return 404", async (t) => {
+  const fetchMock = t.mock.method(globalThis, "fetch", async () => htmlResponse(shellHtml));
+  const response = await router.fetch(new Request("https://loop.test/this-does-not-exist-123", {
+    headers: { "User-Agent": chrome, Accept: "text/html" }
+  }), environment("production"));
+  assert.equal(response.status, 404);
+  assert.equal(fetchMock.mock.callCount(), 0);
 });

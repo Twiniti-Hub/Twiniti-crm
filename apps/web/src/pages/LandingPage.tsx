@@ -1,4 +1,3 @@
-import { useHexclaveApp } from "@hexclave/react";
 import { Link } from "react-router";
 import { Brand } from "../components/Brand";
 import { PAGE_META, usePageMeta } from "../lib/pageMeta";
@@ -11,8 +10,7 @@ import {
 } from "../components/LandingIntroVideo";
 
 export function LandingPage() {
-  const app = useHexclaveApp();
-  usePageMeta(PAGE_META.root.title, PAGE_META.root.description);
+  usePageMeta(PAGE_META.root.title, PAGE_META.root.description, PAGE_META.root);
 
   return (
     <div className="landing">
@@ -46,16 +44,15 @@ export function LandingPage() {
               <span className="accent"> agent-ready teams</span>
             </h1>
             <p className="landing-lede">
-              Contacts, segments, and approval-gated campaigns in one workspace. Sign in to open your
-              marketing hub.
+              Contacts, segments and campaigns in one place. Sign in to your workspace.
             </p>
             <div className="hero-actions">
               <Link className="primary" to="/sign-in">
                 Sign in to continue
               </Link>
-              <button className="quiet" type="button" onClick={() => app.redirectToSignUp()}>
+              <Link className="quiet" to="/sign-up">
                 Create an account
-              </button>
+              </Link>
             </div>
           </div>
 

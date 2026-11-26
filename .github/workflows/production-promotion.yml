@@ -50,9 +50,24 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          checks="$(gh api --paginate "repos/$REPOSITORY/commits/$HEAD_SHA/check-runs?per_page=100" --jq '.check_runs[] | [.name, .status, .conclusion] | @tsv')"
-          if ! printf '%s\n' "$checks" | awk -F '\t' '$1 == "E2E / development-smoke" && $2 == "completed" && $3 == "success" { found = 1 } END { exit(found ? 0 : 1) }'; then
-            echo "::error::No successful E2E / development-smoke check was found for the exact development commit $HEAD_SHA."
-            exit 1
-          fi
-          echo "Development E2E evidence verified for $HEAD_SHA"
+          deadline=$((SECONDS + 900))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            checks="$(gh api --paginate "repos/$REPOSITORY/commits/$HEAD_SHA/check-runs?per_page=100" --jq '.check_runs[] | [.name, .status, .conclusion] | @tsv')"
+            if printf '%s\n' "$checks" | awk -F '\t' '$1 == "E2E / development-smoke" && $2 == "completed" && $3 == "success" { found = 1 } END { exit(found ? 0 : 1) }'; then
+              echo "Development E2E evidence verified for $HEAD_SHA"
+              exit 0
+            fi
+            if printf '%s\n' "$checks" | awk -F '\t' '$1 == "E2E / development-smoke" && $2 == "completed" && $3 == "failure" { failed = 1 } END { exit(failed ? 0 : 1) }'; then
+              echo "::error::E2E / development-smoke failed for development commit $HEAD_SHA."
+              exit 1
+            fi
+            if printf '%s\n' "$checks" | awk -F '\t' '$1 == "E2E / development-smoke" && ($2 == "queued" || $2 == "in_progress") { pending = 1 } END { exit(pending ? 0 : 1) }'; then
+              echo "Waiting for E2E / development-smoke on $HEAD_SHA…"
+              sleep 30
+              continue
+            fi
+            echo "Waiting for E2E / development-smoke to start on $HEAD_SHA…"
+            sleep 30
+          done
+          echo "::error::Timed out waiting for a successful E2E / development-smoke check on $HEAD_SHA."
+          exit 1

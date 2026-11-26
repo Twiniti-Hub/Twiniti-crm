@@ -26,7 +26,7 @@ export function isCrawler(userAgent: string | null) {
 export function wantsDocument(request: Request) {
   if (request.method !== "GET" && request.method !== "HEAD") return false;
   const accept = request.headers.get("Accept") ?? "";
-  return accept === "" || accept.includes("text/html") || accept.includes("*/*");
+  return accept === "" || accept.includes("text/html");
 }
 
 /** Same-origin readiness path the waking page polls; the Worker forwards it to APP_ORIGIN/health. */

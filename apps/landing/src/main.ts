@@ -13,6 +13,7 @@ import {
   initializeGoogleAnalytics,
   initializeMicrosoftClarity,
   mountAnalyticsConsentBanner,
+  shouldLoadClientGoogleAnalytics,
   trackPageView
 } from "@twiniti/analytics";
 
@@ -20,8 +21,13 @@ import {
 // final wording (pending), so change it here only.
 export const TRIAL_SUBLINE = "Try it free for 7 days.";
 
-const googleAnalyticsId =
+const googleAnalyticsIdRaw =
   import.meta.env.VITE_GOOGLE_ANALYTICS_ID?.trim() || import.meta.env.Google_Analytics?.trim() || "";
+const googleAnalyticsId = shouldLoadClientGoogleAnalytics(googleAnalyticsIdRaw, {
+  environmentLabel: import.meta.env.VITE_ENVIRONMENT_LABEL
+})
+  ? googleAnalyticsIdRaw
+  : "";
 const microsoftClarityId = import.meta.env.VITE_MICROSOFT_CLARITY_ID?.trim() || "xyd0gcl234";
 const analyticsConfigured = Boolean(googleAnalyticsId || microsoftClarityId);
 

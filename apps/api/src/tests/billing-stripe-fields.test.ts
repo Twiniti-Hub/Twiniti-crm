@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { checkoutTerms, invoiceSubscriptionId, subscriptionCurrentPeriodEnd } from "../routes/billing.js";
+import { checkoutTerms, invoiceSubscriptionId, subscriptionCurrentPeriodEnd, subscriptionEnteredTrialing } from "../routes/billing.js";
+
+test("subscriptionEnteredTrialing is true only on the first transition into trialing", () => {
+  assert.equal(subscriptionEnteredTrialing("pending", "trialing"), true);
+  assert.equal(subscriptionEnteredTrialing("trialing", "trialing"), false);
+  assert.equal(subscriptionEnteredTrialing("trialing", "active"), false);
+});
 
 test("subscriptionCurrentPeriodEnd prefers Basil item-level period end", () => {
   const end = subscriptionCurrentPeriodEnd({
